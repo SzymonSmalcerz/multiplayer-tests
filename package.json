@@ -1,0 +1,29 @@
+{
+  "name": "multiplayer-game",
+  "version": "1.0.0",
+  "description": "Multiplayer top-down game — Colyseus + Phaser 3",
+  "main": "dist/server/index.js",
+  "scripts": {
+    "build:server": "tsc -p tsconfig.json",
+    "build:client": "esbuild src/client/main.ts --bundle --outfile=public/bundle.js --platform=browser --target=es2020 --sourcemap",
+    "build": "npm run build:server && npm run build:client",
+    "start": "npm run build && node dist/server/index.js",
+    "dev": "concurrently \"tsc -p tsconfig.json --watch\" \"nodemon --watch dist/server --delay 1 dist/server/index.js\" \"esbuild src/client/main.ts --bundle --outfile=public/bundle.js --platform=browser --target=es2020 --watch\""
+  },
+  "dependencies": {
+    "@colyseus/core": "^0.15.0",
+    "@colyseus/schema": "^2.0.0",
+    "@colyseus/ws-transport": "^0.15.0",
+    "colyseus.js": "^0.15.0",
+    "express": "^4.18.2",
+    "phaser": "^3.87.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
+    "concurrently": "^8.0.0",
+    "esbuild": "^0.21.0",
+    "nodemon": "^3.0.0",
+    "typescript": "^5.4.0"
+  }
+}

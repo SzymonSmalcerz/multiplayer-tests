@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multiplayer Game</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #111;
+      overflow: hidden;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+
+    #game { position: fixed; inset: 0; }
+
+    /* ── Overlay ──────────────────────────────────────────────────── */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.82);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      padding: 16px;
+    }
+
+    .menu-card {
+      background: rgba(20, 40, 20, 0.95);
+      border: 2px solid rgba(100, 200, 100, 0.35);
+      border-radius: 14px;
+      padding: 32px 28px 24px;
+      width: 440px;
+      max-width: 100%;
+      color: #e8ffe8;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    }
+
+    .menu-card h1 {
+      font-size: 1.9rem;
+      font-weight: 800;
+      color: #8fff8f;
+      text-shadow: 0 0 18px rgba(100,255,100,0.5);
+      text-align: center;
+      margin-bottom: 4px;
+    }
+
+    .menu-card .subtitle {
+      color: #6a9a6a;
+      font-size: 0.85rem;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    /* ── Avatar section ───────────────────────────────────────────── */
+    .avatar-section { margin-bottom: 16px; }
+
+    .avatar-section label {
+      display: block;
+      font-size: 0.78rem;
+      color: #7aab7a;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    /* Gender tabs */
+    .avatar-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 6px 0;
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      background: rgba(255,255,255,0.06);
+      color: #8aaa8a;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .tab-btn.active {
+      background: rgba(100,200,100,0.18);
+      color: #8fff8f;
+      border-color: rgba(100,200,100,0.45);
+    }
+
+    .tab-btn:hover:not(.active) {
+      background: rgba(255,255,255,0.1);
+      color: #b8ddb8;
+    }
+
+    /* Avatar grid */
+    .avatar-grid-wrap {
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      background: rgba(0,0,0,0.3);
+      padding: 8px;
+      max-height: 280px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(100,200,100,0.4) transparent;
+    }
+
+    .avatar-grid-wrap::-webkit-scrollbar { width: 5px; }
+    .avatar-grid-wrap::-webkit-scrollbar-track { background: transparent; }
+    .avatar-grid-wrap::-webkit-scrollbar-thumb {
+      background: rgba(100,200,100,0.4);
+      border-radius: 3px;
+    }
+
+    #avatar-grid {
+      display: grid;
+      /* auto-fill: as many 80 px columns as fit */
+      grid-template-columns: repeat(auto-fill, 80px);
+      gap: 6px;
+      justify-content: center;
+    }
+
+    /* Each cell shows exactly one sprite frame (80 × 80 px) */
+    .avatar-thumb {
+      width: 80px;
+      height: 80px;
+      background-repeat: no-repeat;
+      /* background-image, background-size, background-position set by JS */
+      border: 2px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: border-color 0.12s, transform 0.1s;
+      image-rendering: pixelated;
+    }
+
+    .avatar-thumb:hover { border-color: rgba(100,200,100,0.5); transform: scale(1.06); }
+    .avatar-thumb.selected { border-color: #7fff7f; box-shadow: 0 0 8px rgba(100,255,100,0.45); }
+
+    /* ── Nickname ─────────────────────────────────────────────────── */
+    .nick-section label {
+      display: block;
+      font-size: 0.78rem;
+      color: #7aab7a;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    #nickname {
+      width: 100%;
+      padding: 11px 16px;
+      font-size: 1rem;
+      background: rgba(255,255,255,0.07);
+      border: 2px solid rgba(100,200,100,0.3);
+      border-radius: 8px;
+      color: #e8ffe8;
+      outline: none;
+      text-align: center;
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+      transition: border-color 0.2s;
+    }
+
+    #nickname::placeholder { color: rgba(200,255,200,0.25); }
+    #nickname:focus { border-color: #7fff7f; }
+
+    /* ── Join button ──────────────────────────────────────────────── */
+    #join-btn {
+      width: 100%;
+      padding: 13px;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: linear-gradient(135deg, #2d7a2d, #3fa83f);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    #join-btn:hover  { opacity: 0.9; transform: translateY(-1px); }
+    #join-btn:active { transform: translateY(0); }
+    #join-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    #error-msg {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: #ff8080;
+      text-align: center;
+      display: none;
+    }
+
+    .controls-hint {
+      margin-top: 14px;
+      font-size: 0.75rem;
+      color: #446644;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+
+  <div id="overlay">
+    <div class="menu-card">
+      <h1>Open World</h1>
+      <p class="subtitle">Multiplayer — up to 50 players</p>
+
+      <!-- Avatar picker -->
+      <div class="avatar-section">
+        <label>Choose your character</label>
+        <div class="avatar-tabs">
+          <button class="tab-btn active" data-gender="male">Male</button>
+          <button class="tab-btn"        data-gender="female">Female</button>
+        </div>
+        <div class="avatar-grid-wrap">
+          <div id="avatar-grid"></div>
+        </div>
+      </div>
+
+      <!-- Nickname -->
+      <div class="nick-section">
+        <label>Nickname</label>
+        <input
+          id="nickname"
+          type="text"
+          placeholder="Your nickname…"
+          maxlength="20"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <button id="join-btn">Join Game</button>
+      <div id="error-msg"></div>
+      <p class="controls-hint">WASD / Arrow Keys to move</p>
+    </div>
+  </div>
+
+  <script src="bundle.js"></script>
+</body>
+</html>
