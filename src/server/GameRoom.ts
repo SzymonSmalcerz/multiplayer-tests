@@ -74,6 +74,19 @@ export class GameRoom extends Room<GameState> {
       client.send("map_data", { trees: this.treeData });
     });
 
+    // Handle chat messages
+    this.onMessage("chat", (client, message: string) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || !message || message.trim().length === 0) return;
+
+      // Broadcast the message to everyone including the sender
+      this.broadcast("chat", {
+        sessionId: client.sessionId,
+        nickname: player.nickname,
+        message: message.slice(0, 100), // limit length
+      });
+    });
+
     // Handle movement messages from clients
     this.onMessage<MoveMessage>("move", (client, data) => {
       const player = this.state.players.get(client.sessionId);

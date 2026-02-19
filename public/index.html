@@ -202,10 +202,82 @@
       color: #446644;
       text-align: center;
     }
+
+    /* ── Chat UI ──────────────────────────────────────────────────── */
+    #chat-wrapper {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 350px;
+      z-index: 100;
+      pointer-events: none; /* Let clicks pass through to game when not typing */
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #chat-display {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 200px;
+      overflow: hidden;
+    }
+
+    .chat-msg {
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      width: fit-content;
+      animation: fadeIn 0.3s forwards;
+      pointer-events: auto;
+    }
+
+    .chat-msg .name {
+      color: #8fff8f;
+      font-weight: bold;
+      margin-right: 6px;
+    }
+
+    #chat-input-wrap {
+      display: none; /* Shown when pressing Enter */
+      pointer-events: auto;
+    }
+
+    #chat-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid #4caf50;
+      border-radius: 4px;
+      color: #fff;
+      padding: 8px 12px;
+      outline: none;
+      font-size: 0.9rem;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
   </style>
 </head>
 <body>
   <div id="game"></div>
+
+  <!-- Chat UI -->
+  <div id="chat-wrapper">
+    <div id="chat-display"></div>
+    <div id="chat-input-wrap">
+      <input id="chat-input" type="text" placeholder="Press Enter to send..." maxlength="100" />
+    </div>
+  </div>
 
   <div id="overlay">
     <div class="menu-card">

@@ -10,6 +10,13 @@ export interface MapDataMessage {
   trees: TreeData[];
 }
 
+/** Chat message payload */
+export interface ChatMessage {
+  sessionId: string;
+  nickname: string;
+  message: string;
+}
+
 /** Colyseus player proxy shape (mirrored from server schema) */
 export interface RemotePlayer {
   x: number;
@@ -32,6 +39,7 @@ export interface GameSceneData {
 export interface RemotePlayerEntity {
   sprite: Phaser.Physics.Arcade.Sprite;
   label: Phaser.GameObjects.Text;
+  chatBubble?: Phaser.GameObjects.Text;
   targetX: number;
   targetY: number;
   direction: number;

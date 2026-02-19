@@ -64,6 +64,7 @@ export class GameScene extends Phaser.Scene {
   // Local player
   private localSprite!: Phaser.Physics.Arcade.Sprite;
   private localLabel!: Phaser.GameObjects.Text;
+  private localChatBubble?: Phaser.GameObjects.Text;
   private localDirection = 0;
 
   // Input
@@ -72,9 +73,16 @@ export class GameScene extends Phaser.Scene {
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyS!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
+  private keyEnter!: Phaser.Input.Keyboard.Key;
 
   // Remote players
   private remoteMap = new Map<string, RemotePlayerEntity>();
+
+  // Chat UI elements
+  private chatInputWrap!: HTMLElement;
+  private chatInput!: HTMLInputElement;
+  private chatDisplay!: HTMLElement;
+  private isTyping = false;
 
   // Trees
   private treesGroup!: Phaser.Physics.Arcade.StaticGroup;
@@ -152,14 +160,91 @@ export class GameScene extends Phaser.Scene {
     this.keyA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyS = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keyD = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this.keyEnter = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+
+    // ── Chat UI ───────────────────────────────────────────────────────────────
+    this.setupChatUI();
 
     // ── Click / tap to move ───────────────────────────────────────────────────
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (this.isTyping) return;
       this.onMapClick(pointer.worldX, pointer.worldY);
     });
 
     // ── Colyseus listeners ────────────────────────────────────────────────────
     this.setupRoomListeners();
+  }
+
+  private setupChatUI(): void {
+    this.chatInputWrap = document.getElementById("chat-input-wrap")!;
+    this.chatInput = document.getElementById("chat-input") as HTMLInputElement;
+    this.chatDisplay = document.getElementById("chat-display")!;
+
+    this.keyEnter.on("down", () => {
+      if (!this.isTyping) {
+        this.startTyping();
+      } else {
+        this.stopTyping(true);
+      }
+    });
+
+    // Handle escape to cancel
+    this.input.keyboard!.on("keydown-ESC", () => {
+      if (this.isTyping) this.stopTyping(false);
+    });
+  }
+
+  private startTyping(): void {
+    this.isTyping = true;
+    this.chatInputWrap.style.display = "block";
+    this.chatInput.focus();
+    this.chatInput.value = "";
+    
+    // Disable Phaser keyboard input and stop capturing events so they reach the HTML input
+    if (this.input.keyboard) {
+      this.input.keyboard.enabled = false;
+      // Also explicitly remove captures if any are active
+      this.input.keyboard.clearCaptures();
+    }
+
+    // But we need Enter to work to send, so we use a native listener
+    const onEnter = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        this.stopTyping(true);
+        this.chatInput.removeEventListener("keydown", onEnter);
+      } else if (e.key === "Escape") {
+        this.stopTyping(false);
+        this.chatInput.removeEventListener("keydown", onEnter);
+      }
+    };
+    this.chatInput.addEventListener("keydown", onEnter);
+  }
+
+  private stopTyping(send: boolean): void {
+    const message = this.chatInput.value.trim();
+    if (send && message.length > 0) {
+      this.room.send("chat", message);
+    }
+
+    this.isTyping = false;
+    this.chatInputWrap.style.display = "none";
+    this.chatInput.blur();
+    
+    if (this.input.keyboard) {
+      this.input.keyboard.enabled = true;
+      // Re-enable captures for common game keys to prevent page scrolling/defaults
+      this.input.keyboard.addCapture([
+        Phaser.Input.Keyboard.KeyCodes.W,
+        Phaser.Input.Keyboard.KeyCodes.A,
+        Phaser.Input.Keyboard.KeyCodes.S,
+        Phaser.Input.Keyboard.KeyCodes.D,
+        Phaser.Input.Keyboard.KeyCodes.SPACE,
+        Phaser.Input.Keyboard.KeyCodes.UP,
+        Phaser.Input.Keyboard.KeyCodes.DOWN,
+        Phaser.Input.Keyboard.KeyCodes.LEFT,
+        Phaser.Input.Keyboard.KeyCodes.RIGHT,
+      ]);
+    }
   }
 
   update(time: number, delta: number): void {
@@ -256,6 +341,77 @@ export class GameScene extends Phaser.Scene {
     this.room.onLeave(() => {
       this.showDisconnectBanner();
     });
+
+    // Chat messages
+    this.room.onMessage("chat", (data: { sessionId: string; nickname: string; message: string }) => {
+      this.displayChatMessage(data);
+    });
+  }
+
+  private displayChatMessage(data: { sessionId: string; nickname: string; message: string }): void {
+    // 1. Bottom-left chat display
+    const msgEl = document.createElement("div");
+    msgEl.className = "chat-msg";
+    msgEl.innerHTML = `<span class="name">${data.nickname}:</span> ${data.message}`;
+    this.chatDisplay.appendChild(msgEl);
+
+    // Fade out and remove from UI after 5 seconds
+    setTimeout(() => {
+      msgEl.style.animation = "fadeOut 0.5s forwards";
+      setTimeout(() => msgEl.remove(), 500);
+    }, 5000);
+
+    // 2. Bubble above player head
+    let targetSprite: Phaser.Physics.Arcade.Sprite;
+    let isLocal = false;
+
+    if (data.sessionId === this.mySessionId) {
+      targetSprite = this.localSprite;
+      isLocal = true;
+      if (this.localChatBubble) this.localChatBubble.destroy();
+    } else {
+      const entity = this.remoteMap.get(data.sessionId);
+      if (!entity) return;
+      targetSprite = entity.sprite;
+      if (entity.chatBubble) entity.chatBubble.destroy();
+    }
+
+    const bubble = this.add.text(targetSprite.x, targetSprite.y - 65, data.message, {
+      fontSize: "14px",
+      color: "#ffffff",
+      backgroundColor: "rgba(0,0,0,0.7)",
+      padding: { x: 8, y: 4 },
+      align: "center",
+      wordWrap: { width: 200 },
+      resolution: 2,
+    })
+    .setOrigin(0.5, 1)
+    .setDepth(10000);
+
+    // Apply to entity
+    if (isLocal) {
+      this.localChatBubble = bubble;
+    } else {
+      const entity = this.remoteMap.get(data.sessionId);
+      if (entity) entity.chatBubble = bubble;
+    }
+
+    // Fade out and destroy bubble after 10 seconds
+    this.tweens.add({
+      targets: bubble,
+      alpha: 0,
+      delay: 9500,
+      duration: 500,
+      onComplete: () => {
+        bubble.destroy();
+        if (isLocal) {
+          if (this.localChatBubble === bubble) this.localChatBubble = undefined;
+        } else {
+          const entity = this.remoteMap.get(data.sessionId);
+          if (entity && entity.chatBubble === bubble) entity.chatBubble = undefined;
+        }
+      },
+    });
   }
 
   // ── Tree placement ─────────────────────────────────────────────────────────
@@ -335,6 +491,7 @@ export class GameScene extends Phaser.Scene {
     if (!entity) return;
     entity.sprite.destroy();
     entity.label.destroy();
+    if (entity.chatBubble) entity.chatBubble.destroy();
     this.remoteMap.delete(sessionId);
   }
 
@@ -420,11 +577,14 @@ export class GameScene extends Phaser.Scene {
     // Depth = bottom edge so lower entities render in front
     this.localSprite.setDepth(this.localSprite.y + FRAME_SIZE / 2);
     this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 42);
+    if (this.localChatBubble) {
+      this.localChatBubble.setPosition(this.localSprite.x, this.localSprite.y - 65);
+    }
   }
 
   private interpolateRemotePlayers(): void {
     this.remoteMap.forEach((entity) => {
-      const { sprite, label, targetX, targetY, direction, skinKey: key } = entity;
+      const { sprite, label, chatBubble, targetX, targetY, direction, skinKey: key } = entity;
 
       const prevX = sprite.x;
       const prevY = sprite.y;
@@ -434,6 +594,9 @@ export class GameScene extends Phaser.Scene {
       sprite.y = Phaser.Math.Linear(sprite.y, targetY, LERP_FACTOR);
 
       label.setPosition(sprite.x, sprite.y - 42);
+      if (chatBubble) {
+        chatBubble.setPosition(sprite.x, sprite.y - 65);
+      }
       sprite.setDepth(sprite.y + FRAME_SIZE / 2);
 
       // Animate based on whether the sprite is visually moving
