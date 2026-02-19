@@ -22,9 +22,7 @@ const MAP_HEIGHT = 2000;
 const MAX_SPEED_PX_PER_S = 300;
 const SPEED_TOLERANCE = 1.6; // allow 60% over to absorb lag spikes
 
-const TREE_SPRITES = [
-  "tree1", "tree2", "tree3", "tree4", "tree_pink_1", "tree_pink_2",
-];
+const TREE_SPRITES = ["tree1", "tree2", "tree3"];
 
 // ─── Shared interfaces ────────────────────────────────────────────────────────
 
@@ -62,14 +60,19 @@ export class GameRoom extends Room<GameState> {
     this.setState(new GameState());
     this.setPatchRate(1000 / 20); // 20 Hz state broadcast
 
-    // Generate 100 random trees once
-    for (let i = 0; i < 100; i++) {
+    // Generate 150 random trees once
+    for (let i = 0; i < 150; i++) {
       this.treeData.push({
         x: 80 + Math.random() * (MAP_WIDTH - 160),
         y: 80 + Math.random() * (MAP_HEIGHT - 160),
         sprite: TREE_SPRITES[Math.floor(Math.random() * TREE_SPRITES.length)],
       });
     }
+
+    // Client requests the map layout after its scene is ready to receive it
+    this.onMessage("get_map", (client) => {
+      client.send("map_data", { trees: this.treeData });
+    });
 
     // Handle movement messages from clients
     this.onMessage<MoveMessage>("move", (client, data) => {
@@ -127,9 +130,6 @@ export class GameRoom extends Room<GameState> {
       y: player.y,
       time: Date.now(),
     });
-
-    // Send the full map layout to the newly joined player
-    client.send("map_data", { trees: this.treeData });
 
     console.log(`[Room] ${player.nickname} (${client.sessionId}) joined. Players: ${this.state.players.size}`);
   }

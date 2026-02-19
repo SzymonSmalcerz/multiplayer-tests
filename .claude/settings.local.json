@@ -6,7 +6,8 @@
       "Bash(npm run build:client:*)",
       "Bash(timeout 5 node:*)",
       "Bash(npx kill-port:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }
