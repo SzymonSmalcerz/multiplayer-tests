@@ -369,17 +369,25 @@ export class GameScene extends Phaser.Scene {
       }
     } else if (this.pathWaypoints.length > 0) {
       // ── Path following ───────────────────────────────────────────────────
-      const wp = this.pathWaypoints[this.pathIndex];
-      const dx = wp.x - this.localSprite.x;
-      const dy = wp.y - this.localSprite.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      let wp = this.pathWaypoints[this.pathIndex];
+      let dx = wp.x - this.localSprite.x;
+      let dy = wp.y - this.localSprite.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (dist < WAYPOINT_THRESHOLD) {
+      // Skip waypoints that are already reached to prevent one-frame stutters
+      while (dist < WAYPOINT_THRESHOLD && this.pathWaypoints.length > 0) {
         this.pathIndex++;
         if (this.pathIndex >= this.pathWaypoints.length) {
           this.pathWaypoints = [];
+          break;
         }
-      } else {
+        wp = this.pathWaypoints[this.pathIndex];
+        dx = wp.x - this.localSprite.x;
+        dy = wp.y - this.localSprite.y;
+        dist = Math.sqrt(dx * dx + dy * dy);
+      }
+
+      if (this.pathWaypoints.length > 0) {
         vx = (dx / dist) * PLAYER_SPEED;
         vy = (dy / dist) * PLAYER_SPEED;
         moving = true;
@@ -399,9 +407,9 @@ export class GameScene extends Phaser.Scene {
     const key = skinKey(this.localSkin);
     const animKey = `${key}_${DIR_NAMES[dir]}`;
     if (moving) {
-      if (this.localSprite.anims.currentAnim?.key !== animKey) {
-        this.localSprite.play(animKey);
-      }
+      // Use ignoreIfPlaying=true so the animation doesn't restart every frame,
+      // but DOES start if it was currently stopped.
+      this.localSprite.play(animKey, true);
     } else {
       if (this.localSprite.anims.isPlaying) {
         this.localSprite.stop();
@@ -436,9 +444,7 @@ export class GameScene extends Phaser.Scene {
       const animKey = `${safeKey}_${DIR_NAMES[direction]}`;
 
       if (moving) {
-        if (sprite.anims.currentAnim?.key !== animKey) {
-          sprite.play(animKey);
-        }
+        sprite.play(animKey, true);
       } else {
         if (sprite.anims.isPlaying) {
           sprite.stop();
