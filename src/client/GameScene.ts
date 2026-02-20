@@ -1,16 +1,20 @@
 import Phaser from "phaser";
-import { GameSceneData, MapDataMessage, RemotePlayer, RemotePlayerEntity, TreeData } from "./types";
+import {
+  GameSceneData, MapDataMessage, RemotePlayer, RemotePlayerEntity,
+  TreeData, EnemyData, EnemyEntity,
+} from "./types";
 import { ALL_SKINS, FRAME_W as FRAME_SIZE } from "./skins";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAP_W = 2000;
 const MAP_H = 2000;
-const PLAYER_SPEED = 200;            // px/s — client prediction speed
-const SEND_RATE_MS = 50;             // send position @ 20 Hz
-const LERP_FACTOR = 0.18;            // interpolation factor for remote players
-const RECONCILE_THRESHOLD = 120;     // px — snap if server disagrees by more than this
-const ANIM_FPS = 10;
+const PLAYER_SPEED        = 200;   // px/s — client prediction speed
+const SEND_RATE_MS        = 50;    // send position @ 20 Hz
+const LERP_FACTOR         = 0.18;  // interpolation factor for remote players / enemies
+const RECONCILE_THRESHOLD = 120;   // px — snap if server disagrees by more than this
+const ANIM_FPS            = 10;
+const ATTACK_ANIM_MS      = 350;   // local attack animation duration (ms)
 
 // All selectable skins — preloaded so any player's chosen skin renders correctly
 const SKINS_TO_LOAD = ALL_SKINS;
@@ -20,35 +24,50 @@ const TREE_KEYS = ["tree1", "tree2", "tree3"];
 // Tree sprite dimensions and trunk collision box (pixel coords within the 96×128 sprite)
 const TREE_W = 96;
 const TREE_H = 128;
-// Collision box corners within sprite: top-left (36,94) → bottom-right (64,111)
-const TRUNK_BODY_X      = 36;               // offset from sprite left
-const TRUNK_BODY_Y      = 94;               // offset from sprite top
-const TRUNK_BODY_WIDTH  = 64 - 36;          // 28 px
-const TRUNK_BODY_HEIGHT = 111 - 94;         // 17 px
+const TRUNK_BODY_X      = 36;
+const TRUNK_BODY_Y      = 94;
+const TRUNK_BODY_WIDTH  = 64 - 36;   // 28 px
+const TRUNK_BODY_HEIGHT = 111 - 94;  // 17 px
 
 // Player collision box (pixel coords within the 64×64 sprite frame)
-// Top-left corner (26,47) → bottom-right corner (39,54)
-const PLAYER_BODY_X      = 26;              // offset from sprite left
-const PLAYER_BODY_Y      = 47;              // offset from sprite top
-const PLAYER_BODY_WIDTH  = 39 - 26;         // 13 px
-const PLAYER_BODY_HEIGHT = 54 - 47;         // 7 px
+const PLAYER_BODY_X      = 26;
+const PLAYER_BODY_Y      = 47;
+const PLAYER_BODY_WIDTH  = 39 - 26;  // 13 px
+const PLAYER_BODY_HEIGHT = 54 - 47;  //  7 px
 
-// ─── Click-to-move / pathfinding ─────────────────────────────────────────────
-const NAV_CELL = 16;           // px per nav-grid cell (2000/16 = 125 cols/rows)
-const WAYPOINT_THRESHOLD = 8;  // px — distance at which we advance to the next waypoint
+// Click-to-move / pathfinding
+const NAV_CELL           = 16;  // px per nav-grid cell
+const WAYPOINT_THRESHOLD = 8;   // px — advance to next waypoint when within this range
 
-// Maps game direction index (0=down,1=left,2=up,3=right) → animation name
+// Maps direction index (0=down,1=left,2=up,3=right) → walk animation suffix
 const DIR_NAMES = ["walk_down", "walk_left", "walk_up", "walk_right"] as const;
 
-// Sprite-sheet row → animation name  (row 0=up, 1=left, 2=down, 3=right per spec)
+// Maps direction index → attack animation suffix (for blue_sword)
+// dir 0=down, 1=left (uses right+flip), 2=up, 3=right
+const ATTACK_DIR_NAMES = ["down", "left", "up", "right"] as const;
+
+// Sprite-sheet row → walk animation name
 const ROW_ANIM_NAMES = ["walk_up", "walk_left", "walk_down", "walk_right"] as const;
 
 // Direction index → sprite-sheet row  (down→row2, left→row1, up→row0, right→row3)
 const DIR_TO_ROW = [2, 1, 0, 3] as const;
 
-// Converts "male/1lvl" → "male_1lvl" (safe Phaser key)
+// Hit-enemy direction name lookup (0=down,1=left,2=up; 3=right uses flip)
+const HIT_DIR_NAMES = ["down", "left", "up"] as const;
+
+// Display info for each enemy type (name + level shown above head)
+const ENEMY_DISPLAY: Record<string, { name: string; level: number }> = {
+  hit: { name: "Hit", level: 3 },
+};
+
+// Converts "male/1lvl" → "male_1lvl"
 function skinKey(skin: string): string {
   return skin.replace("/", "_");
+}
+
+// XP required to advance from `level` to `level+1` (mirrors server formula)
+function xpForNextLevel(level: number): number {
+  return Math.floor(100 * Math.pow(1.1, level - 1));
 }
 
 // ─── Scene ────────────────────────────────────────────────────────────────────
@@ -66,6 +85,21 @@ export class GameScene extends Phaser.Scene {
   private localLabel!: Phaser.GameObjects.Text;
   private localChatBubble?: Phaser.GameObjects.Text;
   private localDirection = 0;
+  private localWeapon!: Phaser.GameObjects.Sprite;
+  private localLevel = 1;
+
+  // Local attack state
+  private localIsAttacking = false;
+  private localAttackDir   = 0;
+  private localAttackTimer = 0;
+
+  // Local death state
+  private localGrave?: Phaser.GameObjects.Image;
+  private diedOverlay?: Phaser.GameObjects.Graphics;
+  private diedText?: Phaser.GameObjects.Text;
+  private countdownText?: Phaser.GameObjects.Text;
+  private localIsDead    = false;
+  private localDeathTimer = 0;
 
   // Input
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -73,10 +107,16 @@ export class GameScene extends Phaser.Scene {
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyS!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
+  private keyI!: Phaser.Input.Keyboard.Key;
+  private keyU!: Phaser.Input.Keyboard.Key;
+  private keySpace!: Phaser.Input.Keyboard.Key;
   private keyEnter!: Phaser.Input.Keyboard.Key;
 
   // Remote players
   private remoteMap = new Map<string, RemotePlayerEntity>();
+
+  // Enemies
+  private enemyMap = new Map<string, EnemyEntity>();
 
   // Chat UI elements
   private chatInputWrap!: HTMLElement;
@@ -87,12 +127,18 @@ export class GameScene extends Phaser.Scene {
   // Trees
   private treesGroup!: Phaser.Physics.Arcade.StaticGroup;
 
-  // Nav grid for click-to-move (flat Uint8Array: 1 = blocked, 0 = free)
+  // HUD
+  private hudHpBar!: Phaser.GameObjects.Graphics;
+  private hudXpBar!: Phaser.GameObjects.Graphics;
+  private hudHpText!: Phaser.GameObjects.Text;
+  private hudXpText!: Phaser.GameObjects.Text;
+
+  // Nav grid for click-to-move
   private navGrid = new Uint8Array(0);
   private navCols = 0;
   private navRows = 0;
 
-  // Active path (world-space waypoints) and current waypoint index
+  // Active path waypoints
   private pathWaypoints: Phaser.Math.Vector2[] = [];
   private pathIndex = 0;
 
@@ -106,18 +152,17 @@ export class GameScene extends Phaser.Scene {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   init(data: GameSceneData): void {
-    this.room = data.room;
+    this.room          = data.room;
     this.localNickname = data.nickname;
-    this.localSkin = data.skin;
-    this.mySessionId = data.room.sessionId as string;
+    this.localSkin     = data.skin;
+    this.mySessionId   = data.room.sessionId as string;
   }
 
   preload(): void {
     // Player sprite sheets
     for (const skin of SKINS_TO_LOAD) {
       this.load.spritesheet(skinKey(skin), `/assets/player/${skin}.png`, {
-        frameWidth: FRAME_SIZE,
-        frameHeight: FRAME_SIZE,
+        frameWidth: FRAME_SIZE, frameHeight: FRAME_SIZE,
       });
     }
 
@@ -132,53 +177,112 @@ export class GameScene extends Phaser.Scene {
     for (const key of TREE_KEYS) {
       this.load.image(key, `/assets/trees/${key}.png`);
     }
+
+    // Weapon sprite sheet (64×64 frames, 9 cols × 5 rows)
+    this.load.spritesheet("blue_sword", "/assets/weapons/blue_sword.png", {
+      frameWidth: FRAME_SIZE, frameHeight: FRAME_SIZE,
+    });
+
+    // Hit enemy sprite sheet (32×32 frames, 2 cols × 7 rows)
+    this.load.spritesheet("hit_enemy", "/assets/enemies/hit.png", {
+      frameWidth: 32, frameHeight: 32,
+    });
+
+    // Grave shown at player's death location
+    this.load.image("grave", "/assets/deathState/grave.png");
   }
 
   create(): void {
-    // ── Background ────────────────────────────────────────────────────────────
+    // ── Background ─────────────────────────────────────────────────────────
     this.add.tileSprite(0, 0, MAP_W, MAP_H, "grass").setOrigin(0, 0).setDepth(0);
 
-    // ── Physics world bounds ──────────────────────────────────────────────────
+    // ── Physics world bounds ────────────────────────────────────────────────
     this.physics.world.setBounds(0, 0, MAP_W, MAP_H);
 
-    // ── Trees static group (populated when map_data arrives) ──────────────────
+    // ── Trees static group ──────────────────────────────────────────────────
     this.treesGroup = this.physics.add.staticGroup();
 
-    // ── Animations ────────────────────────────────────────────────────────────
+    // ── Animations ─────────────────────────────────────────────────────────
     this.createAnimations();
 
-    // ── Local player (position updated once server onAdd fires) ───────────────
+    // ── Local player ────────────────────────────────────────────────────────
     this.createLocalPlayer(MAP_W / 2, MAP_H / 2);
 
-    // ── Camera ────────────────────────────────────────────────────────────────
+    // ── HUD ─────────────────────────────────────────────────────────────────
+    this.createHUD();
+
+    // ── Death UI (hidden by default) ─────────────────────────────────────────
+    this.createDeathUI();
+
+    // ── Camera ──────────────────────────────────────────────────────────────
     this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
     this.cameras.main.startFollow(this.localSprite, true, 0.08, 0.08);
 
-    // ── Input ─────────────────────────────────────────────────────────────────
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keyW = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    this.keyA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    this.keyS = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-    this.keyD = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    // ── Input ────────────────────────────────────────────────────────────────
+    this.cursors  = this.input.keyboard!.createCursorKeys();
+    this.keyW     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    this.keyA     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    this.keyS     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+    this.keyD     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this.keyI     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I);
+    this.keyU     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.U);
+    this.keySpace = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyEnter = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
-    // ── Chat UI ───────────────────────────────────────────────────────────────
+    // ── Chat UI ──────────────────────────────────────────────────────────────
     this.setupChatUI();
 
-    // ── Click / tap to move ───────────────────────────────────────────────────
+    // ── I / Space key → attack ────────────────────────────────────────────────
+    this.keyI.on("down", () => {
+      if (this.isTyping) return;
+      this.triggerAttack();
+    });
+
+    this.keySpace.on("down", () => {
+      if (this.isTyping) return;
+      this.triggerAttack();
+    });
+
+    // ── U key → un-equip weapon ───────────────────────────────────────────────
+    this.keyU.on("down", () => {
+      if (this.isTyping) return;
+      const ps = this.room.state.players.get(this.mySessionId);
+      if (ps?.showWeapon) this.room.send("toggle_weapon");
+    });
+
+    // ── Click / tap to move ──────────────────────────────────────────────────
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.isTyping) return;
       this.onMapClick(pointer.worldX, pointer.worldY);
     });
 
-    // ── Colyseus listeners ────────────────────────────────────────────────────
+    // ── Colyseus listeners ───────────────────────────────────────────────────
     this.setupRoomListeners();
   }
 
+  // ── Attack ─────────────────────────────────────────────────────────────────
+
+  private triggerAttack(): void {
+    if (this.localIsAttacking) return; // already mid-swing
+    if (this.localIsDead) return;
+
+    this.room.send("attack", { direction: this.localDirection });
+
+    // Optimistically start attack animation
+    this.localIsAttacking = true;
+    this.localAttackDir   = this.localDirection;
+    this.localAttackTimer = ATTACK_ANIM_MS;
+
+    // Ensure weapon is visible immediately even if server hasn't confirmed yet
+    this.localWeapon.setVisible(true);
+  }
+
+  // ── Chat ───────────────────────────────────────────────────────────────────
+
   private setupChatUI(): void {
     this.chatInputWrap = document.getElementById("chat-input-wrap")!;
-    this.chatInput = document.getElementById("chat-input") as HTMLInputElement;
-    this.chatDisplay = document.getElementById("chat-display")!;
+    this.chatInput     = document.getElementById("chat-input") as HTMLInputElement;
+    this.chatDisplay   = document.getElementById("chat-display")!;
 
     this.keyEnter.on("down", () => {
       if (!this.isTyping) {
@@ -188,7 +292,6 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // Handle escape to cancel
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.isTyping) this.stopTyping(false);
     });
@@ -199,15 +302,12 @@ export class GameScene extends Phaser.Scene {
     this.chatInputWrap.style.display = "block";
     this.chatInput.focus();
     this.chatInput.value = "";
-    
-    // Disable Phaser keyboard input and stop capturing events so they reach the HTML input
+
     if (this.input.keyboard) {
       this.input.keyboard.enabled = false;
-      // Also explicitly remove captures if any are active
       this.input.keyboard.clearCaptures();
     }
 
-    // But we need Enter to work to send, so we use a native listener
     const onEnter = (e: KeyboardEvent) => {
       if (e.key === "Enter") {
         this.stopTyping(true);
@@ -229,10 +329,9 @@ export class GameScene extends Phaser.Scene {
     this.isTyping = false;
     this.chatInputWrap.style.display = "none";
     this.chatInput.blur();
-    
+
     if (this.input.keyboard) {
       this.input.keyboard.enabled = true;
-      // Re-enable captures for common game keys to prevent page scrolling/defaults
       this.input.keyboard.addCapture([
         Phaser.Input.Keyboard.KeyCodes.W,
         Phaser.Input.Keyboard.KeyCodes.A,
@@ -247,10 +346,192 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ── Main loop ──────────────────────────────────────────────────────────────
+
   update(time: number, delta: number): void {
     this.handleLocalMovement(delta);
     this.interpolateRemotePlayers();
+    this.updateEnemies();
+    this.updateHUD();
+    this.tickDeathTimer(delta);
     this.sendPositionIfNeeded(time);
+  }
+
+  // ── HUD ────────────────────────────────────────────────────────────────────
+
+  private createHUD(): void {
+    const D = 99998;
+
+    // Dark background panel
+    this.add.graphics()
+      .fillStyle(0x000000, 0.55)
+      .fillRect(8, 8, 204, 50)
+      .setScrollFactor(0)
+      .setDepth(D);
+
+    // HP bar background (dark red)
+    this.add.graphics()
+      .fillStyle(0x660000, 1)
+      .fillRect(12, 14, 192, 13)
+      .setScrollFactor(0)
+      .setDepth(D + 1);
+
+    // XP bar background (dark blue)
+    this.add.graphics()
+      .fillStyle(0x000066, 1)
+      .fillRect(12, 32, 192, 13)
+      .setScrollFactor(0)
+      .setDepth(D + 1);
+
+    // HP fill bar (redrawn each frame)
+    this.hudHpBar = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(D + 2);
+
+    // XP fill bar (redrawn each frame)
+    this.hudXpBar = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(D + 2);
+
+    // HP text
+    this.hudHpText = this.add.text(14, 14, "HP: 100/100", {
+      fontSize: "11px",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 2,
+      resolution: 2,
+    }).setScrollFactor(0).setDepth(D + 3);
+
+    // XP text
+    this.hudXpText = this.add.text(14, 32, "XP: 0/100", {
+      fontSize: "11px",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 2,
+      resolution: 2,
+    }).setScrollFactor(0).setDepth(D + 3);
+  }
+
+  private updateHUD(): void {
+    const p = this.room.state.players.get(this.mySessionId);
+    if (!p) return;
+
+    // Detect death / respawn transitions
+    const isDead = !!p.isDead;
+    if (isDead !== this.localIsDead) {
+      this.localIsDead = isDead;
+      if (isDead) {
+        this.onLocalPlayerDied();
+      } else {
+        this.onLocalPlayerRespawned();
+      }
+    }
+
+    const maxBarW = 192;
+
+    // HP bar
+    const hpRatio = Math.max(0, Math.min(1, p.hp / p.maxHp));
+    this.hudHpBar.clear();
+    this.hudHpBar.fillStyle(0xff3333, 1);
+    this.hudHpBar.fillRect(12, 14, Math.floor(maxBarW * hpRatio), 13);
+    this.hudHpText.setText(`HP: ${Math.floor(p.hp)}/${p.maxHp}`);
+
+    // XP bar
+    const xpNeeded = xpForNextLevel(p.level);
+    const xpRatio  = Math.max(0, Math.min(1, p.xp / xpNeeded));
+    this.hudXpBar.clear();
+    this.hudXpBar.fillStyle(0x3399ff, 1);
+    this.hudXpBar.fillRect(12, 32, Math.floor(maxBarW * xpRatio), 13);
+    this.hudXpText.setText(`XP: ${Math.floor(p.xp)}/${xpNeeded}  Lv.${p.level}`);
+
+    // Update nickname label when level changes
+    if (p.level !== this.localLevel) {
+      this.localLevel = p.level;
+      this.localLabel.setText(`${this.localNickname} [Lv.${p.level}]`);
+    }
+  }
+
+  // ── Death UI ───────────────────────────────────────────────────────────────
+
+  private createDeathUI(): void {
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+
+    this.diedOverlay = this.add.graphics()
+      .fillStyle(0x000000, 0.7)
+      .fillRect(0, 0, w, h)
+      .setScrollFactor(0)
+      .setDepth(100010)
+      .setVisible(false);
+
+    this.diedText = this.add.text(w / 2, h / 2 - 50, "YOU DIED", {
+      fontSize: "56px",
+      color: "#cc0000",
+      stroke: "#000000",
+      strokeThickness: 6,
+      resolution: 2,
+    })
+    .setOrigin(0.5)
+    .setScrollFactor(0)
+    .setDepth(100011)
+    .setVisible(false);
+
+    this.countdownText = this.add.text(w / 2, h / 2 + 24, "10", {
+      fontSize: "38px",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 4,
+      resolution: 2,
+    })
+    .setOrigin(0.5)
+    .setScrollFactor(0)
+    .setDepth(100011)
+    .setVisible(false);
+  }
+
+  private onLocalPlayerDied(): void {
+    // Place grave at death position in world space
+    this.localGrave = this.add.image(this.localSprite.x, this.localSprite.y, "grave");
+    this.localGrave.setDisplaySize(32, 32);
+    this.localGrave.setDepth(this.localSprite.y + FRAME_SIZE / 2);
+
+    // Keep label above the grave
+    this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 42);
+
+    // Hide player visuals
+    this.localSprite.setVisible(false);
+    this.localWeapon.setVisible(false);
+    this.localSprite.setVelocity(0, 0);
+    this.localIsAttacking = false;
+
+    // Show death screen
+    this.diedOverlay?.setVisible(true);
+    this.diedText?.setVisible(true);
+    this.countdownText?.setText("10").setVisible(true);
+    this.localDeathTimer = 10;
+  }
+
+  private onLocalPlayerRespawned(): void {
+    // Remove grave
+    this.localGrave?.destroy();
+    this.localGrave = undefined;
+
+    // Restore player visuals
+    this.localSprite.setVisible(true);
+
+    // Hide death screen
+    this.diedOverlay?.setVisible(false);
+    this.diedText?.setVisible(false);
+    this.countdownText?.setVisible(false);
+
+    this.localDeathTimer = 0;
+  }
+
+  private tickDeathTimer(delta: number): void {
+    if (!this.localIsDead || this.localDeathTimer <= 0) return;
+    this.localDeathTimer -= delta / 1000;
+    const secs = Math.max(1, Math.ceil(this.localDeathTimer));
+    this.countdownText?.setText(String(secs));
   }
 
   // ── Setup helpers ──────────────────────────────────────────────────────────
@@ -261,20 +542,21 @@ export class GameScene extends Phaser.Scene {
     this.localSprite.setCollideWorldBounds(true);
     this.localSprite.setDepth(y + FRAME_SIZE / 2);
 
-    // Narrow foot-area collision box so the player walks naturally under canopies.
-    // setOffset is measured from the sprite's top-left corner (origin 0.5,0.5 is
-    // accounted for by Phaser: top-left = sprite.x - 32, sprite.y - 32).
+    this.localWeapon = this.add.sprite(x, y, "blue_sword");
+    this.localWeapon.setDepth(this.localSprite.depth - 0.1);
+    this.localWeapon.setVisible(false);
+
     const body = this.localSprite.body as Phaser.Physics.Arcade.Body;
     body.setSize(PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT);
     body.setOffset(PLAYER_BODY_X, PLAYER_BODY_Y);
     this.localSprite.play(`${key}_walk_down`);
     this.localSprite.stop();
-    this.localSprite.setFrame(DIR_TO_ROW[0] * 9); // idle facing down = row 2, frame 18
+    this.localSprite.setFrame(DIR_TO_ROW[0] * 9);
 
     this.localLabel = this.add
-      .text(x, y - 42, this.localNickname, {
+      .text(x, y - 42, `${this.localNickname} [Lv.1]`, {
         fontSize: "13px",
-        color: "#ffffff",
+        color: "#44ff44",
         stroke: "#000000",
         strokeThickness: 3,
         resolution: 2,
@@ -284,26 +566,90 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createAnimations(): void {
+    // ── Player walk animations ────────────────────────────────────────────────
     for (const skin of SKINS_TO_LOAD) {
       const key = skinKey(skin);
       if (!this.textures.exists(key)) continue;
 
       for (let row = 0; row < 4; row++) {
         const start = row * 9;
-        const end = start + 8;
-        this.anims.create({
-          key: `${key}_${ROW_ANIM_NAMES[row]}`,
-          frames: this.anims.generateFrameNumbers(key, { start, end }),
-          frameRate: ANIM_FPS,
-          repeat: -1,
-        });
+        const end   = start + 8;
+        const aKey  = `${key}_${ROW_ANIM_NAMES[row]}`;
+        if (!this.anims.exists(aKey)) {
+          this.anims.create({
+            key: aKey,
+            frames: this.anims.generateFrameNumbers(key, { start, end }),
+            frameRate: ANIM_FPS,
+            repeat: -1,
+          });
+        }
+      }
+    }
+
+    // ── Weapon walk animations (rows 0–3, 9 frames each) ─────────────────────
+    if (this.textures.exists("blue_sword")) {
+      for (let row = 0; row < 4; row++) {
+        const start = row * 9;
+        const end   = start + 8;
+        const aKey  = `blue_sword_${ROW_ANIM_NAMES[row]}`;
+        if (!this.anims.exists(aKey)) {
+          this.anims.create({
+            key: aKey,
+            frames: this.anims.generateFrameNumbers("blue_sword", { start, end }),
+            frameRate: ANIM_FPS,
+            repeat: -1,
+          });
+        }
+      }
+
+      // Row 4 attack animations (3 frames each, plays once)
+      // Frame layout in row 4: [36,37,38]=right, [39,40,41]=up, [42,43,44]=down
+      // Left attack uses right frames + 180° flip at runtime
+      const attackDefs: [string, number[]][] = [
+        ["blue_sword_attack_right", [36, 37, 38]],
+        ["blue_sword_attack_up",    [39, 40, 41]],
+        ["blue_sword_attack_down",  [42, 43, 44]],
+      ];
+      for (const [aKey, frames] of attackDefs) {
+        if (!this.anims.exists(aKey)) {
+          this.anims.create({
+            key: aKey,
+            frames: this.anims.generateFrameNumbers("blue_sword", { frames }),
+            frameRate: 10,
+            repeat: 0,
+          });
+        }
+      }
+    }
+
+    // ── Hit enemy animations (2 frames per row, 7 rows) ───────────────────────
+    // Row layout: 0=stand, 1=walk_up, 2=walk_left, 3=walk_down,
+    //             4=attack_up, 5=attack_left, 6=attack_down
+    // Right variants use left + flipX at runtime
+    if (this.textures.exists("hit_enemy")) {
+      const hitWalkDefs: [string, number[]][] = [
+        ["hit_idle",        [0,  1 ]],
+        ["hit_walk_up",     [2,  3 ]],
+        ["hit_walk_left",   [4,  5 ]],
+        ["hit_walk_down",   [6,  7 ]],
+        ["hit_attack_up",   [8,  9 ]],
+        ["hit_attack_left", [10, 11]],
+        ["hit_attack_down", [12, 13]],
+      ];
+      for (const [aKey, frames] of hitWalkDefs) {
+        if (!this.anims.exists(aKey)) {
+          this.anims.create({
+            key: aKey,
+            frames: this.anims.generateFrameNumbers("hit_enemy", { frames }),
+            frameRate: 6,
+            repeat: -1,
+          });
+        }
       }
     }
   }
 
   private setupRoomListeners(): void {
-    // Register the handler FIRST, then request the data so the message
-    // is never received before the handler exists (timing-safe).
     this.room.onMessage("map_data", (data: MapDataMessage) => {
       this.placeTrees(data.trees);
       this.buildNavGrid(data.trees);
@@ -311,36 +657,42 @@ export class GameScene extends Phaser.Scene {
     });
     this.room.send("get_map");
 
-    // A player entered the room (including our own entry for initial position)
+    // Player added
     this.room.state.players.onAdd((player: RemotePlayer, sessionId: string) => {
       if (sessionId === this.mySessionId) {
-        // Teleport local sprite to server-assigned spawn
         this.localSprite.setPosition(player.x, player.y);
         return;
       }
       this.addRemotePlayer(player, sessionId);
     });
 
-    // A player left
+    // Player left
     this.room.state.players.onRemove((_player: RemotePlayer, sessionId: string) => {
       this.removeRemotePlayer(sessionId);
     });
 
-    // Authoritative position update for our own player → reconcile
+    // Authoritative position reconciliation for own player
     this.room.state.players.onChange((player: RemotePlayer, sessionId: string) => {
       if (sessionId !== this.mySessionId) return;
       const dx = Math.abs(player.x - this.localSprite.x);
       const dy = Math.abs(player.y - this.localSprite.y);
       if (dx > RECONCILE_THRESHOLD || dy > RECONCILE_THRESHOLD) {
-        // Server is correcting a cheat or very large drift — snap
         this.localSprite.setPosition(player.x, player.y);
       }
     });
 
-    // Connection dropped
-    this.room.onLeave(() => {
-      this.showDisconnectBanner();
+    // Enemy added
+    this.room.state.enemies.onAdd((enemy: EnemyData, id: string) => {
+      this.addEnemy(enemy, id);
     });
+
+    // Enemy removed
+    this.room.state.enemies.onRemove((_enemy: EnemyData, id: string) => {
+      this.removeEnemy(id);
+    });
+
+    // Connection dropped
+    this.room.onLeave(() => { this.showDisconnectBanner(); });
 
     // Chat messages
     this.room.onMessage("chat", (data: { sessionId: string; nickname: string; message: string }) => {
@@ -348,20 +700,505 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ── Remote player management ───────────────────────────────────────────────
+
+  private addRemotePlayer(player: RemotePlayer, sessionId: string): void {
+    const key     = skinKey(player.skin ?? "male/1lvl");
+    const safeKey = this.textures.exists(key) ? key : "male_1lvl";
+    const lv      = player.level ?? 1;
+
+    const sprite = this.physics.add.sprite(player.x, player.y, safeKey);
+    sprite.setDepth(player.y + FRAME_SIZE / 2);
+    sprite.play(`${safeKey}_walk_down`);
+    sprite.stop();
+    sprite.setFrame(DIR_TO_ROW[0] * 9);
+
+    const weaponSprite = this.add.sprite(player.x, player.y, "blue_sword");
+    weaponSprite.setVisible(player.showWeapon || false);
+    weaponSprite.setDepth(sprite.depth - 0.1);
+
+    const graveSprite = this.add.image(player.x, player.y, "grave");
+    graveSprite.setDisplaySize(32, 32);
+    graveSprite.setDepth(sprite.depth);
+    graveSprite.setVisible(false);
+
+    const label = this.add
+      .text(player.x, player.y - 42, `${player.nickname ?? ""} [Lv.${lv}]`, {
+        fontSize: "13px",
+        color: "#ffff44",
+        stroke: "#000000",
+        strokeThickness: 3,
+        resolution: 2,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(9999);
+
+    const entity: RemotePlayerEntity = {
+      sprite,
+      weaponSprite,
+      label,
+      graveSprite,
+      targetX: player.x,
+      targetY: player.y,
+      direction: player.direction ?? 0,
+      showWeapon: player.showWeapon || false,
+      skinKey: safeKey,
+      level: lv,
+      isAttacking: player.isAttacking || false,
+      attackDirection: player.attackDirection ?? 0,
+      isDead: player.isDead || false,
+    };
+
+    this.remoteMap.set(sessionId, entity);
+
+    player.onChange(() => {
+      const e = this.remoteMap.get(sessionId);
+      if (!e) return;
+
+      const wasDeadBefore = e.isDead;
+      const isDeadNow     = player.isDead || false;
+
+      e.targetX         = player.x;
+      e.targetY         = player.y;
+      e.direction       = player.direction ?? 0;
+      e.showWeapon      = player.showWeapon || false;
+      e.isAttacking     = player.isAttacking || false;
+      e.attackDirection = player.attackDirection ?? 0;
+      e.isDead          = isDeadNow;
+
+      if (!wasDeadBefore && isDeadNow) {
+        // Just died: freeze sprite at death position, show grave
+        e.sprite.setVisible(false);
+        e.weaponSprite.setVisible(false);
+        e.graveSprite?.setPosition(e.sprite.x, e.sprite.y).setVisible(true);
+      } else if (wasDeadBefore && !isDeadNow) {
+        // Respawned: snap to new server position, restore sprite, hide grave
+        e.sprite.setPosition(player.x, player.y);
+        e.sprite.setVisible(true);
+        e.graveSprite?.setVisible(false);
+      }
+
+      const newLv = player.level ?? 1;
+      if (e.level !== newLv) {
+        e.level = newLv;
+        e.label.setText(`${player.nickname} [Lv.${newLv}]`);
+      }
+    });
+  }
+
+  private removeRemotePlayer(sessionId: string): void {
+    const entity = this.remoteMap.get(sessionId);
+    if (!entity) return;
+    entity.sprite.destroy();
+    entity.weaponSprite.destroy();
+    entity.label.destroy();
+    if (entity.chatBubble) entity.chatBubble.destroy();
+    entity.graveSprite?.destroy();
+    this.remoteMap.delete(sessionId);
+  }
+
+  // ── Enemy management ───────────────────────────────────────────────────────
+
+  private addEnemy(enemy: EnemyData, id: string): void {
+    const sprite = this.add.sprite(enemy.x, enemy.y, "hit_enemy");
+    sprite.setDisplaySize(48, 48); // upscale 32×32 → 48×48
+    sprite.setDepth(enemy.y + 24);
+    sprite.play("hit_idle");
+
+    const hpBar = this.add.graphics();
+    hpBar.setDepth(sprite.depth + 1);
+
+    const info  = ENEMY_DISPLAY[enemy.type] ?? { name: enemy.type, level: 1 };
+    const label = this.add.text(enemy.x, enemy.y - 44, `${info.name} [Lv.${info.level}]`, {
+      fontSize: "12px",
+      color: "#ff4444",
+      stroke: "#000000",
+      strokeThickness: 3,
+      resolution: 2,
+    })
+    .setOrigin(0.5, 1)
+    .setDepth(sprite.depth + 2);
+
+    const entity: EnemyEntity = {
+      sprite,
+      hpBar,
+      label,
+      targetX: enemy.x,
+      targetY: enemy.y,
+      direction: enemy.direction,
+      isAttacking: enemy.isAttacking,
+      attackDirection: enemy.attackDirection,
+      isDead: enemy.isDead,
+      type: enemy.type,
+      hp: enemy.hp,
+      maxHp: enemy.maxHp,
+    };
+
+    this.enemyMap.set(id, entity);
+
+    enemy.onChange(() => {
+      const e = this.enemyMap.get(id);
+      if (!e) return;
+      e.targetX       = enemy.x;
+      e.targetY       = enemy.y;
+      e.direction     = enemy.direction;
+      e.isAttacking   = enemy.isAttacking;
+      e.attackDirection = enemy.attackDirection;
+      e.hp            = enemy.hp;
+      e.maxHp         = enemy.maxHp;
+      e.isDead        = enemy.isDead;
+
+      // Start fade when enemy dies (server removes it 500 ms later)
+      if (enemy.isDead && sprite.active) {
+        this.tweens.add({
+          targets: sprite,
+          alpha: 0,
+          duration: 400,
+          onComplete: () => { /* sprite destroyed in removeEnemy */ },
+        });
+        hpBar.clear();
+      }
+    });
+  }
+
+  private removeEnemy(id: string): void {
+    const entity = this.enemyMap.get(id);
+    if (!entity) return;
+    entity.sprite.destroy();
+    entity.hpBar.destroy();
+    entity.label.destroy();
+    this.enemyMap.delete(id);
+  }
+
+  // ── Per-frame updates ──────────────────────────────────────────────────────
+
+  private updateEnemies(): void {
+    this.enemyMap.forEach((entity) => {
+      if (entity.isDead) return;
+
+      const { sprite, hpBar } = entity;
+      const prevX = sprite.x;
+      const prevY = sprite.y;
+
+      // Lerp toward authoritative position
+      sprite.x = Phaser.Math.Linear(sprite.x, entity.targetX, LERP_FACTOR);
+      sprite.y = Phaser.Math.Linear(sprite.y, entity.targetY, LERP_FACTOR);
+
+      const depth = sprite.y + 24;
+      sprite.setDepth(depth);
+      hpBar.setDepth(depth + 1);
+      entity.label.setPosition(sprite.x, sprite.y - 36).setDepth(depth + 2);
+
+      // ── HP bar ─────────────────────────────────────────────────────────────
+      hpBar.clear();
+      if (entity.hp > 0 && entity.maxHp > 0) {
+        const ratio = Math.max(0, Math.min(1, entity.hp / entity.maxHp));
+        hpBar.fillStyle(0x000000, 0.6);
+        hpBar.fillRect(sprite.x - 16, sprite.y - 32, 32, 4);
+        hpBar.fillStyle(0xff3333, 1);
+        hpBar.fillRect(sprite.x - 16, sprite.y - 32, Math.floor(32 * ratio), 4);
+      }
+
+      // ── Animation ──────────────────────────────────────────────────────────
+      const dir    = entity.isAttacking ? entity.attackDirection : entity.direction;
+      const moving = Math.abs(sprite.x - prevX) > 0.5 || Math.abs(sprite.y - prevY) > 0.5;
+
+      if (entity.isAttacking) {
+        if (dir === 3) {
+          // right attack = left attack frames + flipX
+          sprite.setFlipX(true);
+          sprite.play("hit_attack_left", true);
+        } else {
+          sprite.setFlipX(false);
+          const aKey = dir < 3 ? `hit_attack_${HIT_DIR_NAMES[dir]}` : "hit_attack_down";
+          sprite.play(aKey, true);
+        }
+      } else if (moving) {
+        if (entity.direction === 3) {
+          // right walk = left walk frames + flipX
+          sprite.setFlipX(true);
+          sprite.play("hit_walk_left", true);
+        } else {
+          sprite.setFlipX(false);
+          const wKey = entity.direction < 3
+            ? `hit_walk_${HIT_DIR_NAMES[entity.direction]}`
+            : "hit_walk_down";
+          sprite.play(wKey, true);
+        }
+      } else {
+        // No target / out of range — always return to waiting (row 0) animation
+        sprite.setFlipX(false);
+        sprite.play("hit_idle", true);
+      }
+    });
+  }
+
+  // ── Local movement & weapon animation ────────────────────────────────────────
+
+  private handleLocalMovement(delta: number): void {
+    // Block all movement while dead
+    if (this.localIsDead) {
+      this.localSprite.setVelocity(0, 0);
+      return;
+    }
+
+    const left  = this.cursors.left!.isDown  || this.keyA.isDown;
+    const right = this.cursors.right!.isDown || this.keyD.isDown;
+    const up    = this.cursors.up!.isDown    || this.keyW.isDown;
+    const down  = this.cursors.down!.isDown  || this.keyS.isDown;
+    const anyKey = left || right || up || down;
+
+    if (anyKey) this.pathWaypoints = [];
+
+    let vx = 0, vy = 0;
+    let moving = false;
+    let dir = this.localDirection;
+
+    if (anyKey) {
+      if (left)  { vx = -PLAYER_SPEED; dir = 1; moving = true; }
+      if (right) { vx =  PLAYER_SPEED; dir = 3; moving = true; }
+      if (up)    { vy = -PLAYER_SPEED; if (!left && !right) dir = 2; moving = true; }
+      if (down)  { vy =  PLAYER_SPEED; if (!left && !right) dir = 0; moving = true; }
+
+      if (vx !== 0 && vy !== 0) {
+        const norm = Math.SQRT2;
+        vx /= norm;
+        vy /= norm;
+      }
+    } else if (this.pathWaypoints.length > 0) {
+      let wp   = this.pathWaypoints[this.pathIndex];
+      let dx   = wp.x - this.localSprite.x;
+      let dy   = wp.y - this.localSprite.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+
+      while (dist < WAYPOINT_THRESHOLD && this.pathWaypoints.length > 0) {
+        this.pathIndex++;
+        if (this.pathIndex >= this.pathWaypoints.length) {
+          this.pathWaypoints = [];
+          break;
+        }
+        wp   = this.pathWaypoints[this.pathIndex];
+        dx   = wp.x - this.localSprite.x;
+        dy   = wp.y - this.localSprite.y;
+        dist = Math.sqrt(dx * dx + dy * dy);
+      }
+
+      if (this.pathWaypoints.length > 0) {
+        vx = (dx / dist) * PLAYER_SPEED;
+        vy = (dy / dist) * PLAYER_SPEED;
+        moving = true;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          dir = dx > 0 ? 3 : 1;
+        } else {
+          dir = dy > 0 ? 0 : 2;
+        }
+      }
+    }
+
+    this.localSprite.setVelocity(vx, vy);
+    this.localDirection = dir;
+
+    // ── Player sprite animation ────────────────────────────────────────────
+    const key     = skinKey(this.localSkin);
+    const animKey = `${key}_${DIR_NAMES[dir]}`;
+    if (moving) {
+      this.localSprite.play(animKey, true);
+    } else {
+      if (this.localSprite.anims.isPlaying) {
+        this.localSprite.stop();
+        this.localSprite.setFrame(DIR_TO_ROW[dir] * 9);
+      }
+    }
+
+    const playerDepth = this.localSprite.y + FRAME_SIZE / 2;
+    this.localSprite.setDepth(playerDepth);
+    this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 42);
+    if (this.localChatBubble) {
+      this.localChatBubble.setPosition(this.localSprite.x, this.localSprite.y - 65);
+    }
+
+    // ── Weapon animation ───────────────────────────────────────────────────
+    // Tick down attack timer
+    if (this.localIsAttacking) {
+      this.localAttackTimer -= delta;
+      if (this.localAttackTimer <= 0) {
+        this.localIsAttacking = false;
+        this.localWeapon.setFlipX(false);
+        this.localWeapon.setFlipY(false);
+      }
+    }
+
+    const playerState = this.room.state.players.get(this.mySessionId);
+    const showWeapon  = playerState?.showWeapon || this.localIsAttacking;
+
+    this.localWeapon.setVisible(showWeapon);
+
+    if (showWeapon) {
+      this.localWeapon.setPosition(this.localSprite.x, this.localSprite.y);
+
+      if (this.localIsAttacking) {
+        // Play attack animation
+        const atkDir = this.localAttackDir;
+        if (atkDir === 1) {
+          // left = right frames rotated 180°
+          this.localWeapon.setFlipX(true);
+          this.localWeapon.setFlipY(true);
+          this.localWeapon.play("blue_sword_attack_right", true);
+        } else {
+          this.localWeapon.setFlipX(false);
+          this.localWeapon.setFlipY(false);
+          const atkKey = `blue_sword_attack_${ATTACK_DIR_NAMES[atkDir]}`;
+          this.localWeapon.play(atkKey, true);
+        }
+      } else if (moving) {
+        this.localWeapon.setFlipX(false);
+        this.localWeapon.setFlipY(false);
+        this.localWeapon.play(`blue_sword_${DIR_NAMES[dir]}`, true);
+      } else {
+        this.localWeapon.stop();
+        this.localWeapon.setFlipX(false);
+        this.localWeapon.setFlipY(false);
+        this.localWeapon.setFrame(DIR_TO_ROW[dir] * 9);
+      }
+
+      // Depth: render in front when facing down, behind otherwise
+      if (dir === 0) {
+        this.localWeapon.setDepth(playerDepth + 0.1);
+      } else {
+        this.localWeapon.setDepth(playerDepth - 0.1);
+      }
+    }
+  }
+
+  // ── Remote player interpolation ─────────────────────────────────────────────
+
+  private interpolateRemotePlayers(): void {
+    this.remoteMap.forEach((entity) => {
+      // Dead players: freeze at death position, keep label above grave
+      if (entity.isDead) {
+        entity.label.setPosition(entity.sprite.x, entity.sprite.y - 42);
+        if (entity.chatBubble) entity.chatBubble.setPosition(entity.sprite.x, entity.sprite.y - 65);
+        return;
+      }
+
+      const { sprite, weaponSprite, label, chatBubble,
+              targetX, targetY, direction, showWeapon,
+              isAttacking, attackDirection, skinKey: key } = entity;
+
+      const prevX = sprite.x;
+      const prevY = sprite.y;
+
+      sprite.x = Phaser.Math.Linear(sprite.x, targetX, LERP_FACTOR);
+      sprite.y = Phaser.Math.Linear(sprite.y, targetY, LERP_FACTOR);
+
+      label.setPosition(sprite.x, sprite.y - 42);
+      if (chatBubble) chatBubble.setPosition(sprite.x, sprite.y - 65);
+
+      const playerDepth = sprite.y + FRAME_SIZE / 2;
+      sprite.setDepth(playerDepth);
+
+      const dx = Math.abs(sprite.x - prevX);
+      const dy = Math.abs(sprite.y - prevY);
+      const moving = dx > 0.5 || dy > 0.5;
+
+      // ── Remote weapon ────────────────────────────────────────────────────
+      const showW = showWeapon || isAttacking;
+      weaponSprite.setVisible(showW);
+
+      if (showW) {
+        weaponSprite.setPosition(sprite.x, sprite.y);
+
+        if (isAttacking) {
+          const atkDir = attackDirection;
+          if (atkDir === 1) {
+            weaponSprite.setFlipX(true);
+            weaponSprite.setFlipY(true);
+            weaponSprite.play("blue_sword_attack_right", true);
+          } else {
+            weaponSprite.setFlipX(false);
+            weaponSprite.setFlipY(false);
+            weaponSprite.play(`blue_sword_attack_${ATTACK_DIR_NAMES[atkDir]}`, true);
+          }
+        } else if (moving) {
+          weaponSprite.setFlipX(false);
+          weaponSprite.setFlipY(false);
+          weaponSprite.play(`blue_sword_${DIR_NAMES[direction]}`, true);
+        } else {
+          weaponSprite.stop();
+          weaponSprite.setFlipX(false);
+          weaponSprite.setFlipY(false);
+          weaponSprite.setFrame(DIR_TO_ROW[direction] * 9);
+        }
+
+        if (direction === 0) {
+          weaponSprite.setDepth(playerDepth + 0.1);
+        } else {
+          weaponSprite.setDepth(playerDepth - 0.1);
+        }
+      }
+
+      // ── Remote player sprite animation ───────────────────────────────────
+      const safeKey = this.textures.exists(key) ? key : "male_1lvl";
+      const animKey = `${safeKey}_${DIR_NAMES[direction]}`;
+
+      if (moving) {
+        sprite.play(animKey, true);
+      } else {
+        if (sprite.anims.isPlaying) {
+          sprite.stop();
+          sprite.setFrame(DIR_TO_ROW[direction] * 9);
+        }
+      }
+    });
+  }
+
+  // ── Position send ──────────────────────────────────────────────────────────
+
+  private sendPositionIfNeeded(time: number): void {
+    if (time - this.lastSendTime < SEND_RATE_MS) return;
+    this.lastSendTime = time;
+    this.room.send("move", {
+      x: this.localSprite.x,
+      y: this.localSprite.y,
+      direction: this.localDirection,
+      timestamp: time,
+    });
+  }
+
+  // ── Tree placement ─────────────────────────────────────────────────────────
+
+  private placeTrees(trees: TreeData[]): void {
+    for (const td of trees) {
+      const img = this.treesGroup.create(td.x, td.y, td.sprite) as Phaser.Physics.Arcade.Image;
+      img.setDisplaySize(TREE_W, TREE_H);
+
+      const body = img.body as Phaser.Physics.Arcade.StaticBody;
+      body.setSize(TRUNK_BODY_WIDTH, TRUNK_BODY_HEIGHT);
+      body.setOffset(TRUNK_BODY_X, TRUNK_BODY_Y);
+      img.setDepth(td.y + TREE_H / 2);
+    }
+    this.treesGroup.refresh();
+  }
+
+  // ── Chat display ────────────────────────────────────────────────────────────
+
   private displayChatMessage(data: { sessionId: string; nickname: string; message: string }): void {
-    // 1. Bottom-left chat display
     const msgEl = document.createElement("div");
     msgEl.className = "chat-msg";
-    msgEl.innerHTML = `<span class="name">${data.nickname}:</span> ${data.message}`;
+    if (data.sessionId === "server") {
+      msgEl.innerHTML = `<span style="color:#aaaaaa">${data.message}</span>`;
+    } else if (data.sessionId === this.mySessionId) {
+      msgEl.innerHTML = `<span class="name" style="color:#44ff44">${data.nickname}:</span> ${data.message}`;
+    } else {
+      msgEl.innerHTML = `<span class="name" style="color:#ffff44">${data.nickname}:</span> ${data.message}`;
+    }
     this.chatDisplay.appendChild(msgEl);
 
-    // Fade out and remove from UI after 5 seconds
     setTimeout(() => {
       msgEl.style.animation = "fadeOut 0.5s forwards";
       setTimeout(() => msgEl.remove(), 500);
     }, 5000);
 
-    // 2. Bubble above player head
     let targetSprite: Phaser.Physics.Arcade.Sprite;
     let isLocal = false;
 
@@ -388,7 +1225,6 @@ export class GameScene extends Phaser.Scene {
     .setOrigin(0.5, 1)
     .setDepth(10000);
 
-    // Apply to entity
     if (isLocal) {
       this.localChatBubble = bubble;
     } else {
@@ -396,7 +1232,6 @@ export class GameScene extends Phaser.Scene {
       if (entity) entity.chatBubble = bubble;
     }
 
-    // Fade out and destroy bubble after 10 seconds
     this.tweens.add({
       targets: bubble,
       alpha: 0,
@@ -414,243 +1249,12 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // ── Tree placement ─────────────────────────────────────────────────────────
-
-  private placeTrees(trees: TreeData[]): void {
-    for (const td of trees) {
-      const img = this.treesGroup.create(td.x, td.y, td.sprite) as Phaser.Physics.Arcade.Image;
-
-      // Force the display size to the known sprite dimensions (96×128)
-      img.setDisplaySize(TREE_W, TREE_H);
-
-      /**
-       * Collision box at the trunk base.
-       * Sprite origin is (0.5, 0.5), so Phaser measures body.setOffset from
-       * the sprite's top-left corner: (x - w/2, y - h/2).
-       *
-       * Box in sprite-local coords: x 36→64, y 94→111
-       *   → offset  = (36, 94)
-       *   → size    = (28, 17)
-       */
-      const body = img.body as Phaser.Physics.Arcade.StaticBody;
-      body.setSize(TRUNK_BODY_WIDTH, TRUNK_BODY_HEIGHT);
-      body.setOffset(TRUNK_BODY_X, TRUNK_BODY_Y);
-
-      // Depth = bottom edge of the sprite (centre + half-height)
-      img.setDepth(td.y + TREE_H / 2);
-    }
-    this.treesGroup.refresh();
-  }
-
-  // ── Remote player management ───────────────────────────────────────────────
-
-  private addRemotePlayer(player: RemotePlayer, sessionId: string): void {
-    const key = skinKey(player.skin ?? "male/1lvl");
-    const safeKey = this.textures.exists(key) ? key : "male_1lvl";
-
-    const sprite = this.physics.add.sprite(player.x, player.y, safeKey);
-    sprite.setDepth(player.y + FRAME_SIZE / 2);
-    sprite.play(`${safeKey}_walk_down`);
-    sprite.stop();
-    sprite.setFrame(DIR_TO_ROW[0] * 9); // idle facing down = row 2, frame 18
-
-    const label = this.add
-      .text(player.x, player.y - 42, player.nickname ?? "", {
-        fontSize: "13px",
-        color: "#ffffaa",
-        stroke: "#000000",
-        strokeThickness: 3,
-        resolution: 2,
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(9999);
-
-    const entity: RemotePlayerEntity = {
-      sprite,
-      label,
-      targetX: player.x,
-      targetY: player.y,
-      direction: player.direction ?? 0,
-      skinKey: safeKey,
-    };
-
-    this.remoteMap.set(sessionId, entity);
-
-    // Listen for position/direction updates from server state patches
-    player.onChange(() => {
-      const e = this.remoteMap.get(sessionId);
-      if (!e) return;
-      e.targetX = player.x;
-      e.targetY = player.y;
-      e.direction = player.direction ?? 0;
-    });
-  }
-
-  private removeRemotePlayer(sessionId: string): void {
-    const entity = this.remoteMap.get(sessionId);
-    if (!entity) return;
-    entity.sprite.destroy();
-    entity.label.destroy();
-    if (entity.chatBubble) entity.chatBubble.destroy();
-    this.remoteMap.delete(sessionId);
-  }
-
-  // ── Per-frame logic ────────────────────────────────────────────────────────
-
-  private handleLocalMovement(_delta: number): void {
-    const left  = this.cursors.left!.isDown  || this.keyA.isDown;
-    const right = this.cursors.right!.isDown || this.keyD.isDown;
-    const up    = this.cursors.up!.isDown    || this.keyW.isDown;
-    const down  = this.cursors.down!.isDown  || this.keyS.isDown;
-    const anyKey = left || right || up || down;
-
-    // Any keyboard press cancels the active path
-    if (anyKey) this.pathWaypoints = [];
-
-    let vx = 0, vy = 0;
-    let moving = false;
-    let dir = this.localDirection;
-
-    if (anyKey) {
-      // ── Keyboard movement ────────────────────────────────────────────────
-      if (left)  { vx = -PLAYER_SPEED; dir = 1; moving = true; }
-      if (right) { vx =  PLAYER_SPEED; dir = 3; moving = true; }
-      if (up)    { vy = -PLAYER_SPEED; if (!left && !right) dir = 2; moving = true; }
-      if (down)  { vy =  PLAYER_SPEED; if (!left && !right) dir = 0; moving = true; }
-
-      // Normalise diagonal speed
-      if (vx !== 0 && vy !== 0) {
-        const norm = Math.SQRT2;
-        vx /= norm;
-        vy /= norm;
-      }
-    } else if (this.pathWaypoints.length > 0) {
-      // ── Path following ───────────────────────────────────────────────────
-      let wp = this.pathWaypoints[this.pathIndex];
-      let dx = wp.x - this.localSprite.x;
-      let dy = wp.y - this.localSprite.y;
-      let dist = Math.sqrt(dx * dx + dy * dy);
-
-      // Skip waypoints that are already reached to prevent one-frame stutters
-      while (dist < WAYPOINT_THRESHOLD && this.pathWaypoints.length > 0) {
-        this.pathIndex++;
-        if (this.pathIndex >= this.pathWaypoints.length) {
-          this.pathWaypoints = [];
-          break;
-        }
-        wp = this.pathWaypoints[this.pathIndex];
-        dx = wp.x - this.localSprite.x;
-        dy = wp.y - this.localSprite.y;
-        dist = Math.sqrt(dx * dx + dy * dy);
-      }
-
-      if (this.pathWaypoints.length > 0) {
-        vx = (dx / dist) * PLAYER_SPEED;
-        vy = (dy / dist) * PLAYER_SPEED;
-        moving = true;
-        // Pick closest cardinal direction for animation
-        if (Math.abs(dx) >= Math.abs(dy)) {
-          dir = dx > 0 ? 3 : 1; // right or left
-        } else {
-          dir = dy > 0 ? 0 : 2; // down or up
-        }
-      }
-    }
-
-    this.localSprite.setVelocity(vx, vy);
-    this.localDirection = dir;
-
-    // Animation
-    const key = skinKey(this.localSkin);
-    const animKey = `${key}_${DIR_NAMES[dir]}`;
-    if (moving) {
-      // Use ignoreIfPlaying=true so the animation doesn't restart every frame,
-      // but DOES start if it was currently stopped.
-      this.localSprite.play(animKey, true);
-    } else {
-      if (this.localSprite.anims.isPlaying) {
-        this.localSprite.stop();
-        this.localSprite.setFrame(DIR_TO_ROW[dir] * 9);
-      }
-    }
-
-    // Depth = bottom edge so lower entities render in front
-    this.localSprite.setDepth(this.localSprite.y + FRAME_SIZE / 2);
-    this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 42);
-    if (this.localChatBubble) {
-      this.localChatBubble.setPosition(this.localSprite.x, this.localSprite.y - 65);
-    }
-  }
-
-  private interpolateRemotePlayers(): void {
-    this.remoteMap.forEach((entity) => {
-      const { sprite, label, chatBubble, targetX, targetY, direction, skinKey: key } = entity;
-
-      const prevX = sprite.x;
-      const prevY = sprite.y;
-
-      // Lerp towards server-authoritative target
-      sprite.x = Phaser.Math.Linear(sprite.x, targetX, LERP_FACTOR);
-      sprite.y = Phaser.Math.Linear(sprite.y, targetY, LERP_FACTOR);
-
-      label.setPosition(sprite.x, sprite.y - 42);
-      if (chatBubble) {
-        chatBubble.setPosition(sprite.x, sprite.y - 65);
-      }
-      sprite.setDepth(sprite.y + FRAME_SIZE / 2);
-
-      // Animate based on whether the sprite is visually moving
-      const dx = Math.abs(sprite.x - prevX);
-      const dy = Math.abs(sprite.y - prevY);
-      const moving = dx > 0.5 || dy > 0.5;
-      const safeKey = this.textures.exists(key) ? key : "male_1lvl";
-      const animKey = `${safeKey}_${DIR_NAMES[direction]}`;
-
-      if (moving) {
-        sprite.play(animKey, true);
-      } else {
-        if (sprite.anims.isPlaying) {
-          sprite.stop();
-          sprite.setFrame(DIR_TO_ROW[direction] * 9);
-        }
-      }
-    });
-  }
-
-  private sendPositionIfNeeded(time: number): void {
-    if (time - this.lastSendTime < SEND_RATE_MS) return;
-    this.lastSendTime = time;
-
-    this.room.send("move", {
-      x: this.localSprite.x,
-      y: this.localSprite.y,
-      direction: this.localDirection,
-      timestamp: time,
-    });
-  }
-
   // ── Pathfinding ────────────────────────────────────────────────────────────
 
-  /**
-   * Build a flat nav grid from the tree list.
-   * Each cell is 16×16 px.  A cell is blocked when the player's sprite-centre
-   * being in that cell would cause the player body to overlap a tree trunk.
-   *
-   * Player body world extent (sprite centre = px,py):
-   *   x: [px−6 … px+7]   y: [py+15 … py+22]
-   * Tree trunk world extent (tree sprite centre = tx,ty):
-   *   x: [tx−12 … tx+16]  y: [ty+30 … ty+47]
-   *
-   * Sprite-centre exclusion zone = Minkowski difference:
-   *   x: (tx−19 … tx+22)   y: (ty+8 … ty+32)
-   * Expanded by NAV_CELL/2 so any cell whose centre lies in the bloated box
-   * is treated as blocked:
-   *   x: [tx−27 … tx+30]   y: [ty … ty+40]
-   */
   private buildNavGrid(trees: TreeData[]): void {
     this.navCols = Math.ceil(MAP_W / NAV_CELL);
     this.navRows = Math.ceil(MAP_H / NAV_CELL);
-    this.navGrid = new Uint8Array(this.navCols * this.navRows); // 0 = free
+    this.navGrid = new Uint8Array(this.navCols * this.navRows);
 
     for (const td of trees) {
       const bx0 = td.x - 27;
@@ -671,7 +1275,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** A* on the nav grid.  Returns world-space waypoints or null if no path. */
   private findPath(
     fromX: number, fromY: number,
     toX: number, toY: number,
@@ -687,7 +1290,7 @@ export class GameScene extends Phaser.Scene {
     const tc = Math.max(0, Math.min(cols - 1, Math.floor(toX   / NAV_CELL)));
     const tr = Math.max(0, Math.min(rows - 1, Math.floor(toY   / NAV_CELL)));
 
-    if (this.navGrid[tr * cols + tc]) return null; // destination blocked
+    if (this.navGrid[tr * cols + tc]) return null;
 
     const start = sr * cols + sc;
     const goal  = tr * cols + tc;
@@ -701,7 +1304,6 @@ export class GameScene extends Phaser.Scene {
     const closed = new Uint8Array(N);
     const open: number[] = [];
 
-    // Octile-distance heuristic (admissible for 8-directional grids)
     const h = (c1: number, r1: number): number => {
       const dx = Math.abs(c1 - tc);
       const dy = Math.abs(r1 - tr);
@@ -713,7 +1315,6 @@ export class GameScene extends Phaser.Scene {
     open.push(start);
     inOpen[start] = 1;
 
-    // 8-directional neighbour offsets and their movement costs
     const DC       = [-1, 0, 1, -1, 1, -1, 0, 1];
     const DR       = [-1,-1,-1,  0, 0,  1, 1, 1];
     const STEPCOST = [
@@ -723,20 +1324,16 @@ export class GameScene extends Phaser.Scene {
     ];
 
     while (open.length > 0) {
-      // Find the open node with the lowest fScore (linear scan is fine for 125×125)
       let bestIdx = 0;
       for (let i = 1; i < open.length; i++) {
         if (fScore[open[i]] < fScore[open[bestIdx]]) bestIdx = i;
       }
       const cur = open[bestIdx];
-      // Fast removal: swap with last element
       open[bestIdx] = open[open.length - 1];
       open.pop();
       inOpen[cur] = 0;
 
       if (cur === goal) {
-        // Reconstruct path — cell centres as waypoints; replace the last
-        // with the exact click position so the player walks all the way in.
         const path: Phaser.Math.Vector2[] = [];
         let node = goal;
         while (node !== -1) {
@@ -778,12 +1375,11 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    return null; // no path found
+    return null;
   }
 
-  /** Handle a tap/click on the world. Starts pathfinding and shows a marker. */
   private onMapClick(worldX: number, worldY: number): void {
-    if (this.navGrid.length === 0) return; // map not loaded yet
+    if (this.navGrid.length === 0) return;
 
     const path = this.findPath(
       this.localSprite.x, this.localSprite.y,
@@ -800,7 +1396,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Show a green (reachable) or red (blocked) X marker that fades after 1 s. */
   private showMarker(x: number, y: number, green: boolean): void {
     const img = this.add.image(x, y, green ? "x_green" : "x_red").setDepth(99998);
     this.tweens.add({
