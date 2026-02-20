@@ -33,6 +33,8 @@ export interface RemotePlayer {
   isAttacking: boolean;
   attackDirection: number;
   isDead: boolean;
+  partyId: string;
+  isPartyOwner: boolean;
   onChange: (cb: () => void) => void;
 }
 
@@ -60,6 +62,8 @@ export interface RemotePlayerEntity {
   attackDirection: number;
   isDead: boolean;
   graveSprite?: Phaser.GameObjects.Image;
+  hpBar?: Phaser.GameObjects.Graphics;
+  partyId: string;
 }
 
 /** Enemy state proxy (mirrors server EnemyState schema) */

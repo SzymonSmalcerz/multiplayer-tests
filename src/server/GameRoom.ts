@@ -18,6 +18,8 @@ export class PlayerState extends Schema {
   @type("boolean") isAttacking: boolean = false;
   @type("number") attackDirection: number = 0;
   @type("boolean") isDead: boolean = false;
+  @type("string")  partyId: string = "";
+  @type("boolean") isPartyOwner: boolean = false;
 }
 
 export class EnemyState extends Schema {
@@ -142,6 +144,12 @@ export class GameRoom extends Room<GameState> {
   /** Enemies waiting to respawn */
   private respawnQueue: Array<{ type: string; spawnAt: number }> = [];
 
+  // ── Party bookkeeping ──────────────────────────────────────────────────────
+  /** targetSessionId → inviterSessionId */
+  private pendingInvites = new Map<string, string>();
+  /** partyId (= owner sessionId) → Set of member sessionIds */
+  private partyMembers   = new Map<string, Set<string>>();
+
 
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -224,6 +232,67 @@ export class GameRoom extends Room<GameState> {
       this.lastPositions.set(client.sessionId, { x: newX, y: newY, time: now });
     });
 
+    // ── Party handlers ────────────────────────────────────────────────────────
+
+    this.onMessage("party_invite", (client, data: { targetId: string }) => {
+      const sender = this.state.players.get(client.sessionId);
+      if (!sender) return;
+
+      // Only solo players or party owners may invite
+      if (sender.partyId !== "" && !sender.isPartyOwner) return;
+
+      const target = this.state.players.get(data.targetId);
+      if (!target || target.partyId !== "") return; // target already in a party
+
+      // Create party if sender is solo
+      if (sender.partyId === "") {
+        sender.partyId      = client.sessionId; // use owner's sessionId as partyId
+        sender.isPartyOwner = true;
+        this.partyMembers.set(client.sessionId, new Set([client.sessionId]));
+      }
+
+      const members = this.partyMembers.get(sender.partyId);
+      if (!members || members.size >= 5) return; // party full
+
+      this.pendingInvites.set(data.targetId, client.sessionId);
+      const targetClient = this.clients.find(c => c.sessionId === data.targetId);
+      if (targetClient) {
+        targetClient.send("party_invite", {
+          fromId: client.sessionId,
+          fromNickname: sender.nickname,
+        });
+      }
+    });
+
+    this.onMessage("party_response", (client, data: { fromId: string; accept: boolean }) => {
+      const storedInviterId = this.pendingInvites.get(client.sessionId);
+      if (!storedInviterId || storedInviterId !== data.fromId) return;
+      this.pendingInvites.delete(client.sessionId);
+
+      if (!data.accept) return;
+
+      const inviter = this.state.players.get(data.fromId);
+      const joiner  = this.state.players.get(client.sessionId);
+      if (!inviter || !joiner || inviter.partyId === "") return;
+
+      const members = this.partyMembers.get(inviter.partyId);
+      if (!members || members.size >= 5) return;
+
+      members.add(client.sessionId);
+      joiner.partyId      = inviter.partyId;
+      joiner.isPartyOwner = false;
+
+      this.broadcast("chat", {
+        sessionId: "server",
+        nickname:  "Server",
+        message:   `${joiner.nickname} joined ${inviter.nickname}'s party`,
+      });
+    });
+
+    this.onMessage("party_leave", (client) => {
+      this.disbandOrLeaveParty(client.sessionId);
+    });
+
     this.onMessage<AttackMessage>("attack", (client, data) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || player.isDead) return;
@@ -275,6 +344,16 @@ export class GameRoom extends Room<GameState> {
   onLeave(client: Client): void {
     const player = this.state.players.get(client.sessionId);
     const name   = player?.nickname ?? client.sessionId;
+
+    // Clean up party state before removing from schema
+    this.disbandOrLeaveParty(client.sessionId);
+
+    // Remove any pending invites FROM this client
+    this.pendingInvites.forEach((_inviterId, targetId) => {
+      if (_inviterId === client.sessionId) this.pendingInvites.delete(targetId);
+    });
+    this.pendingInvites.delete(client.sessionId);
+
     this.state.players.delete(client.sessionId);
     this.lastPositions.delete(client.sessionId);
     this.playerHitCooldowns.delete(client.sessionId);
@@ -384,7 +463,7 @@ export class GameRoom extends Room<GameState> {
         const lastHit = cdMap.get(nearest.id) ?? 0;
 
         if (now - lastHit >= HIT_ATTACK_CD_MS) {
-          if (isInsideHitbox(enemy.x, enemy.y, atkDir, nearest.state.x, nearest.state.y, 10)) {
+          if (isInsideHitbox(enemy.x, enemy.y, atkDir, nearest.state.x, nearest.state.y, 20)) {
             nearest.state.hp = Math.max(0, nearest.state.hp - HIT_ENEMY_DAMAGE);
             cdMap.set(nearest.id, now);
 
@@ -434,7 +513,7 @@ export class GameRoom extends Room<GameState> {
 
     this.state.enemies.forEach((enemy, enemyId) => {
       if (enemy.isDead) return;
-      if (!isInsideHitbox(player.x, player.y, direction, enemy.x, enemy.y)) return;
+      if (!isInsideHitbox(player.x, player.y, direction, enemy.x, enemy.y, 10)) return;
 
       const lastHit = cdMap.get(enemyId) ?? 0;
       if (now - lastHit < WEAPON_HIT_CD_MS) return;
@@ -446,6 +525,35 @@ export class GameRoom extends Room<GameState> {
         this.killEnemy(enemyId, sessionId);
       }
     });
+  }
+
+  private disbandOrLeaveParty(sessionId: string): void {
+    const player = this.state.players.get(sessionId);
+    if (!player || player.partyId === "") return;
+
+    const partyId = player.partyId;
+    const members = this.partyMembers.get(partyId);
+
+    if (player.isPartyOwner) {
+      // Disband: remove all members
+      if (members) {
+        members.forEach(memberId => {
+          const member = this.state.players.get(memberId);
+          if (member) { member.partyId = ""; member.isPartyOwner = false; }
+        });
+        this.partyMembers.delete(partyId);
+      }
+      this.broadcast("chat", {
+        sessionId: "server",
+        nickname:  "Server",
+        message:   `${player.nickname}'s party has been disbanded`,
+      });
+    } else {
+      // Just leave
+      if (members) members.delete(sessionId);
+      player.partyId      = "";
+      player.isPartyOwner = false;
+    }
   }
 
   private killEnemy(enemyId: string, killerSessionId: string): void {
@@ -463,12 +571,41 @@ export class GameRoom extends Room<GameState> {
     // Queue respawn
     this.respawnQueue.push({ type: enemy.type, spawnAt: Date.now() + ENEMY_RESPAWN_MS });
 
-    // Award XP to killer
-    const player = this.state.players.get(killerSessionId);
-    if (player) {
-      player.xp += HIT_ENEMY_XP;
+    // Award XP (with party sharing)
+    this.awardXP(killerSessionId, HIT_ENEMY_XP, enemy.x, enemy.y);
+  }
+
+  private awardXP(killerSessionId: string, xpAmount: number, enemyX: number, enemyY: number): void {
+    const killer = this.state.players.get(killerSessionId);
+    if (!killer) return;
+
+    if (killer.partyId === "") {
+      killer.xp += xpAmount;
       this.checkLevelUp(killerSessionId);
+      return;
     }
+
+    // Party XP: split among members within 10 tiles (640 px) of the kill
+    const SHARE_RANGE = 640;
+    const members = this.partyMembers.get(killer.partyId);
+    if (!members) { killer.xp += xpAmount; this.checkLevelUp(killerSessionId); return; }
+
+    const eligible: string[] = [];
+    members.forEach(memberId => {
+      const member = this.state.players.get(memberId);
+      if (!member || member.isDead) return;
+      const dx = member.x - enemyX;
+      const dy = member.y - enemyY;
+      if (Math.sqrt(dx * dx + dy * dy) <= SHARE_RANGE) eligible.push(memberId);
+    });
+
+    if (eligible.length === 0) { killer.xp += xpAmount; this.checkLevelUp(killerSessionId); return; }
+
+    const share = Math.floor(xpAmount / eligible.length);
+    eligible.forEach(memberId => {
+      const member = this.state.players.get(memberId);
+      if (member) { member.xp += share; this.checkLevelUp(memberId); }
+    });
   }
 
   private checkLevelUp(sessionId: string): void {
