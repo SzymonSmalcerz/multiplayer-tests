@@ -151,7 +151,13 @@ export class GameScene extends Phaser.Scene {
     hpBar: Phaser.GameObjects.Graphics;
     xpBar: Phaser.GameObjects.Graphics;
     nameText: Phaser.GameObjects.Text;
+    kickBtn: Phaser.GameObjects.Text;
   }> = [];
+  private localPartyLabel?: Phaser.GameObjects.Text;
+  private partyHudHeaderBg!: Phaser.GameObjects.Graphics;
+  private partyHudHeaderText!: Phaser.GameObjects.Text;
+  private partyHudLeaveBtn!: Phaser.GameObjects.Text;
+  private partyHudRenameBtn!: Phaser.GameObjects.Text;
 
   // Nav grid for click-to-move
   private navGrid = new Uint8Array(0);
@@ -488,9 +494,60 @@ export class GameScene extends Phaser.Scene {
 
   private createPartyHUD(): void {
     const D       = 99998;
-    const ROW_H   = 44;
+    const ROW_H   = 32;
     const ROW_GAP = 4;
-    const START_Y = 66; // just below main HUD (8 + 50 + 8)
+    const HEADER_H = 18;
+    const START_Y = 66 + HEADER_H + 2; // member rows below header
+
+    // Party header (hidden when not in party)
+    this.partyHudHeaderBg = this.add.graphics().setScrollFactor(0).setDepth(D);
+
+    this.partyHudHeaderText = this.add.text(12, 68, "◆ Party", {
+      fontSize: "11px",
+      color: "#77aaff",
+      stroke: "#000000",
+      strokeThickness: 2,
+      resolution: 2,
+    }).setScrollFactor(0).setDepth(D + 1).setVisible(false);
+
+    this.partyHudLeaveBtn = this.add.text(210, 68, "Leave", {
+      fontSize: "11px",
+      color: "#ff9966",
+      stroke: "#000000",
+      strokeThickness: 2,
+      resolution: 2,
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(D + 1)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+
+    this.partyHudLeaveBtn.on("pointerover", () => this.partyHudLeaveBtn.setColor("#ff5533"));
+    this.partyHudLeaveBtn.on("pointerout",  () => this.partyHudLeaveBtn.setColor("#ff9966"));
+    this.partyHudLeaveBtn.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
+      this.room.send("party_leave");
+    });
+
+    this.partyHudRenameBtn = this.add.text(150, 68, "✎", {
+      fontSize: "12px",
+      color: "#aaaaaa",
+      stroke: "#000000",
+      strokeThickness: 2,
+      resolution: 2,
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(D + 1)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+
+    this.partyHudRenameBtn.on("pointerover", () => this.partyHudRenameBtn.setColor("#ffffff"));
+    this.partyHudRenameBtn.on("pointerout",  () => this.partyHudRenameBtn.setColor("#aaaaaa"));
+    this.partyHudRenameBtn.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
+      const current = this.room.state.players.get(this.mySessionId)?.partyName ?? "";
+      const newName = window.prompt("Party name (max 20 characters):", current);
+      if (newName !== null) {
+        const trimmed = newName.trim().slice(0, 20);
+        if (trimmed.length > 0) this.room.send("party_rename", { name: trimmed });
+      }
+    });
 
     for (let i = 0; i < 4; i++) {
       const y = START_Y + i * (ROW_H + ROW_GAP);
@@ -501,35 +558,69 @@ export class GameScene extends Phaser.Scene {
 
       const nameText = this.add.text(14, y + 4, "", {
         fontSize: "11px",
-        color: "#4488ff",
+        color: "#77aaff",
         stroke: "#000000",
         strokeThickness: 2,
         resolution: 2,
       }).setScrollFactor(0).setDepth(D + 3).setVisible(false);
 
-      this.partyHudRows.push({ bg, hpBar, xpBar, nameText });
+      const kickBtn = this.add.text(210, y + 4, "Kick", {
+        fontSize: "10px",
+        color: "#ff9966",
+        stroke: "#000000",
+        strokeThickness: 2,
+        resolution: 2,
+      }).setOrigin(1, 0).setScrollFactor(0).setDepth(D + 3).setVisible(false)
+        .setInteractive({ useHandCursor: true });
+
+      kickBtn.on("pointerover", () => kickBtn.setColor("#ff5533"));
+      kickBtn.on("pointerout",  () => kickBtn.setColor("#ff9966"));
+      kickBtn.on("pointerdown", () => {
+        this.ignoreNextMapClick = true;
+        const targetId = kickBtn.getData("targetId") as string;
+        if (targetId) this.room.send("party_kick", { targetId });
+      });
+
+      this.partyHudRows.push({ bg, hpBar, xpBar, nameText, kickBtn });
     }
   }
 
   private updatePartyHUD(): void {
-    const ROW_H   = 44;
-    const ROW_GAP = 4;
-    const START_Y = 66;
-    const PANEL_W = 204;
+    const ROW_H    = 32;
+    const ROW_GAP  = 4;
+    const HEADER_H = 18;
+    const START_Y  = 66 + HEADER_H + 2;
+    const PANEL_W  = 204;
     const BAR_W   = 192;
 
-    // Collect other party members in stable order
-    const members: Array<{ nickname: string; level: number; hp: number; maxHp: number; xp: number }> = [];
-    if (this.myPartyId !== "") {
+    // Collect other party members in stable order (with sessionId for kick)
+    const members: Array<{ sessionId: string; nickname: string; level: number; hp: number; maxHp: number }> = [];
+    const inParty = this.myPartyId !== "";
+
+    // Show/hide party header
+    this.partyHudHeaderBg.clear();
+    if (inParty) {
+      this.partyHudHeaderBg.fillStyle(0x000000, 0.55).fillRect(8, 66, PANEL_W, HEADER_H);
+    }
+    const myPartyName = this.room.state.players.get(this.mySessionId)?.partyName ?? "Party";
+    this.partyHudHeaderText
+      .setText(`◆ ${myPartyName}`)
+      .setVisible(inParty);
+    this.partyHudLeaveBtn
+      .setText(this.myIsPartyOwner ? "Disband" : "Leave")
+      .setVisible(inParty);
+    this.partyHudRenameBtn.setVisible(inParty && this.myIsPartyOwner);
+
+    if (inParty) {
       this.remoteMap.forEach((_entity, sessionId) => {
         const state = this.room.state.players.get(sessionId);
         if (state && state.partyId === this.myPartyId) {
           members.push({
+            sessionId,
             nickname: state.nickname,
             level:    state.level,
             hp:       state.hp,
             maxHp:    state.maxHp,
-            xp:       state.xp,
           });
         }
       });
@@ -544,38 +635,39 @@ export class GameScene extends Phaser.Scene {
       row.xpBar.clear();
 
       if (i < members.length) {
-        const m       = members[i];
-        const xpNeeded = xpForNextLevel(m.level);
-        const hpRatio  = Math.max(0, Math.min(1, m.hp / m.maxHp));
-        const xpRatio  = Math.max(0, Math.min(1, m.xp / xpNeeded));
+        const m      = members[i];
+        const hpRatio = Math.max(0, Math.min(1, m.hp / m.maxHp));
 
         // Panel background
         row.bg.fillStyle(0x000000, 0.55).fillRect(8, y, PANEL_W, ROW_H);
         // HP bar track
         row.bg.fillStyle(0x660000, 1).fillRect(12, y + 20, BAR_W, 8);
-        // XP bar track
-        row.bg.fillStyle(0x000066, 1).fillRect(12, y + 31, BAR_W, 8);
 
         row.hpBar.fillStyle(0xff3333, 1)
           .fillRect(12, y + 20, Math.floor(BAR_W * hpRatio), 8);
-        row.xpBar.fillStyle(0x3399ff, 1)
-          .fillRect(12, y + 31, Math.floor(BAR_W * xpRatio), 8);
 
         row.nameText
-          .setText(`${m.nickname} [Lv.${m.level}]  ${Math.floor(m.hp)}/${m.maxHp} HP`)
+          .setText(`${m.nickname} [Lv.${m.level}]`)
           .setPosition(14, y + 4)
           .setVisible(true);
+
+        row.kickBtn
+          .setData("targetId", m.sessionId)
+          .setVisible(this.myIsPartyOwner);
       } else {
         row.nameText.setVisible(false);
+        row.kickBtn.setVisible(false);
       }
     }
 
-    // Refresh remote player label colors every frame (avoids stale onChange timing)
+    // Refresh remote player label + partyLabel colors every frame (avoids stale onChange timing)
     this.remoteMap.forEach((entity, sessionId) => {
       const rp = this.room.state.players.get(sessionId);
       if (!rp) return;
       const inParty = this.myPartyId !== "" && rp.partyId === this.myPartyId;
-      entity.label.setColor(inParty ? "#4488ff" : "#ffff44");
+      const color = inParty ? "#77aaff" : "#ffff44";
+      entity.label.setColor(color);
+      if (entity.partyLabel) entity.partyLabel.setColor(color);
     });
   }
 
@@ -625,6 +717,7 @@ export class GameScene extends Phaser.Scene {
 
     // Keep label above the grave
     this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 42);
+    this.localPartyLabel?.setVisible(false);
 
     // Hide player visuals
     this.localSprite.setVisible(false);
@@ -691,6 +784,18 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 1)
       .setDepth(9999);
+
+    this.localPartyLabel = this.add
+      .text(x, y - 42, "", {
+        fontSize: "12px",
+        color: "#44ff44",
+        stroke: "#000000",
+        strokeThickness: 3,
+        resolution: 2,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(9999)
+      .setVisible(false);
   }
 
   private createAnimations(): void {
@@ -840,7 +945,7 @@ export class GameScene extends Phaser.Scene {
           const rp = this.room.state.players.get(sid);
           if (!rp) return;
           const inParty = rp.partyId !== "" && rp.partyId === this.myPartyId;
-          entity.label.setColor(inParty ? "#4488ff" : "#ffff44");
+          entity.label.setColor(inParty ? "#77aaff" : "#ffff44");
           entity.partyId = rp.partyId ?? "";
         });
       }
@@ -880,12 +985,28 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(9999);
 
+    // Party name label (below nickname, same color, 1px smaller)
+    const partyLabel = this.add
+      .text(player.x, player.y - 42, "", {
+        fontSize: "12px",
+        color: "#ffff44",
+        stroke: "#000000",
+        strokeThickness: 3,
+        resolution: 2,
+      })
+      .setOrigin(0.5, 1)
+      .setDepth(9999)
+      .setVisible(false);
+
     // HP bar (shown only for party members)
     const hpBar = this.add.graphics();
 
-    // Make sprite clickable for party invite
+    // Make sprite clickable for party invite, with hover highlight
     sprite.setInteractive();
+    sprite.on("pointerover", () => sprite.setTint(0xaaddff));
+    sprite.on("pointerout",  () => sprite.clearTint());
     sprite.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      sprite.clearTint();
       this.ignoreNextMapClick = true;
       this.showPlayerActionMenu(sessionId, pointer.x, pointer.y);
     });
@@ -894,6 +1015,7 @@ export class GameScene extends Phaser.Scene {
       sprite,
       weaponSprite,
       label,
+      partyLabel,
       graveSprite,
       hpBar,
       targetX: player.x,
@@ -948,7 +1070,7 @@ export class GameScene extends Phaser.Scene {
       if (newPartyId !== e.partyId) {
         e.partyId = newPartyId;
         const inParty = newPartyId !== "" && newPartyId === this.myPartyId;
-        e.label.setColor(inParty ? "#4488ff" : "#ffff44");
+        e.label.setColor(inParty ? "#77aaff" : "#ffff44");
       }
     });
   }
@@ -959,6 +1081,7 @@ export class GameScene extends Phaser.Scene {
     entity.sprite.destroy();
     entity.weaponSprite.destroy();
     entity.label.destroy();
+    entity.partyLabel?.destroy();
     if (entity.chatBubble) entity.chatBubble.destroy();
     entity.graveSprite?.destroy();
     entity.hpBar?.destroy();
@@ -1002,9 +1125,10 @@ export class GameScene extends Phaser.Scene {
     .setDepth(200001)
     .setInteractive({ useHandCursor: true });
 
-    btn.on("pointerover", () => btn.setColor("#4488ff"));
+    btn.on("pointerover", () => btn.setColor("#77aaff"));
     btn.on("pointerout",  () => btn.setColor("#ffffff"));
     btn.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
       this.room.send("party_invite", { targetId: sessionId });
       this.hidePlayerActionMenu();
     });
@@ -1073,10 +1197,12 @@ export class GameScene extends Phaser.Scene {
     .setInteractive({ useHandCursor: true });
 
     acceptBtn.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
       this.room.send("party_response", { fromId, accept: true });
       this.hidePartyInvitePopup();
     });
     refuseBtn.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
       this.room.send("party_response", { fromId, accept: false });
       this.hidePartyInvitePopup();
     });
@@ -1310,7 +1436,21 @@ export class GameScene extends Phaser.Scene {
 
     const playerDepth = this.localSprite.y + FRAME_SIZE / 2;
     this.localSprite.setDepth(playerDepth);
-    this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 42);
+
+    // Position nickname + optional party label
+    const myState = this.room.state.players.get(this.mySessionId);
+    const localPartyName = myState?.partyName ?? "";
+    if (localPartyName && this.localPartyLabel) {
+      this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 54);
+      this.localPartyLabel
+        .setText(`(${localPartyName})`)
+        .setPosition(this.localSprite.x, this.localSprite.y - 42)
+        .setVisible(true);
+    } else {
+      this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 42);
+      this.localPartyLabel?.setVisible(false);
+    }
+
     if (this.localChatBubble) {
       this.localChatBubble.setPosition(this.localSprite.x, this.localSprite.y - 65);
     }
@@ -1375,6 +1515,7 @@ export class GameScene extends Phaser.Scene {
       // Dead players: freeze at death position, keep label above grave
       if (entity.isDead) {
         entity.label.setPosition(entity.sprite.x, entity.sprite.y - 42);
+        entity.partyLabel?.setVisible(false);
         if (entity.chatBubble) entity.chatBubble.setPosition(entity.sprite.x, entity.sprite.y - 65);
         entity.hpBar?.clear();
         return;
@@ -1390,7 +1531,19 @@ export class GameScene extends Phaser.Scene {
       sprite.x = Phaser.Math.Linear(sprite.x, targetX, LERP_FACTOR);
       sprite.y = Phaser.Math.Linear(sprite.y, targetY, LERP_FACTOR);
 
-      label.setPosition(sprite.x, sprite.y - 42);
+      // Position nickname and optional party name label
+      const rState = this.room.state.players.get(sessionId);
+      const remotePartyName = rState?.partyName ?? "";
+      if (remotePartyName && entity.partyLabel) {
+        label.setPosition(sprite.x, sprite.y - 54);
+        entity.partyLabel
+          .setText(`(${remotePartyName})`)
+          .setPosition(sprite.x, sprite.y - 42)
+          .setVisible(true);
+      } else {
+        label.setPosition(sprite.x, sprite.y - 42);
+        entity.partyLabel?.setVisible(false);
+      }
       if (chatBubble) chatBubble.setPosition(sprite.x, sprite.y - 65);
 
       const playerDepth = sprite.y + FRAME_SIZE / 2;
@@ -1508,7 +1661,7 @@ export class GameScene extends Phaser.Scene {
       // Check if sender is in our party → blue, otherwise yellow
       const senderState = this.room.state.players.get(data.sessionId);
       const inParty = senderState && senderState.partyId !== "" && senderState.partyId === this.myPartyId;
-      const nameColor = inParty ? "#4488ff" : "#ffff44";
+      const nameColor = inParty ? "#77aaff" : "#ffff44";
       msgEl.innerHTML = `<span class="name" style="color:${nameColor}">${data.nickname}:</span> ${data.message}`;
     }
     this.chatDisplay.appendChild(msgEl);

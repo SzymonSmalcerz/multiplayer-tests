@@ -35,6 +35,7 @@ export interface RemotePlayer {
   isDead: boolean;
   partyId: string;
   isPartyOwner: boolean;
+  partyName: string;
   onChange: (cb: () => void) => void;
 }
 
@@ -64,6 +65,7 @@ export interface RemotePlayerEntity {
   graveSprite?: Phaser.GameObjects.Image;
   hpBar?: Phaser.GameObjects.Graphics;
   partyId: string;
+  partyLabel?: Phaser.GameObjects.Text;
 }
 
 /** Enemy state proxy (mirrors server EnemyState schema) */
