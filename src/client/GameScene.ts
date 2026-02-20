@@ -39,6 +39,11 @@ const PLAYER_BODY_HEIGHT = 54 - 47;  //  7 px
 const NAV_CELL           = 16;  // px per nav-grid cell
 const WAYPOINT_THRESHOLD = 8;   // px — advance to next waypoint when within this range
 
+// Minimap Constants
+const MINIMAP_SIZE = 200;
+const VIEW_RADIUS  = 600;
+const MINIMAP_SCALE = MINIMAP_SIZE / (VIEW_RADIUS * 2);
+
 // Maps direction index (0=down,1=left,2=up,3=right) → walk animation suffix
 const DIR_NAMES = ["walk_down", "walk_left", "walk_up", "walk_right"] as const;
 
@@ -159,6 +164,21 @@ export class GameScene extends Phaser.Scene {
   private partyHudLeaveBtn!: Phaser.GameObjects.Text;
   private partyHudRenameBtn!: Phaser.GameObjects.Text;
 
+  // Minimap
+  private minimapOpen       = false;
+  private minimapIcon!:       Phaser.GameObjects.Image;
+  private minimapBg!:         Phaser.GameObjects.Graphics;
+  private minimapDots!:       Phaser.GameObjects.Graphics;
+  private minimapBorder!:     Phaser.GameObjects.Graphics;
+  private minimapCloseBtn!:   Phaser.GameObjects.Text;
+  private minimapNorthLabel!: Phaser.GameObjects.Text;
+  private keyM!:              Phaser.Input.Keyboard.Key;
+
+  // Leaderboard
+  private leaderboardBg!:     Phaser.GameObjects.Graphics;
+  private leaderboardHeader!: Phaser.GameObjects.Text;
+  private leaderboardRows:    Phaser.GameObjects.Text[] = [];
+
   // Nav grid for click-to-move
   private navGrid = new Uint8Array(0);
   private navCols = 0;
@@ -194,6 +214,7 @@ export class GameScene extends Phaser.Scene {
 
     // Background tile
     this.load.image("grass", "/assets/maps/grass.png");
+    this.load.image("minimap_icon", "/assets/maps/minimap_icon.png");
 
     // Click-to-move markers
     this.load.image("x_green", "/assets/shortestPath/xGreen.png");
@@ -237,6 +258,7 @@ export class GameScene extends Phaser.Scene {
     // ── HUD ─────────────────────────────────────────────────────────────────
     this.createHUD();
     this.createPartyHUD();
+    this.createMinimap();
 
     // ── Death UI (hidden by default) ─────────────────────────────────────────
     this.createDeathUI();
@@ -253,6 +275,7 @@ export class GameScene extends Phaser.Scene {
     this.keyD     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyI     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I);
     this.keyU     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.U);
+    this.keyM     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.M);
     this.keySpace = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyEnter = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
@@ -275,6 +298,11 @@ export class GameScene extends Phaser.Scene {
       if (this.isTyping) return;
       const ps = this.room.state.players.get(this.mySessionId);
       if (ps?.showWeapon) this.room.send("toggle_weapon");
+    });
+
+    this.keyM.on("down", () => {
+      if (this.isTyping) return;
+      this.toggleMinimap();
     });
 
     // ── Click / tap to move ──────────────────────────────────────────────────
@@ -392,6 +420,12 @@ export class GameScene extends Phaser.Scene {
     this.updateEnemies();
     this.updateHUD();
     this.updatePartyHUD();
+    this.updateLeaderboard();
+    
+    if (this.minimapOpen) {
+      this.updateMinimap();
+    }
+
     this.tickDeathTimer(delta);
     this.sendPositionIfNeeded(time);
   }
@@ -669,6 +703,251 @@ export class GameScene extends Phaser.Scene {
       entity.label.setColor(color);
       if (entity.partyLabel) entity.partyLabel.setColor(color);
     });
+  }
+
+  // ── Minimap ────────────────────────────────────────────────────────────────
+
+  private createMinimap(): void {
+    const D = 99990;
+    const camW = this.cameras.main.width;
+
+    // 1. Icon (visible by default)
+    this.minimapIcon = this.add.image(camW - 56, 8, "minimap_icon")
+      .setDisplaySize(48, 48)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(D)
+      .setInteractive({ useHandCursor: true });
+
+    this.minimapIcon.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
+      this.openMinimap();
+    });
+
+    this.minimapIcon.on("pointerover", () => this.minimapIcon.setTint(0xdddddd));
+    this.minimapIcon.on("pointerout",  () => this.minimapIcon.clearTint());
+
+    // 2. Background
+    const mmX = camW - 208;
+    const mmY = 8;
+    this.minimapBg = this.add.graphics()
+      .fillStyle(0x111111, 0.85)
+      .fillRect(mmX, mmY, MINIMAP_SIZE, MINIMAP_SIZE)
+      .lineStyle(1, 0x334433, 1)
+      .strokeRect(mmX, mmY, MINIMAP_SIZE, MINIMAP_SIZE)
+      .setScrollFactor(0)
+      .setDepth(D)
+      .setVisible(false);
+
+    // 3. Dots
+    this.minimapDots = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(D + 1)
+      .setVisible(false);
+
+    // 4. Close button
+    this.minimapCloseBtn = this.add.text(camW - 16, 12, "×", {
+      fontSize: "20px",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 2,
+    })
+    .setOrigin(1, 0)
+    .setScrollFactor(0)
+    .setDepth(D + 2)
+    .setVisible(false)
+    .setInteractive({ useHandCursor: true });
+
+    this.minimapCloseBtn.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
+      this.closeMinimap();
+    });
+
+    // 5. North label
+    this.minimapNorthLabel = this.add.text(mmX + MINIMAP_SIZE / 2, mmY + 4, "N", {
+      fontSize: "10px",
+      color: "#ffffff",
+      stroke: "#000000",
+      strokeThickness: 1,
+    })
+    .setOrigin(0.5, 0)
+    .setScrollFactor(0)
+    .setDepth(D + 2)
+    .setVisible(false);
+
+    this.createLeaderboard();
+  }
+
+  private openMinimap(): void {
+    this.minimapOpen = true;
+    this.minimapIcon.setVisible(false);
+    this.minimapBg.setVisible(true);
+    this.minimapDots.setVisible(true);
+    this.minimapCloseBtn.setVisible(true);
+    this.minimapNorthLabel.setVisible(true);
+  }
+
+  private closeMinimap(): void {
+    this.minimapOpen = false;
+    this.minimapIcon.setVisible(true);
+    this.minimapBg.setVisible(false);
+    this.minimapDots.setVisible(false);
+    this.minimapCloseBtn.setVisible(false);
+    this.minimapNorthLabel.setVisible(false);
+  }
+
+  private toggleMinimap(): void {
+    if (this.minimapOpen) this.closeMinimap();
+    else this.openMinimap();
+  }
+
+  private updateMinimap(): void {
+    this.minimapDots.clear();
+    const camW = this.cameras.main.width;
+    const mmX = camW - 208;
+    const mmY = 8;
+    const mmCenterX = mmX + MINIMAP_SIZE / 2;
+    const mmCenterY = mmY + MINIMAP_SIZE / 2;
+
+    const localX = this.localSprite.x;
+    const localY = this.localSprite.y;
+
+    // 1. Enemies
+    this.enemyMap.forEach((e) => {
+      if (e.isDead) return;
+      const dx = e.sprite.x - localX;
+      const dy = e.sprite.y - localY;
+      if (Math.abs(dx) <= VIEW_RADIUS && Math.abs(dy) <= VIEW_RADIUS) {
+        const dotX = mmCenterX + dx * MINIMAP_SCALE;
+        const dotY = mmCenterY + dy * MINIMAP_SCALE;
+        this.minimapDots.fillStyle(0xff4444, 1);
+        this.minimapDots.fillCircle(dotX, dotY, 2);
+      }
+    });
+
+    // 2. Remote Players
+    this.remoteMap.forEach((e, sid) => {
+      if (e.isDead) return;
+      const dx = e.sprite.x - localX;
+      const dy = e.sprite.y - localY;
+      if (Math.abs(dx) <= VIEW_RADIUS && Math.abs(dy) <= VIEW_RADIUS) {
+        const dotX = mmCenterX + dx * MINIMAP_SCALE;
+        const dotY = mmCenterY + dy * MINIMAP_SCALE;
+        
+        const rp = this.room.state.players.get(sid);
+        const inParty = this.myPartyId !== "" && rp.partyId === this.myPartyId;
+        const color = inParty ? 0x77aaff : 0xffff44;
+
+        this.minimapDots.fillStyle(color, 1);
+        this.minimapDots.fillCircle(dotX, dotY, 3);
+      }
+    });
+
+    // 3. Local Player (Green dot at center)
+    this.minimapDots.fillStyle(0x44ff44, 1);
+    this.minimapDots.fillCircle(mmCenterX, mmCenterY, 4);
+  }
+
+  // ── Leaderboard ────────────────────────────────────────────────────────────
+
+  private createLeaderboard(): void {
+    const D = 99990;
+    const camW = this.cameras.main.width;
+    const lbX = camW - 208;
+    const lbY = 216;
+
+    this.leaderboardBg = this.add.graphics()
+      .fillStyle(0x111111, 0.85)
+      .fillRect(0, 0, MINIMAP_SIZE, 120)
+      .lineStyle(1, 0x334433, 1)
+      .strokeRect(0, 0, MINIMAP_SIZE, 120)
+      .setScrollFactor(0)
+      .setDepth(D)
+      .setPosition(lbX, lbY)
+      .setVisible(true);
+
+    this.leaderboardHeader = this.add.text(lbX + MINIMAP_SIZE / 2, lbY + 8, "🏆 Top Players", {
+      fontSize: "13px",
+      color: "#ffcc44",
+      stroke: "#000000",
+      strokeThickness: 2,
+    })
+    .setOrigin(0.5, 0)
+    .setScrollFactor(0)
+    .setDepth(D + 1)
+    .setVisible(true);
+
+    for (let i = 0; i < 5; i++) {
+      const row = this.add.text(lbX + 8, lbY + 32 + i * 16, "", {
+        fontSize: "11px",
+        color: i === 0 ? "#ffcc44" : "#cccccc",
+        stroke: "#000000",
+        strokeThickness: 1,
+      })
+      .setScrollFactor(0)
+      .setDepth(D + 1)
+      .setVisible(true);
+
+      this.leaderboardRows.push(row);
+    }
+  }
+
+  private updateLeaderboard(): void {
+    const camW = this.cameras.main.width;
+    const lbX = camW - 208;
+    const lbY = this.minimapOpen ? 216 : 64;
+
+    this.leaderboardBg.setPosition(lbX, lbY);
+    this.leaderboardHeader.setPosition(lbX + MINIMAP_SIZE / 2, lbY + 8);
+
+    const allPlayers: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
+    this.room.state.players.forEach((p: RemotePlayer) => {
+      allPlayers.push({
+        nickname: p.nickname,
+        level: p.level,
+        xp: p.xp,
+        partyName: p.partyName,
+      });
+    });
+
+    allPlayers.sort((a, b) => (b.level !== a.level ? b.level - a.level : b.xp - a.xp));
+
+    const top5 = allPlayers.slice(0, 5);
+
+    let currentY = lbY + 32;
+
+    for (let i = 0; i < 5; i++) {
+      const row = this.leaderboardRows[i];
+      if (i < top5.length) {
+        row.setPosition(lbX + 8, currentY);
+        const p = top5[i];
+        const partyTag = p.partyName ? ` [${p.partyName}]` : "";
+        const rawContent = `${p.nickname}${partyTag} Lv.${p.level}`;
+        
+        let text = `${i + 1}. ${rawContent}`;
+        
+        // If content > 20 signs, move the rest to a new line
+        if (rawContent.length > 20) {
+          text = `${i + 1}. ${rawContent.slice(0, 20)}\n   ${rawContent.slice(20)}`;
+        }
+
+        row.setText(text);
+        row.setVisible(true);
+
+        // Advance Y for the next row based on the actual height of this text object
+        currentY += row.height + 4; 
+      } else {
+        row.setVisible(false);
+      }
+    }
+
+    // Dynamic background height
+    const totalHeight = Math.max(120, (currentY - lbY) + 4);
+    this.leaderboardBg.clear();
+    this.leaderboardBg.fillStyle(0x111111, 0.85);
+    this.leaderboardBg.fillRect(0, 0, MINIMAP_SIZE, totalHeight);
+    this.leaderboardBg.lineStyle(1, 0x334433, 1);
+    this.leaderboardBg.strokeRect(0, 0, MINIMAP_SIZE, totalHeight);
   }
 
   // ── Death UI ───────────────────────────────────────────────────────────────
@@ -1003,7 +1282,17 @@ export class GameScene extends Phaser.Scene {
 
     // Make sprite clickable for party invite, with hover highlight
     sprite.setInteractive();
-    sprite.on("pointerover", () => sprite.setTint(0xaaddff));
+    sprite.on("pointerover", () => {
+      const target = this.room.state.players.get(sessionId);
+      const myState = this.room.state.players.get(this.mySessionId);
+      if (!target || !myState) return;
+
+      // Only highlight if we can invite: target must be solo, and we must be solo or the owner
+      const canInvite = (target.partyId === "") &&
+                        (myState.partyId === "" || myState.isPartyOwner);
+
+      if (canInvite) sprite.setTint(0xaaddff);
+    });
     sprite.on("pointerout",  () => sprite.clearTint());
     sprite.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       sprite.clearTint();
