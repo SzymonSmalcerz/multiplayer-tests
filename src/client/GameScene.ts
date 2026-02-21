@@ -64,6 +64,12 @@ const DIR_TO_ROW = [2, 1, 0, 3] as const;
 // Hit-enemy direction name lookup (0=down,1=left,2=up; 3=right uses flip)
 const HIT_DIR_NAMES = ["down", "left", "up"] as const;
 
+// Weapons available in the trader's shop
+const SHOP_WEAPONS = [
+  { key: "great_axe", label: "Great Axe", damage: 100, cost: 200 },
+  { key: "solid_axe", label: "Solid Axe", damage: 75,  cost: 100 },
+];
+
 // Display info for each enemy type (name + level shown above head)
 const ENEMY_DISPLAY: Record<string, { name: string; level: number }> = {
   hit: { name: "Hit", level: 3 },
@@ -90,6 +96,7 @@ export class GameScene extends Phaser.Scene {
   private localChatBubble?: Phaser.GameObjects.Text;
   private localDirection = 0;
   private localWeapon!: Phaser.GameObjects.Image;
+  private localWeaponKey = "axe";
   private localLevel = 1;
 
   // Local attack state
@@ -192,6 +199,10 @@ export class GameScene extends Phaser.Scene {
   // Coin animations — keyed by server coin ID
   private coinAnimations = new Map<string, { sprite: Phaser.GameObjects.Sprite; timer: Phaser.Time.TimerEvent }>();
 
+  // Trader shop
+  private shopOpen = false;
+  private shopObjects: Phaser.GameObjects.GameObject[] = [];
+
   // Timing
   private lastSendTime = 0;
 
@@ -229,8 +240,17 @@ export class GameScene extends Phaser.Scene {
       this.load.image(key, `/assets/trees/${key}.png`);
     }
 
-    // Axe weapon image (single sprite, rotated procedurally during orbit)
-    this.load.image("axe", "/assets/weapons/axe_attacking.png");
+    // Weapon attacking sprites (rotated procedurally during orbit animation)
+    this.load.image("axe_attacking",       "/assets/weapons/axe_attacking.png");
+    this.load.image("great_axe_attacking", "/assets/weapons/great_axe_attacking.png");
+    this.load.image("solid_axe_attacking", "/assets/weapons/solid_axe_attacking.png");
+
+    // Weapon display sprites (shown in trader shop)
+    this.load.image("great_axe", "/assets/weapons/great_axe.png");
+    this.load.image("solid_axe", "/assets/weapons/solid_axe.png");
+
+    // Trader NPC
+    this.load.image("trader", "/assets/npcs/trader.png");
 
     // Hit enemy sprite sheet (32×32 frames, 2 cols × 7 rows)
     this.load.spritesheet("hit_enemy", "/assets/enemies/hit.png", {
@@ -273,6 +293,9 @@ export class GameScene extends Phaser.Scene {
     // ── Camera ──────────────────────────────────────────────────────────────
     this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
     this.cameras.main.startFollow(this.localSprite, true, 0.08, 0.08);
+
+    // ── Trader NPC ───────────────────────────────────────────────────────────
+    this.createTrader();
 
     // ── Input ────────────────────────────────────────────────────────────────
     this.cursors  = this.input.keyboard!.createCursorKeys();
@@ -422,7 +445,7 @@ export class GameScene extends Phaser.Scene {
     this.myIsPartyOwner = myState?.isPartyOwner ?? false;
 
     this.handleLocalMovement(delta);
-    this.interpolateRemotePlayers();
+    this.interpolateRemotePlayers(delta);
     this.updateEnemies();
     this.updateHUD();
     this.updatePartyHUD();
@@ -1064,7 +1087,7 @@ export class GameScene extends Phaser.Scene {
     this.localSprite.setCollideWorldBounds(true);
     this.localSprite.setDepth(y + FRAME_SIZE / 2);
 
-    this.localWeapon = this.add.image(x, y, "axe");
+    this.localWeapon = this.add.image(x, y, "axe_attacking");
     this.localWeapon.setDepth(this.localSprite.depth + 1);
     this.localWeapon.setVisible(false);
 
@@ -1202,15 +1225,24 @@ export class GameScene extends Phaser.Scene {
       this.showPartyInvitePopup(data.fromId, data.fromNickname);
     });
 
-    // Track local player's own party state (for color syncs etc.)
+    // Track local player's own state changes
     this.room.state.players.onChange((player: RemotePlayer, sessionId: string) => {
       if (sessionId !== this.mySessionId) return;
-      // Position reconciliation (existing logic)
+
+      // Position reconciliation
       const dx = Math.abs(player.x - this.localSprite.x);
       const dy = Math.abs(player.y - this.localSprite.y);
       if (dx > RECONCILE_THRESHOLD || dy > RECONCILE_THRESHOLD) {
         this.localSprite.setPosition(player.x, player.y);
       }
+
+      // Weapon change — swap attacking sprite
+      const newWeapon = player.weapon ?? "axe";
+      if (newWeapon !== this.localWeaponKey) {
+        this.localWeaponKey = newWeapon;
+        this.localWeapon.setTexture(`${newWeapon}_attacking`);
+      }
+
       // Party state change — update label colors of all remote players
       const newPartyId = player.partyId ?? "";
       if (newPartyId !== this.myPartyId) {
@@ -1240,7 +1272,8 @@ export class GameScene extends Phaser.Scene {
     sprite.stop();
     sprite.setFrame(DIR_TO_ROW[0] * 9);
 
-    const weaponSprite = this.add.image(player.x, player.y, "axe");
+    const initWeapon = player.weapon ?? "axe";
+    const weaponSprite = this.add.image(player.x, player.y, `${initWeapon}_attacking`);
     weaponSprite.setVisible(false);
     weaponSprite.setDepth(sprite.depth + 1);
 
@@ -1312,6 +1345,7 @@ export class GameScene extends Phaser.Scene {
       isAttacking: player.isAttacking || false,
       attackDirection: player.attackDirection ?? 0,
       attackOrbitTimer: 0,
+      weapon: player.weapon ?? "axe",
       isDead: player.isDead || false,
       partyId: player.partyId ?? "",
     };
@@ -1338,6 +1372,13 @@ export class GameScene extends Phaser.Scene {
       // Start orbit timer when attack begins
       if (!wasAttacking && e.isAttacking) {
         e.attackOrbitTimer = ATTACK_ANIM_MS;
+      }
+
+      // Swap attacking sprite if weapon changed
+      const newWeapon = player.weapon ?? "axe";
+      if (newWeapon !== e.weapon) {
+        e.weapon = newWeapon;
+        e.weaponSprite.setTexture(`${newWeapon}_attacking`);
       }
 
       if (!wasDeadBefore && isDeadNow) {
@@ -1748,6 +1789,13 @@ export class GameScene extends Phaser.Scene {
       this.localChatBubble.setPosition(this.localSprite.x, this.localSprite.y - 65);
     }
 
+    // ── Weapon texture sync (reads live server state every frame) ──────────
+    const serverWeapon = (myState?.weapon ?? "axe") as string;
+    if (serverWeapon !== this.localWeaponKey) {
+      this.localWeaponKey = serverWeapon;
+      this.localWeapon.setTexture(`${serverWeapon}_attacking`);
+    }
+
     // ── Weapon animation (axe orbits clockwise) ────────────────────────────
     // Tick cooldown
     if (this.localAttackCooldownTimer > 0) {
@@ -1780,7 +1828,7 @@ export class GameScene extends Phaser.Scene {
 
   // ── Remote player interpolation ─────────────────────────────────────────────
 
-  private interpolateRemotePlayers(): void {
+  private interpolateRemotePlayers(delta: number): void {
     this.remoteMap.forEach((entity, sessionId) => {
       // Dead players: freeze at death position, keep label above grave
       if (entity.isDead) {
@@ -2076,6 +2124,176 @@ export class GameScene extends Phaser.Scene {
       duration: 300,
       onComplete: () => anim.sprite.destroy(),
     });
+  }
+
+  // ── Trader NPC & Shop ──────────────────────────────────────────────────────
+
+  private createTrader(): void {
+    const traderX = MAP_W - 100;
+    const traderY = 100;
+    const depth   = traderY + 40;
+
+    const sprite = this.add.image(traderX, traderY, "trader")
+      .setDisplaySize(48, 64)
+      .setDepth(depth)
+      .setInteractive({ useHandCursor: true });
+
+    this.add.text(traderX, traderY - 40, "Trader", {
+      fontSize: "13px", color: "#ffd700",
+      stroke: "#000000", strokeThickness: 3, resolution: 2,
+    }).setOrigin(0.5, 1).setDepth(depth + 1);
+
+    this.add.text(traderX, traderY - 54, "[click to trade]", {
+      fontSize: "10px", color: "#aaaaaa",
+      stroke: "#000000", strokeThickness: 2, resolution: 2,
+    }).setOrigin(0.5, 1).setDepth(depth + 1);
+
+    sprite.on("pointerover", () => sprite.setTint(0xdddddd));
+    sprite.on("pointerout",  () => sprite.clearTint());
+    sprite.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
+      this.openShop();
+    });
+  }
+
+  private openShop(): void {
+    // Toggle off if already open
+    if (this.shopOpen) {
+      this.closeShop();
+      return;
+    }
+    this.shopOpen = true;
+
+    const { width, height } = this.scale;
+    const ITEM_H   = 120;
+    const PANEL_W  = 320;
+    const PANEL_H  = 50 + SHOP_WEAPONS.length * ITEM_H;
+    const px       = Math.round((width  - PANEL_W) / 2);
+    const py       = Math.round((height - PANEL_H) / 2);
+    const D        = 200000;
+
+    const add = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
+      this.shopObjects.push(obj);
+      return obj;
+    };
+
+    // Background panel
+    add(this.add.graphics())
+      .fillStyle(0x111111, 0.93)
+      .fillRoundedRect(px, py, PANEL_W, PANEL_H, 8)
+      .lineStyle(2, 0x998844, 1)
+      .strokeRoundedRect(px, py, PANEL_W, PANEL_H, 8)
+      .setScrollFactor(0).setDepth(D);
+
+    // Title
+    add(this.add.text(px + PANEL_W / 2, py + 16, "Trader's Shop", {
+      fontSize: "16px", color: "#ffd700",
+      stroke: "#000000", strokeThickness: 3, resolution: 2,
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(D + 1));
+
+    // Close button
+    const closeBtn = add(this.add.text(px + PANEL_W - 10, py + 10, "×", {
+      fontSize: "22px", color: "#ffffff",
+      stroke: "#000000", strokeThickness: 2, resolution: 2,
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(D + 1)
+      .setInteractive({ useHandCursor: true })) as Phaser.GameObjects.Text;
+
+    closeBtn.on("pointerover", () => closeBtn.setColor("#ff4444"));
+    closeBtn.on("pointerout",  () => closeBtn.setColor("#ffffff"));
+    closeBtn.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
+      this.closeShop();
+    });
+
+    // Title divider
+    add(this.add.graphics())
+      .lineStyle(1, 0x665533, 1)
+      .lineBetween(px + 10, py + 30, px + PANEL_W - 10, py + 30)
+      .setScrollFactor(0).setDepth(D + 1);
+
+    const playerState  = this.room.state.players.get(this.mySessionId);
+    const playerGold   = playerState?.gold   ?? 0;
+    const currentWeapon = playerState?.weapon ?? "axe";
+
+    SHOP_WEAPONS.forEach((item, i) => {
+      const rowY      = py + 38 + i * ITEM_H;
+      const canAfford = playerGold >= item.cost;
+      const equipped  = currentWeapon === item.key;
+
+      // Row background
+      add(this.add.graphics())
+        .fillStyle(0x1a1a0d, 0.7)
+        .fillRect(px + 8, rowY + 2, PANEL_W - 16, ITEM_H - 8)
+        .setScrollFactor(0).setDepth(D + 1);
+
+      // Weapon display image
+      add(this.add.image(px + 44, rowY + ITEM_H / 2 - 4, item.key)
+        .setDisplaySize(56, 56)
+        .setScrollFactor(0).setDepth(D + 2));
+
+      // Weapon name
+      add(this.add.text(px + 84, rowY + 16, item.label, {
+        fontSize: "14px", color: "#ffdd88",
+        stroke: "#000000", strokeThickness: 2, resolution: 2,
+      }).setScrollFactor(0).setDepth(D + 2));
+
+      // Damage
+      add(this.add.text(px + 84, rowY + 38, `Damage: ${item.damage}`, {
+        fontSize: "12px", color: "#ff9988",
+        stroke: "#000000", strokeThickness: 2, resolution: 2,
+      }).setScrollFactor(0).setDepth(D + 2));
+
+      // Cost
+      add(this.add.text(px + 84, rowY + 57, `Cost: ${item.cost} gold`, {
+        fontSize: "12px", color: "#ffd700",
+        stroke: "#000000", strokeThickness: 2, resolution: 2,
+      }).setScrollFactor(0).setDepth(D + 2));
+
+      // Buy / Equipped label
+      if (equipped) {
+        add(this.add.text(px + PANEL_W - 16, rowY + ITEM_H / 2 + 10, "Equipped", {
+          fontSize: "12px", color: "#44ff44",
+          stroke: "#000000", strokeThickness: 2, resolution: 2,
+        }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(D + 2));
+      } else {
+        const bgColor  = canAfford ? "#336633" : "#333333";
+        const txtColor = canAfford ? "#ffffff"  : "#666666";
+        const buyBtn   = add(this.add.text(
+          px + PANEL_W - 16, rowY + ITEM_H / 2 + 10, "Buy",
+          {
+            fontSize: "13px", color: txtColor, backgroundColor: bgColor,
+            padding: { x: 16, y: 7 },
+            stroke: "#000000", strokeThickness: 1, resolution: 2,
+          },
+        ).setOrigin(1, 0.5).setScrollFactor(0).setDepth(D + 2)) as Phaser.GameObjects.Text;
+
+        if (canAfford) {
+          buyBtn.setInteractive({ useHandCursor: true });
+          buyBtn.on("pointerover", () => buyBtn.setBackgroundColor("#448844"));
+          buyBtn.on("pointerout",  () => buyBtn.setBackgroundColor("#336633"));
+          buyBtn.on("pointerdown", () => {
+            this.ignoreNextMapClick = true;
+            this.room.send("buy_weapon", { weapon: item.key });
+            this.closeShop();
+          });
+        }
+      }
+
+      // Row divider (between items)
+      if (i < SHOP_WEAPONS.length - 1) {
+        add(this.add.graphics())
+          .lineStyle(1, 0x443322, 0.7)
+          .lineBetween(px + 10, rowY + ITEM_H - 4, px + PANEL_W - 10, rowY + ITEM_H - 4)
+          .setScrollFactor(0).setDepth(D + 1);
+      }
+    });
+  }
+
+  private closeShop(): void {
+    if (!this.shopOpen) return;
+    this.shopOpen = false;
+    for (const obj of this.shopObjects) obj.destroy();
+    this.shopObjects = [];
   }
 
   // ── Disconnect banner ──────────────────────────────────────────────────────

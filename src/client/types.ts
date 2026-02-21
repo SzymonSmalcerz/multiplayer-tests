@@ -37,6 +37,7 @@ export interface RemotePlayer {
   isPartyOwner: boolean;
   partyName: string;
   gold: number;
+  weapon: string;
   onChange: (cb: () => void) => void;
 }
 
@@ -63,6 +64,7 @@ export interface RemotePlayerEntity {
   isAttacking: boolean;
   attackDirection: number;
   attackOrbitTimer: number;
+  weapon: string;
   isDead: boolean;
   graveSprite?: Phaser.GameObjects.Image;
   hpBar?: Phaser.GameObjects.Graphics;

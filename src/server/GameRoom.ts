@@ -22,6 +22,7 @@ export class PlayerState extends Schema {
   @type("boolean") isPartyOwner: boolean = false;
   @type("string")  partyName: string = "";
   @type("number")  gold: number = 0;
+  @type("string")  weapon: string = "axe";
 }
 
 export class EnemyState extends Schema {
@@ -66,12 +67,18 @@ const HIT_ATTACK_CD_MS       = 200;   // 1 dmg every 0.2 s = 5 DPS
 const HIT_ENEMY_GOLD_AMOUNT  = 20;
 const HIT_ENEMY_GOLD_CHANCE  = 0.3;   // 30% drop rate
 
-// Player weapon (axe)
-const AXE_BASE_DMG          = 50;
+// Player weapon
 const AXE_ORBIT_RADIUS      = 15;   // px — matches client orbit radius
-const WEAPON_SPRITE_RADIUS  = 33;   // px — bounding-circle radius of the axe image
+const WEAPON_SPRITE_RADIUS  = 33;   // px — bounding-circle radius of the attacking sprite
 const WEAPON_HIT_CD_MS      = 1_000; // prevent hitting the same enemy twice in one swing
 const PLAYER_ATTACK_ANIM_MS = 1_000; // 1-second orbit animation
+
+/** All purchasable weapons. Key matches schema player.weapon value. */
+const WEAPON_DATA: Record<string, { damage: number; cost: number }> = {
+  axe:       { damage: 50,  cost: 0   }, // default, not sold
+  great_axe: { damage: 100, cost: 200 },
+  solid_axe: { damage: 75,  cost: 100 },
+};
 
 // ─── Shared interfaces ────────────────────────────────────────────────────────
 
@@ -403,6 +410,22 @@ export class GameRoom extends Room<GameState> {
         this.playerAttacks.delete(client.sessionId);
       }, PLAYER_ATTACK_ANIM_MS);
     });
+
+    this.onMessage("buy_weapon", (client, data: { weapon: string }) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.isDead) return;
+
+      const weaponKey = String(data.weapon ?? "");
+      const info = WEAPON_DATA[weaponKey];
+
+      // Must be a real purchasable weapon
+      if (!info || info.cost === 0) return;
+      if (player.gold < info.cost) return;
+
+      player.gold   -= info.cost;
+      player.weapon  = weaponKey;
+      player.showWeapon = true; // auto-equip on purchase
+    });
   }
 
   onJoin(client: Client, options: { nickname?: string; skin?: string }): void {
@@ -416,6 +439,7 @@ export class GameRoom extends Room<GameState> {
     player.level     = 1;
     player.xp        = 0;
     player.attackBonus = 0;
+    player.gold      = 1000;
 
     this.state.players.set(client.sessionId, player);
     this.lastPositions.set(client.sessionId, { x: player.x, y: player.y, time: Date.now() });
@@ -612,7 +636,8 @@ export class GameRoom extends Room<GameState> {
       const angle     = -Math.PI / 2 + progress * 2 * Math.PI;
       const weaponX   = player.x + AXE_ORBIT_RADIUS * Math.cos(angle);
       const weaponY   = player.y + AXE_ORBIT_RADIUS * Math.sin(angle);
-      const totalDmg  = AXE_BASE_DMG + player.attackBonus;
+      const weaponInfo = WEAPON_DATA[player.weapon] ?? WEAPON_DATA["axe"];
+      const totalDmg   = weaponInfo.damage + player.attackBonus;
 
       this.state.enemies.forEach((enemy, enemyId) => {
         if (enemy.isDead) return;
