@@ -4,6 +4,15 @@ import {
   TreeData, EnemyData, EnemyEntity,
 } from "./types";
 import { ALL_SKINS, FRAME_W as FRAME_SIZE } from "./skins";
+import {
+  xpForNextLevel,
+  worldToMinimapOffset,
+  sortLeaderboard,
+  findPath as findPathLogic,
+  MINIMAP_SIZE,
+  VIEW_RADIUS,
+  MINIMAP_SCALE,
+} from "./logic";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -39,10 +48,7 @@ const PLAYER_BODY_HEIGHT = 54 - 47;  //  7 px
 const NAV_CELL           = 16;  // px per nav-grid cell
 const WAYPOINT_THRESHOLD = 8;   // px — advance to next waypoint when within this range
 
-// Minimap Constants
-const MINIMAP_SIZE = 200;
-const VIEW_RADIUS  = 600;
-const MINIMAP_SCALE = MINIMAP_SIZE / (VIEW_RADIUS * 2);
+// Minimap constants — defined in logic.ts, re-exported for use here
 
 // Maps direction index (0=down,1=left,2=up,3=right) → walk animation suffix
 const DIR_NAMES = ["walk_down", "walk_left", "walk_up", "walk_right"] as const;
@@ -68,11 +74,6 @@ const ENEMY_DISPLAY: Record<string, { name: string; level: number }> = {
 // Converts "male/1lvl" → "male_1lvl"
 function skinKey(skin: string): string {
   return skin.replace("/", "_");
-}
-
-// XP required to advance from `level` to `level+1` (mirrors server formula)
-function xpForNextLevel(level: number): number {
-  return Math.floor(100 * Math.pow(1.1, level - 1));
 }
 
 // ─── Scene ────────────────────────────────────────────────────────────────────
@@ -185,7 +186,7 @@ export class GameScene extends Phaser.Scene {
   private navRows = 0;
 
   // Active path waypoints
-  private pathWaypoints: Phaser.Math.Vector2[] = [];
+  private pathWaypoints: { x: number; y: number }[] = [];
   private pathIndex = 0;
 
   // Timing
@@ -818,10 +819,9 @@ export class GameScene extends Phaser.Scene {
       const dx = e.sprite.x - localX;
       const dy = e.sprite.y - localY;
       if (Math.abs(dx) <= VIEW_RADIUS && Math.abs(dy) <= VIEW_RADIUS) {
-        const dotX = mmCenterX + dx * MINIMAP_SCALE;
-        const dotY = mmCenterY + dy * MINIMAP_SCALE;
+        const off = worldToMinimapOffset(dx, dy);
         this.minimapDots.fillStyle(0xff4444, 1);
-        this.minimapDots.fillCircle(dotX, dotY, 2);
+        this.minimapDots.fillCircle(mmCenterX + off.x, mmCenterY + off.y, 2);
       }
     });
 
@@ -831,8 +831,9 @@ export class GameScene extends Phaser.Scene {
       const dx = e.sprite.x - localX;
       const dy = e.sprite.y - localY;
       if (Math.abs(dx) <= VIEW_RADIUS && Math.abs(dy) <= VIEW_RADIUS) {
-        const dotX = mmCenterX + dx * MINIMAP_SCALE;
-        const dotY = mmCenterY + dy * MINIMAP_SCALE;
+        const off = worldToMinimapOffset(dx, dy);
+        const dotX = mmCenterX + off.x;
+        const dotY = mmCenterY + off.y;
         
         const rp = this.room.state.players.get(sid);
         const inParty = this.myPartyId !== "" && rp.partyId === this.myPartyId;
@@ -910,9 +911,7 @@ export class GameScene extends Phaser.Scene {
       });
     });
 
-    allPlayers.sort((a, b) => (b.level !== a.level ? b.level - a.level : b.xp - a.xp));
-
-    const top5 = allPlayers.slice(0, 5);
+    const top5 = sortLeaderboard(allPlayers).slice(0, 5);
 
     let currentY = lbY + 32;
 
@@ -2039,104 +2038,8 @@ export class GameScene extends Phaser.Scene {
   private findPath(
     fromX: number, fromY: number,
     toX: number, toY: number,
-  ): Phaser.Math.Vector2[] | null {
-    if (this.navGrid.length === 0) return null;
-
-    const cols = this.navCols;
-    const rows = this.navRows;
-    const N    = cols * rows;
-
-    const sc = Math.max(0, Math.min(cols - 1, Math.floor(fromX / NAV_CELL)));
-    const sr = Math.max(0, Math.min(rows - 1, Math.floor(fromY / NAV_CELL)));
-    const tc = Math.max(0, Math.min(cols - 1, Math.floor(toX   / NAV_CELL)));
-    const tr = Math.max(0, Math.min(rows - 1, Math.floor(toY   / NAV_CELL)));
-
-    if (this.navGrid[tr * cols + tc]) return null;
-
-    const start = sr * cols + sc;
-    const goal  = tr * cols + tc;
-
-    if (start === goal) return [new Phaser.Math.Vector2(toX, toY)];
-
-    const gScore = new Float32Array(N).fill(Infinity);
-    const fScore = new Float32Array(N).fill(Infinity);
-    const parent = new Int32Array(N).fill(-1);
-    const inOpen = new Uint8Array(N);
-    const closed = new Uint8Array(N);
-    const open: number[] = [];
-
-    const h = (c1: number, r1: number): number => {
-      const dx = Math.abs(c1 - tc);
-      const dy = Math.abs(r1 - tr);
-      return (dx + dy + (Math.SQRT2 - 2) * Math.min(dx, dy)) * NAV_CELL;
-    };
-
-    gScore[start] = 0;
-    fScore[start] = h(sc, sr);
-    open.push(start);
-    inOpen[start] = 1;
-
-    const DC       = [-1, 0, 1, -1, 1, -1, 0, 1];
-    const DR       = [-1,-1,-1,  0, 0,  1, 1, 1];
-    const STEPCOST = [
-      Math.SQRT2 * NAV_CELL, NAV_CELL, Math.SQRT2 * NAV_CELL,
-      NAV_CELL, NAV_CELL,
-      Math.SQRT2 * NAV_CELL, NAV_CELL, Math.SQRT2 * NAV_CELL,
-    ];
-
-    while (open.length > 0) {
-      let bestIdx = 0;
-      for (let i = 1; i < open.length; i++) {
-        if (fScore[open[i]] < fScore[open[bestIdx]]) bestIdx = i;
-      }
-      const cur = open[bestIdx];
-      open[bestIdx] = open[open.length - 1];
-      open.pop();
-      inOpen[cur] = 0;
-
-      if (cur === goal) {
-        const path: Phaser.Math.Vector2[] = [];
-        let node = goal;
-        while (node !== -1) {
-          const c = node % cols;
-          const r = Math.floor(node / cols);
-          path.push(new Phaser.Math.Vector2(
-            c * NAV_CELL + NAV_CELL / 2,
-            r * NAV_CELL + NAV_CELL / 2,
-          ));
-          node = parent[node];
-        }
-        path.reverse();
-        path[path.length - 1].set(toX, toY);
-        return path;
-      }
-
-      closed[cur] = 1;
-      const cc = cur % cols;
-      const cr = Math.floor(cur / cols);
-
-      for (let i = 0; i < 8; i++) {
-        const nc = cc + DC[i];
-        const nr = cr + DR[i];
-        if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
-
-        const nb = nr * cols + nc;
-        if (closed[nb] || this.navGrid[nb]) continue;
-
-        const tg = gScore[cur] + STEPCOST[i];
-        if (tg < gScore[nb]) {
-          parent[nb] = cur;
-          gScore[nb] = tg;
-          fScore[nb] = tg + h(nc, nr);
-          if (!inOpen[nb]) {
-            open.push(nb);
-            inOpen[nb] = 1;
-          }
-        }
-      }
-    }
-
-    return null;
+  ): { x: number; y: number }[] | null {
+    return findPathLogic(this.navGrid, this.navCols, this.navRows, NAV_CELL, fromX, fromY, toX, toY);
   }
 
   private onMapClick(worldX: number, worldY: number): void {

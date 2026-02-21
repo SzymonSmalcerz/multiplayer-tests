@@ -8,6 +8,7 @@
     "build:client": "esbuild src/client/main.ts --bundle --outfile=public/bundle.js --platform=browser --target=es2020 --sourcemap",
     "build": "npm run build:server && npm run build:client",
     "start": "npm run build && node dist/server/index.js",
+    "test": "vitest run",
     "dev": "concurrently \"tsc -p tsconfig.json --watch\" \"nodemon --watch dist/server --delay 1 dist/server/index.js\" \"esbuild src/client/main.ts --bundle --outfile=public/bundle.js --platform=browser --target=es2020 --watch\""
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "concurrently": "^8.0.0",
     "esbuild": "^0.21.0",
     "nodemon": "^3.0.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.18"
   }
 }
