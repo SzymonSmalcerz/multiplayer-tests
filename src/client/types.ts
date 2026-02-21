@@ -51,7 +51,7 @@ export interface GameSceneData {
 /** Represents one remote player entity in the GameScene */
 export interface RemotePlayerEntity {
   sprite: Phaser.Physics.Arcade.Sprite;
-  weaponSprite: Phaser.GameObjects.Sprite;
+  weaponSprite: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   chatBubble?: Phaser.GameObjects.Text;
   targetX: number;
@@ -62,6 +62,7 @@ export interface RemotePlayerEntity {
   level: number;
   isAttacking: boolean;
   attackDirection: number;
+  attackOrbitTimer: number;
   isDead: boolean;
   graveSprite?: Phaser.GameObjects.Image;
   hpBar?: Phaser.GameObjects.Graphics;

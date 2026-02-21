@@ -66,10 +66,12 @@ const HIT_ATTACK_CD_MS       = 200;   // 1 dmg every 0.2 s = 5 DPS
 const HIT_ENEMY_GOLD_AMOUNT  = 20;
 const HIT_ENEMY_GOLD_CHANCE  = 0.3;   // 30% drop rate
 
-// Player weapon
-const BLUE_SWORD_BASE_DMG = 5;
-const WEAPON_HIT_CD_MS    = 1_000;  // 1 hit per second per player→enemy pair
-const PLAYER_ATTACK_ANIM_MS = 350;
+// Player weapon (axe)
+const AXE_BASE_DMG          = 50;
+const AXE_ORBIT_RADIUS      = 15;   // px — matches client orbit radius
+const WEAPON_SPRITE_RADIUS  = 33;   // px — bounding-circle radius of the axe image
+const WEAPON_HIT_CD_MS      = 1_000; // prevent hitting the same enemy twice in one swing
+const PLAYER_ATTACK_ANIM_MS = 1_000; // 1-second orbit animation
 
 // ─── Shared interfaces ────────────────────────────────────────────────────────
 
@@ -156,6 +158,9 @@ export class GameRoom extends Room<GameState> {
 
   /** playerId → Map<enemyId, lastHitTimestamp> */
   private playerHitCooldowns = new Map<string, Map<string, number>>();
+
+  /** playerId → attack start timestamp (present while the axe is orbiting) */
+  private playerAttacks = new Map<string, number>();
 
   /** Enemies waiting to respawn */
   private respawnQueue: Array<{ type: string; spawnAt: number }> = [];
@@ -379,19 +384,24 @@ export class GameRoom extends Room<GameState> {
       const direction = Math.floor(Number(data.direction));
       if (direction < 0 || direction > 3) return;
 
+      // Ignore if already attacking (server-side gate)
+      if (this.playerAttacks.has(client.sessionId)) return;
+
       // Auto-equip weapon if not equipped
       if (!player.showWeapon) player.showWeapon = true;
 
-      player.isAttacking    = true;
+      player.isAttacking     = true;
       player.attackDirection = direction;
 
-      // Reset attack animation flag after PLAYER_ATTACK_ANIM_MS
+      // Record attack start — tickPlayerWeapons() drives hit detection each tick
+      this.playerAttacks.set(client.sessionId, Date.now());
+
+      // Clear the attacking flag once the animation finishes
       setTimeout(() => {
         const p = this.state.players.get(client.sessionId);
         if (p) p.isAttacking = false;
+        this.playerAttacks.delete(client.sessionId);
       }, PLAYER_ATTACK_ANIM_MS);
-
-      this.applyPlayerAttack(client.sessionId, direction);
     });
   }
 
@@ -436,6 +446,7 @@ export class GameRoom extends Room<GameState> {
     this.state.players.delete(client.sessionId);
     this.lastPositions.delete(client.sessionId);
     this.playerHitCooldowns.delete(client.sessionId);
+    this.playerAttacks.delete(client.sessionId);
     console.log(`[Room] ${name} left. Players: ${this.state.players.size}`);
   }
 
@@ -472,6 +483,7 @@ export class GameRoom extends Room<GameState> {
     const dtSec = dt / 1000;
 
     this.tickCoins(now);
+    this.tickPlayerWeapons(now);
 
     // Process respawn queue
     for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
@@ -583,28 +595,44 @@ export class GameRoom extends Room<GameState> {
 
   // ── Player attack ────────────────────────────────────────────────────────────
 
-  private applyPlayerAttack(sessionId: string, direction: number): void {
-    const player = this.state.players.get(sessionId);
-    if (!player) return;
+  /** Called every tick — checks the axe's current orbital position against all enemies. */
+  private tickPlayerWeapons(now: number): void {
+    this.playerAttacks.forEach((startTime, sessionId) => {
+      const player = this.state.players.get(sessionId);
+      if (!player || player.isDead) return;
 
-    const totalDamage = BLUE_SWORD_BASE_DMG + player.attackBonus;
-    const now         = Date.now();
-    const cdMap       = this.playerHitCooldowns.get(sessionId);
-    if (!cdMap) return;
+      const elapsed = now - startTime;
+      if (elapsed >= PLAYER_ATTACK_ANIM_MS) return; // guard (setTimeout handles cleanup)
 
-    this.state.enemies.forEach((enemy, enemyId) => {
-      if (enemy.isDead) return;
-      if (!isInsideHitbox(player.x, player.y, direction, enemy.x, enemy.y, 10)) return;
+      const cdMap = this.playerHitCooldowns.get(sessionId);
+      if (!cdMap) return;
 
-      const lastHit = cdMap.get(enemyId) ?? 0;
-      if (now - lastHit < WEAPON_HIT_CD_MS) return;
+      // Mirror client angle calculation: start at top (−π/2), sweep clockwise
+      const progress  = elapsed / PLAYER_ATTACK_ANIM_MS;
+      const angle     = -Math.PI / 2 + progress * 2 * Math.PI;
+      const weaponX   = player.x + AXE_ORBIT_RADIUS * Math.cos(angle);
+      const weaponY   = player.y + AXE_ORBIT_RADIUS * Math.sin(angle);
+      const totalDmg  = AXE_BASE_DMG + player.attackBonus;
 
-      cdMap.set(enemyId, now);
-      enemy.hp = Math.max(0, enemy.hp - totalDamage);
+      this.state.enemies.forEach((enemy, enemyId) => {
+        if (enemy.isDead) return;
 
-      if (enemy.hp <= 0) {
-        this.killEnemy(enemyId, sessionId);
-      }
+        // Hit if the enemy centre is within the weapon sprite's bounding circle
+        const dx   = enemy.x - weaponX;
+        const dy   = enemy.y - weaponY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > WEAPON_SPRITE_RADIUS) return;
+
+        const lastHit = cdMap.get(enemyId) ?? 0;
+        if (now - lastHit < WEAPON_HIT_CD_MS) return;
+
+        cdMap.set(enemyId, now);
+        enemy.hp = Math.max(0, enemy.hp - totalDmg);
+
+        if (enemy.hp <= 0) {
+          this.killEnemy(enemyId, sessionId);
+        }
+      });
     });
   }
 

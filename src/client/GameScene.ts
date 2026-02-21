@@ -23,7 +23,9 @@ const SEND_RATE_MS        = 50;    // send position @ 20 Hz
 const LERP_FACTOR         = 0.18;  // interpolation factor for remote players / enemies
 const RECONCILE_THRESHOLD = 120;   // px — snap if server disagrees by more than this
 const ANIM_FPS            = 10;
-const ATTACK_ANIM_MS      = 350;   // local attack animation duration (ms)
+const ATTACK_ANIM_MS      = 1000;  // axe orbit animation duration (ms)
+const ATTACK_COOLDOWN_MS  = 2000;  // ms between attacks
+const AXE_ORBIT_RADIUS    = 15;    // px from player sprite centre
 
 // All selectable skins — preloaded so any player's chosen skin renders correctly
 const SKINS_TO_LOAD = ALL_SKINS;
@@ -52,10 +54,6 @@ const WAYPOINT_THRESHOLD = 8;   // px — advance to next waypoint when within t
 
 // Maps direction index (0=down,1=left,2=up,3=right) → walk animation suffix
 const DIR_NAMES = ["walk_down", "walk_left", "walk_up", "walk_right"] as const;
-
-// Maps direction index → attack animation suffix (for blue_sword)
-// dir 0=down, 1=left (uses right+flip), 2=up, 3=right
-const ATTACK_DIR_NAMES = ["down", "left", "up", "right"] as const;
 
 // Sprite-sheet row → walk animation name
 const ROW_ANIM_NAMES = ["walk_up", "walk_left", "walk_down", "walk_right"] as const;
@@ -91,13 +89,14 @@ export class GameScene extends Phaser.Scene {
   private localLabel!: Phaser.GameObjects.Text;
   private localChatBubble?: Phaser.GameObjects.Text;
   private localDirection = 0;
-  private localWeapon!: Phaser.GameObjects.Sprite;
+  private localWeapon!: Phaser.GameObjects.Image;
   private localLevel = 1;
 
   // Local attack state
   private localIsAttacking = false;
   private localAttackDir   = 0;
   private localAttackTimer = 0;
+  private localAttackCooldownTimer = 0;
 
   // Local death state
   private localGrave?: Phaser.GameObjects.Image;
@@ -230,10 +229,8 @@ export class GameScene extends Phaser.Scene {
       this.load.image(key, `/assets/trees/${key}.png`);
     }
 
-    // Weapon sprite sheet (64×64 frames, 9 cols × 5 rows)
-    this.load.spritesheet("blue_sword", "/assets/weapons/blue_sword.png", {
-      frameWidth: FRAME_SIZE, frameHeight: FRAME_SIZE,
-    });
+    // Axe weapon image (single sprite, rotated procedurally during orbit)
+    this.load.image("axe", "/assets/weapons/axe_attacking.png");
 
     // Hit enemy sprite sheet (32×32 frames, 2 cols × 7 rows)
     this.load.spritesheet("hit_enemy", "/assets/enemies/hit.png", {
@@ -334,18 +331,17 @@ export class GameScene extends Phaser.Scene {
   // ── Attack ─────────────────────────────────────────────────────────────────
 
   private triggerAttack(): void {
-    if (this.localIsAttacking) return; // already mid-swing
+    if (this.localIsAttacking) return;          // already mid-swing
     if (this.localIsDead) return;
+    if (this.localAttackCooldownTimer > 0) return; // still on cooldown
 
     this.room.send("attack", { direction: this.localDirection });
 
     // Optimistically start attack animation
-    this.localIsAttacking = true;
-    this.localAttackDir   = this.localDirection;
-    this.localAttackTimer = ATTACK_ANIM_MS;
-
-    // Ensure weapon is visible immediately even if server hasn't confirmed yet
-    this.localWeapon.setVisible(true);
+    this.localIsAttacking        = true;
+    this.localAttackDir          = this.localDirection;
+    this.localAttackTimer        = ATTACK_ANIM_MS;
+    this.localAttackCooldownTimer = ATTACK_COOLDOWN_MS;
   }
 
   // ── Chat ───────────────────────────────────────────────────────────────────
@@ -1068,8 +1064,8 @@ export class GameScene extends Phaser.Scene {
     this.localSprite.setCollideWorldBounds(true);
     this.localSprite.setDepth(y + FRAME_SIZE / 2);
 
-    this.localWeapon = this.add.sprite(x, y, "blue_sword");
-    this.localWeapon.setDepth(this.localSprite.depth - 0.1);
+    this.localWeapon = this.add.image(x, y, "axe");
+    this.localWeapon.setDepth(this.localSprite.depth + 1);
     this.localWeapon.setVisible(false);
 
     const body = this.localSprite.body as Phaser.Physics.Arcade.Body;
@@ -1119,42 +1115,6 @@ export class GameScene extends Phaser.Scene {
             frames: this.anims.generateFrameNumbers(key, { start, end }),
             frameRate: ANIM_FPS,
             repeat: -1,
-          });
-        }
-      }
-    }
-
-    // ── Weapon walk animations (rows 0–3, 9 frames each) ─────────────────────
-    if (this.textures.exists("blue_sword")) {
-      for (let row = 0; row < 4; row++) {
-        const start = row * 9;
-        const end   = start + 8;
-        const aKey  = `blue_sword_${ROW_ANIM_NAMES[row]}`;
-        if (!this.anims.exists(aKey)) {
-          this.anims.create({
-            key: aKey,
-            frames: this.anims.generateFrameNumbers("blue_sword", { start, end }),
-            frameRate: ANIM_FPS,
-            repeat: -1,
-          });
-        }
-      }
-
-      // Row 4 attack animations (3 frames each, plays once)
-      // Frame layout in row 4: [36,37,38]=right, [39,40,41]=up, [42,43,44]=down
-      // Left attack uses right frames + 180° flip at runtime
-      const attackDefs: [string, number[]][] = [
-        ["blue_sword_attack_right", [36, 37, 38]],
-        ["blue_sword_attack_up",    [39, 40, 41]],
-        ["blue_sword_attack_down",  [42, 43, 44]],
-      ];
-      for (const [aKey, frames] of attackDefs) {
-        if (!this.anims.exists(aKey)) {
-          this.anims.create({
-            key: aKey,
-            frames: this.anims.generateFrameNumbers("blue_sword", { frames }),
-            frameRate: 10,
-            repeat: 0,
           });
         }
       }
@@ -1280,9 +1240,9 @@ export class GameScene extends Phaser.Scene {
     sprite.stop();
     sprite.setFrame(DIR_TO_ROW[0] * 9);
 
-    const weaponSprite = this.add.sprite(player.x, player.y, "blue_sword");
-    weaponSprite.setVisible(player.showWeapon || false);
-    weaponSprite.setDepth(sprite.depth - 0.1);
+    const weaponSprite = this.add.image(player.x, player.y, "axe");
+    weaponSprite.setVisible(false);
+    weaponSprite.setDepth(sprite.depth + 1);
 
     const graveSprite = this.add.image(player.x, player.y, "grave");
     graveSprite.setDisplaySize(32, 32);
@@ -1351,6 +1311,7 @@ export class GameScene extends Phaser.Scene {
       level: lv,
       isAttacking: player.isAttacking || false,
       attackDirection: player.attackDirection ?? 0,
+      attackOrbitTimer: 0,
       isDead: player.isDead || false,
       partyId: player.partyId ?? "",
     };
@@ -1364,6 +1325,8 @@ export class GameScene extends Phaser.Scene {
       const wasDeadBefore = e.isDead;
       const isDeadNow     = player.isDead || false;
 
+      const wasAttacking = e.isAttacking;
+
       e.targetX         = player.x;
       e.targetY         = player.y;
       e.direction       = player.direction ?? 0;
@@ -1371,6 +1334,11 @@ export class GameScene extends Phaser.Scene {
       e.isAttacking     = player.isAttacking || false;
       e.attackDirection = player.attackDirection ?? 0;
       e.isDead          = isDeadNow;
+
+      // Start orbit timer when attack begins
+      if (!wasAttacking && e.isAttacking) {
+        e.attackOrbitTimer = ATTACK_ANIM_MS;
+      }
 
       if (!wasDeadBefore && isDeadNow) {
         // Just died: freeze sprite at death position, show grave
@@ -1780,56 +1748,33 @@ export class GameScene extends Phaser.Scene {
       this.localChatBubble.setPosition(this.localSprite.x, this.localSprite.y - 65);
     }
 
-    // ── Weapon animation ───────────────────────────────────────────────────
-    // Tick down attack timer
+    // ── Weapon animation (axe orbits clockwise) ────────────────────────────
+    // Tick cooldown
+    if (this.localAttackCooldownTimer > 0) {
+      this.localAttackCooldownTimer -= delta;
+    }
+
+    // Tick attack animation timer
     if (this.localIsAttacking) {
       this.localAttackTimer -= delta;
       if (this.localAttackTimer <= 0) {
         this.localIsAttacking = false;
-        this.localWeapon.setFlipX(false);
-        this.localWeapon.setFlipY(false);
       }
     }
 
-    const playerState = this.room.state.players.get(this.mySessionId);
-    const showWeapon  = playerState?.showWeapon || this.localIsAttacking;
-
-    this.localWeapon.setVisible(showWeapon);
-
-    if (showWeapon) {
-      this.localWeapon.setPosition(this.localSprite.x, this.localSprite.y);
-
-      if (this.localIsAttacking) {
-        // Play attack animation
-        const atkDir = this.localAttackDir;
-        if (atkDir === 1) {
-          // left = right frames rotated 180°
-          this.localWeapon.setFlipX(true);
-          this.localWeapon.setFlipY(true);
-          this.localWeapon.play("blue_sword_attack_right", true);
-        } else {
-          this.localWeapon.setFlipX(false);
-          this.localWeapon.setFlipY(false);
-          const atkKey = `blue_sword_attack_${ATTACK_DIR_NAMES[atkDir]}`;
-          this.localWeapon.play(atkKey, true);
-        }
-      } else if (moving) {
-        this.localWeapon.setFlipX(false);
-        this.localWeapon.setFlipY(false);
-        this.localWeapon.play(`blue_sword_${DIR_NAMES[dir]}`, true);
-      } else {
-        this.localWeapon.stop();
-        this.localWeapon.setFlipX(false);
-        this.localWeapon.setFlipY(false);
-        this.localWeapon.setFrame(DIR_TO_ROW[dir] * 9);
-      }
-
-      // Depth: render in front when facing down, behind otherwise
-      if (dir === 0) {
-        this.localWeapon.setDepth(playerDepth + 0.1);
-      } else {
-        this.localWeapon.setDepth(playerDepth - 0.1);
-      }
+    if (this.localIsAttacking) {
+      // progress 0→1 over the animation duration
+      const progress = 1 - this.localAttackTimer / ATTACK_ANIM_MS;
+      // start at top (−π/2), sweep clockwise (increasing angle)
+      const angle = -Math.PI / 2 + progress * 2 * Math.PI;
+      const wx = this.localSprite.x + AXE_ORBIT_RADIUS * Math.cos(angle);
+      const wy = this.localSprite.y + AXE_ORBIT_RADIUS * Math.sin(angle);
+      this.localWeapon.setPosition(wx, wy);
+      this.localWeapon.setRotation(angle + Math.PI / 2);
+      this.localWeapon.setDepth(playerDepth + 1);
+      this.localWeapon.setVisible(true);
+    } else {
+      this.localWeapon.setVisible(false);
     }
   }
 
@@ -1847,8 +1792,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       const { sprite, weaponSprite, label, chatBubble,
-              targetX, targetY, direction, showWeapon,
-              isAttacking, attackDirection, skinKey: key } = entity;
+              targetX, targetY, direction, skinKey: key } = entity;
 
       const prevX = sprite.x;
       const prevY = sprite.y;
@@ -1894,40 +1838,23 @@ export class GameScene extends Phaser.Scene {
       const dy = Math.abs(sprite.y - prevY);
       const moving = dx > 0.5 || dy > 0.5;
 
-      // ── Remote weapon ────────────────────────────────────────────────────
-      const showW = showWeapon || isAttacking;
-      weaponSprite.setVisible(showW);
+      // ── Remote weapon (axe orbit) ─────────────────────────────────────────
+      // Tick orbit timer
+      if (entity.attackOrbitTimer > 0) {
+        entity.attackOrbitTimer = Math.max(0, entity.attackOrbitTimer - delta);
+      }
 
-      if (showW) {
-        weaponSprite.setPosition(sprite.x, sprite.y);
-
-        if (isAttacking) {
-          const atkDir = attackDirection;
-          if (atkDir === 1) {
-            weaponSprite.setFlipX(true);
-            weaponSprite.setFlipY(true);
-            weaponSprite.play("blue_sword_attack_right", true);
-          } else {
-            weaponSprite.setFlipX(false);
-            weaponSprite.setFlipY(false);
-            weaponSprite.play(`blue_sword_attack_${ATTACK_DIR_NAMES[atkDir]}`, true);
-          }
-        } else if (moving) {
-          weaponSprite.setFlipX(false);
-          weaponSprite.setFlipY(false);
-          weaponSprite.play(`blue_sword_${DIR_NAMES[direction]}`, true);
-        } else {
-          weaponSprite.stop();
-          weaponSprite.setFlipX(false);
-          weaponSprite.setFlipY(false);
-          weaponSprite.setFrame(DIR_TO_ROW[direction] * 9);
-        }
-
-        if (direction === 0) {
-          weaponSprite.setDepth(playerDepth + 0.1);
-        } else {
-          weaponSprite.setDepth(playerDepth - 0.1);
-        }
+      if (entity.attackOrbitTimer > 0) {
+        const progress = 1 - entity.attackOrbitTimer / ATTACK_ANIM_MS;
+        const angle    = -Math.PI / 2 + progress * 2 * Math.PI;
+        const wx = sprite.x + AXE_ORBIT_RADIUS * Math.cos(angle);
+        const wy = sprite.y + AXE_ORBIT_RADIUS * Math.sin(angle);
+        weaponSprite.setPosition(wx, wy);
+        weaponSprite.setRotation(angle + Math.PI / 2);
+        weaponSprite.setDepth(playerDepth + 1);
+        weaponSprite.setVisible(true);
+      } else {
+        weaponSprite.setVisible(false);
       }
 
       // ── Remote player sprite animation ───────────────────────────────────
