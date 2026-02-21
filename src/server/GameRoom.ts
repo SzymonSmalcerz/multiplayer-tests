@@ -21,6 +21,7 @@ export class PlayerState extends Schema {
   @type("string")  partyId: string = "";
   @type("boolean") isPartyOwner: boolean = false;
   @type("string")  partyName: string = "";
+  @type("number")  gold: number = 0;
 }
 
 export class EnemyState extends Schema {
@@ -58,10 +59,12 @@ const ENEMY_COUNT        = 10;
 const ENEMY_RESPAWN_MS   = 10_000;
 
 // "hit" enemy stats
-const HIT_ENEMY_HP      = 15;
-const HIT_ENEMY_XP      = 100;
-const HIT_ENEMY_DAMAGE  = 1;
-const HIT_ATTACK_CD_MS  = 200;   // 1 dmg every 0.2 s = 5 DPS
+const HIT_ENEMY_HP           = 15;
+const HIT_ENEMY_XP           = 100;
+const HIT_ENEMY_DAMAGE       = 1;
+const HIT_ATTACK_CD_MS       = 200;   // 1 dmg every 0.2 s = 5 DPS
+const HIT_ENEMY_GOLD_AMOUNT  = 20;
+const HIT_ENEMY_GOLD_CHANCE  = 0.3;   // 30% drop rate
 
 // Player weapon
 const BLUE_SWORD_BASE_DMG = 5;
@@ -91,6 +94,14 @@ interface LastPos {
   x: number;
   y: number;
   time: number;
+}
+
+interface PendingCoin {
+  id: string;
+  x: number;
+  y: number;
+  amount: number;
+  expiresAt: number;
 }
 
 // ─── XP / Levelling ──────────────────────────────────────────────────────────
@@ -135,6 +146,10 @@ export class GameRoom extends Room<GameState> {
 
   // ── Enemy bookkeeping ──────────────────────────────────────────────────────
   private enemyCounter = 0;
+
+  // ── Coin bookkeeping ───────────────────────────────────────────────────────
+  private coinCounter  = 0;
+  private pendingCoins = new Map<string, PendingCoin>();
 
   /** enemyId → Map<playerId, lastAttackTimestamp> */
   private enemyAttackCooldowns = new Map<string, Map<string, number>>();
@@ -456,6 +471,8 @@ export class GameRoom extends Room<GameState> {
     const now   = Date.now();
     const dtSec = dt / 1000;
 
+    this.tickCoins(now);
+
     // Process respawn queue
     for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
       if (now >= this.respawnQueue[i].spawnAt) {
@@ -667,6 +684,19 @@ export class GameRoom extends Room<GameState> {
 
     // Award XP (with party sharing)
     this.awardXP(killerSessionId, HIT_ENEMY_XP, enemy.x, enemy.y);
+
+    // Gold drop (type-specific) — create a persistent pickup for 15 s
+    if (enemy.type === "hit" && Math.random() < HIT_ENEMY_GOLD_CHANCE) {
+      const coinId = `coin_${++this.coinCounter}`;
+      this.pendingCoins.set(coinId, {
+        id: coinId,
+        x: enemy.x,
+        y: enemy.y,
+        amount: HIT_ENEMY_GOLD_AMOUNT,
+        expiresAt: Date.now() + 15_000,
+      });
+      this.broadcast("coin_drop", { id: coinId, x: enemy.x, y: enemy.y });
+    }
   }
 
   private awardXP(killerSessionId: string, xpAmount: number, enemyX: number, enemyY: number): void {
@@ -699,6 +729,145 @@ export class GameRoom extends Room<GameState> {
     eligible.forEach(memberId => {
       const member = this.state.players.get(memberId);
       if (member) { member.xp += share; this.checkLevelUp(memberId); }
+    });
+  }
+
+  /**
+   * Process all pending coins each tick.
+   * A coin is consumed when a qualifying player steps within range, or removed
+   * silently when it expires after 15 s.
+   */
+  private tickCoins(now: number): void {
+    const toProcess: PendingCoin[] = [];
+
+    for (const coin of this.pendingCoins.values()) {
+      const expired = now >= coin.expiresAt;
+      if (expired || this.coinHasNearbyPlayer(coin)) {
+        toProcess.push(coin);
+      }
+    }
+
+    for (const coin of toProcess) {
+      this.pendingCoins.delete(coin.id);
+      this.broadcast("coin_collected", { id: coin.id });
+      if (now < coin.expiresAt) {
+        this.awardGold(coin.amount, coin.x, coin.y);
+      }
+    }
+  }
+
+  /** Returns true if any living player is within the 20 px collect radius. */
+  private coinHasNearbyPlayer(coin: PendingCoin): boolean {
+    const COLLECT_RANGE = 20;
+    let found = false;
+    this.state.players.forEach((p) => {
+      if (found || p.isDead) return;
+      const dx = p.x - coin.x;
+      const dy = p.y - coin.y;
+      if (Math.sqrt(dx * dx + dy * dy) <= COLLECT_RANGE) found = true;
+    });
+    return found;
+  }
+
+  /**
+   * Award gold to any living player(s) whose center is within 20 px of the coin.
+   * If nobody is close enough the coin animation plays but no gold is granted.
+   * Among eligible players, the nearest one wins; ties split evenly (ceil).
+   * If the winner is in a party, further splits with nearby party members.
+   */
+  private awardGold(amount: number, coinX: number, coinY: number): void {
+    const COLLECT_RANGE = 20; // px
+
+    const candidates: Array<{ id: string; state: PlayerState; dist: number }> = [];
+    this.state.players.forEach((p, id) => {
+      if (p.isDead) return;
+      const dx = p.x - coinX;
+      const dy = p.y - coinY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= COLLECT_RANGE) candidates.push({ id, state: p, dist });
+    });
+
+    if (candidates.length === 0) return; // no player close enough
+
+    const minDist = Math.min(...candidates.map(c => c.dist));
+    const EPSILON = 1; // px — treat as tied if within 1 px of each other
+    const nearest = candidates.filter(c => c.dist <= minDist + EPSILON);
+
+    if (nearest.length === 1) {
+      this.distributeGoldToParty(nearest[0].id, amount, coinX, coinY);
+      return;
+    }
+
+    // Multiple equidistant players — group by party
+    const inSameParty =
+      nearest.every(c => c.state.partyId !== "" && c.state.partyId === nearest[0].state.partyId);
+
+    if (inSameParty) {
+      // Treat as a single party recipient (party split handled inside)
+      this.distributeGoldToParty(nearest[0].id, amount, coinX, coinY);
+    } else {
+      // Different parties / solo — each gets ceil(amount / count)
+      const share = Math.ceil(amount / nearest.length);
+      for (const c of nearest) {
+        this.distributeGoldToParty(c.id, share, coinX, coinY);
+      }
+    }
+  }
+
+  /**
+   * Award gold to `recipientId`. If they are in a party, split with nearby
+   * party members (≤640 px from coin) — same radius as XP sharing.
+   * Each recipient receives ceil(amount / eligibleCount).
+   */
+  private distributeGoldToParty(recipientId: string, amount: number, coinX: number, coinY: number): void {
+    const recipient = this.state.players.get(recipientId);
+    if (!recipient) return;
+
+    if (recipient.partyId === "") {
+      recipient.gold += amount;
+      this.sendGoldNotification(recipientId, amount);
+      return;
+    }
+
+    const SHARE_RANGE = 640;
+    const members = this.partyMembers.get(recipient.partyId);
+    if (!members) {
+      recipient.gold += amount;
+      this.sendGoldNotification(recipientId, amount);
+      return;
+    }
+
+    const eligible: string[] = [];
+    members.forEach(memberId => {
+      const member = this.state.players.get(memberId);
+      if (!member || member.isDead) return;
+      const dx = member.x - coinX;
+      const dy = member.y - coinY;
+      if (Math.sqrt(dx * dx + dy * dy) <= SHARE_RANGE) eligible.push(memberId);
+    });
+
+    if (eligible.length === 0) {
+      recipient.gold += amount;
+      this.sendGoldNotification(recipientId, amount);
+      return;
+    }
+
+    const share = Math.ceil(amount / eligible.length);
+    for (const memberId of eligible) {
+      const member = this.state.players.get(memberId);
+      if (member) {
+        member.gold += share;
+        this.sendGoldNotification(memberId, share);
+      }
+    }
+  }
+
+  private sendGoldNotification(sessionId: string, amount: number): void {
+    const client = this.clients.find(c => c.sessionId === sessionId);
+    client?.send("chat", {
+      sessionId: "server",
+      nickname: "Server",
+      message: `You have gained ${amount} gold`,
     });
   }
 

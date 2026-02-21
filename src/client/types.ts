@@ -36,6 +36,7 @@ export interface RemotePlayer {
   partyId: string;
   isPartyOwner: boolean;
   partyName: string;
+  gold: number;
   onChange: (cb: () => void) => void;
 }
 

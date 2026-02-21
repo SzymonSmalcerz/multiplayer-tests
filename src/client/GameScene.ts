@@ -138,6 +138,7 @@ export class GameScene extends Phaser.Scene {
   private hudXpBar!: Phaser.GameObjects.Graphics;
   private hudHpText!: Phaser.GameObjects.Text;
   private hudXpText!: Phaser.GameObjects.Text;
+  private hudGoldText!: Phaser.GameObjects.Text;
 
   // Party state
   private myPartyId      = "";
@@ -189,6 +190,9 @@ export class GameScene extends Phaser.Scene {
   private pathWaypoints: { x: number; y: number }[] = [];
   private pathIndex = 0;
 
+  // Coin animations — keyed by server coin ID
+  private coinAnimations = new Map<string, { sprite: Phaser.GameObjects.Sprite; timer: Phaser.Time.TimerEvent }>();
+
   // Timing
   private lastSendTime = 0;
 
@@ -238,6 +242,11 @@ export class GameScene extends Phaser.Scene {
 
     // Grave shown at player's death location
     this.load.image("grave", "/assets/deathState/grave.png");
+
+    // Coin spin spritesheet (20×20 px per frame, 4 frames stacked vertically)
+    this.load.spritesheet("coins", "/assets/utils/coins.png", {
+      frameWidth: 20, frameHeight: 20,
+    });
   }
 
   create(): void {
@@ -484,6 +493,21 @@ export class GameScene extends Phaser.Scene {
       strokeThickness: 2,
       resolution: 2,
     }).setScrollFactor(0).setDepth(D + 3);
+
+    // Gold panel (to the right of HP/XP panel)
+    this.add.graphics()
+      .fillStyle(0x000000, 0.55)
+      .fillRect(218, 8, 80, 20)
+      .setScrollFactor(0)
+      .setDepth(D);
+
+    this.hudGoldText = this.add.text(222, 12, "Gold: 0", {
+      fontSize: "11px",
+      color: "#ffd700",
+      stroke: "#000000",
+      strokeThickness: 2,
+      resolution: 2,
+    }).setScrollFactor(0).setDepth(D + 1);
   }
 
   private updateHUD(): void {
@@ -517,6 +541,9 @@ export class GameScene extends Phaser.Scene {
     this.hudXpBar.fillStyle(0x3399ff, 1);
     this.hudXpBar.fillRect(12, 32, Math.floor(maxBarW * xpRatio), 13);
     this.hudXpText.setText(`XP: ${Math.floor(p.xp)}/${xpNeeded}  Lv.${p.level}`);
+
+    // Gold display
+    this.hudGoldText.setText(`Gold: ${p.gold ?? 0}`);
 
     // Update nickname label when level changes
     if (p.level !== this.localLevel) {
@@ -1198,6 +1225,16 @@ export class GameScene extends Phaser.Scene {
     // Chat messages
     this.room.onMessage("chat", (data: { sessionId: string; nickname: string; message: string }) => {
       this.displayChatMessage(data);
+    });
+
+    // Coin drop animation
+    this.room.onMessage("coin_drop", (data: { id: string; x: number; y: number }) => {
+      this.spawnCoinAnimation(data.id, data.x, data.y);
+    });
+
+    // Coin collected or expired — stop the animation
+    this.room.onMessage("coin_collected", (data: { id: string }) => {
+      this.removeCoinAnimation(data.id);
     });
 
     // Party invite received
@@ -2068,6 +2105,49 @@ export class GameScene extends Phaser.Scene {
       delay: 1000,
       duration: 500,
       onComplete: () => img.destroy(),
+    });
+  }
+
+  // ── Coin animation ─────────────────────────────────────────────────────────
+
+  /**
+   * Spawn a looping coin-spin animation at world position (x, y).
+   * Loops indefinitely until removeCoinAnimation() is called with the same id.
+   * Frames 0–3 = first half-spin; frames 3–0 with flipX = mirrored second half.
+   */
+  private spawnCoinAnimation(id: string, x: number, y: number): void {
+    const sprite = this.add.sprite(x, y - 20, "coins");
+    sprite.setDepth(y + 10);
+    sprite.setFrame(0);
+
+    let frameIdx = 0; // 0–7 within one full spin
+
+    const timer = this.time.addEvent({
+      delay: 80,
+      loop: true,
+      callback: () => {
+        const secondHalf = frameIdx >= 4;
+        sprite.setFrame(secondHalf ? 3 - (frameIdx - 4) : frameIdx);
+        sprite.setFlipX(secondHalf);
+        frameIdx = (frameIdx + 1) % 8;
+      },
+    });
+
+    this.coinAnimations.set(id, { sprite, timer });
+  }
+
+  /** Stop and fade out a coin animation when collected or expired. */
+  private removeCoinAnimation(id: string): void {
+    const anim = this.coinAnimations.get(id);
+    if (!anim) return;
+    this.coinAnimations.delete(id);
+    anim.timer.remove();
+    this.tweens.add({
+      targets: anim.sprite,
+      alpha: 0,
+      y: anim.sprite.y - 14,
+      duration: 300,
+      onComplete: () => anim.sprite.destroy(),
     });
   }
 
