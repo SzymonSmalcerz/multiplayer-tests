@@ -1,8 +1,9 @@
 import Phaser from "phaser";
 import {
   GameSceneData, MapDataMessage, RemotePlayer, RemotePlayerEntity,
-  TreeData, EnemyData, EnemyEntity, NpcData,
+  StaticObjectData, EnemyData, EnemyEntity, NpcData,
 } from "./types";
+import { STATIC_OBJECT_REGISTRY } from "../shared/staticObjects";
 import { ShopUI } from "./ui/ShopUI";
 import { ALL_SKINS, FRAME_W as FRAME_SIZE } from "./skins";
 import {
@@ -30,16 +31,6 @@ const AXE_ORBIT_RADIUS    = 15;    // px from player sprite centre
 
 // All selectable skins — preloaded so any player's chosen skin renders correctly
 const SKINS_TO_LOAD = ALL_SKINS;
-
-const TREE_KEYS = ["tree1", "tree2", "tree3"];
-
-// Tree sprite dimensions and trunk collision box (pixel coords within the 96×128 sprite)
-const TREE_W = 96;
-const TREE_H = 128;
-const TRUNK_BODY_X      = 36;
-const TRUNK_BODY_Y      = 94;
-const TRUNK_BODY_WIDTH  = 64 - 36;   // 28 px
-const TRUNK_BODY_HEIGHT = 111 - 94;  // 17 px
 
 // Player collision box (pixel coords within the 64×64 sprite frame)
 const PLAYER_BODY_X      = 26;
@@ -132,7 +123,7 @@ export class GameScene extends Phaser.Scene {
   private isTyping = false;
 
   // Trees
-  private treesGroup!: Phaser.Physics.Arcade.StaticGroup;
+  private staticObjectsGroup!: Phaser.Physics.Arcade.StaticGroup;
 
   // HUD
   private hudHpBar!: Phaser.GameObjects.Graphics;
@@ -237,10 +228,12 @@ export class GameScene extends Phaser.Scene {
     this.load.image("x_green", "/assets/shortestPath/xGreen.png");
     this.load.image("x_red",   "/assets/shortestPath/xRed.png");
 
-    // Tree images
-    for (const key of TREE_KEYS) {
-      this.load.image(key, `/assets/trees/${key}.png`);
-    }
+    // Static object images (trees + buildings)
+    this.load.image("tree1", "/assets/trees/tree1.png");
+    this.load.image("tree2", "/assets/trees/tree2.png");
+    this.load.image("tree3", "/assets/trees/tree3.png");
+    this.load.image("house_cottage_big",   "/assets/entities/house_cottage_big.png");
+    this.load.image("house_cottage_small", "/assets/entities/house_cottage_small.png");
 
     // Weapon attacking sprites (rotated procedurally during orbit animation)
     this.load.image("axe_attacking",       "/assets/weapons/axe_attacking.png");
@@ -276,7 +269,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, MAP_W, MAP_H);
 
     // ── Trees static group ──────────────────────────────────────────────────
-    this.treesGroup = this.physics.add.staticGroup();
+    this.staticObjectsGroup = this.physics.add.staticGroup();
 
     // ── Animations ─────────────────────────────────────────────────────────
     this.createAnimations();
@@ -1202,9 +1195,9 @@ export class GameScene extends Phaser.Scene {
 
   private setupRoomListeners(): void {
     this.room.onMessage("map_data", (data: MapDataMessage) => {
-      this.placeTrees(data.trees);
-      this.buildNavGrid(data.trees);
-      this.physics.add.collider(this.localSprite, this.treesGroup);
+      this.placeStaticObjects(data.objects);
+      this.buildNavGrid(data.objects);
+      this.physics.add.collider(this.localSprite, this.staticObjectsGroup);
       this.placeNpcs(data.npcs ?? []);
     });
     this.room.send("get_map");
@@ -1964,19 +1957,22 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // ── Tree placement ─────────────────────────────────────────────────────────
+  // ── Static object placement ─────────────────────────────────────────────────
 
-  private placeTrees(trees: TreeData[]): void {
-    for (const td of trees) {
-      const img = this.treesGroup.create(td.x, td.y, td.sprite) as Phaser.Physics.Arcade.Image;
-      img.setDisplaySize(TREE_W, TREE_H);
+  private placeStaticObjects(objects: StaticObjectData[]): void {
+    for (const obj of objects) {
+      const def = STATIC_OBJECT_REGISTRY[obj.type];
+      if (!def) continue;
+
+      const img = this.staticObjectsGroup.create(obj.x, obj.y, obj.type) as Phaser.Physics.Arcade.Image;
+      img.setDisplaySize(def.imageWidth, def.imageHeight);
 
       const body = img.body as Phaser.Physics.Arcade.StaticBody;
-      body.setSize(TRUNK_BODY_WIDTH, TRUNK_BODY_HEIGHT);
-      body.setOffset(TRUNK_BODY_X, TRUNK_BODY_Y);
-      img.setDepth(td.y + TREE_H / 2);
+      body.setSize(def.collision.x1 - def.collision.x0, def.collision.y1 - def.collision.y0);
+      body.setOffset(def.collision.x0, def.collision.y0);
+      img.setDepth(obj.y + def.imageHeight / 2);
     }
-    this.treesGroup.refresh();
+    this.staticObjectsGroup.refresh();
   }
 
   // ── Chat display ────────────────────────────────────────────────────────────
@@ -2054,16 +2050,22 @@ export class GameScene extends Phaser.Scene {
 
   // ── Pathfinding ────────────────────────────────────────────────────────────
 
-  private buildNavGrid(trees: TreeData[]): void {
+  private buildNavGrid(objects: StaticObjectData[]): void {
     this.navCols = Math.ceil(MAP_W / NAV_CELL);
     this.navRows = Math.ceil(MAP_H / NAV_CELL);
     this.navGrid = new Uint8Array(this.navCols * this.navRows);
 
-    for (const td of trees) {
-      const bx0 = td.x - 27;
-      const bx1 = td.x + 30;
-      const by0 = td.y;
-      const by1 = td.y + 40;
+    for (const obj of objects) {
+      const def = STATIC_OBJECT_REGISTRY[obj.type];
+      if (!def) continue;
+
+      // Convert image-local collision coords to world coords
+      const imgLeft = obj.x - def.imageWidth  / 2;
+      const imgTop  = obj.y - def.imageHeight / 2;
+      const bx0 = imgLeft + def.collision.x0;
+      const bx1 = imgLeft + def.collision.x1;
+      const by0 = imgTop  + def.collision.y0;
+      const by1 = imgTop  + def.collision.y1;
 
       const c0 = Math.max(0, Math.floor(bx0 / NAV_CELL));
       const c1 = Math.min(this.navCols - 1, Math.floor(bx1 / NAV_CELL));

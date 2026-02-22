@@ -1,8 +1,8 @@
-/** Tree data sent from server on room join */
-export interface TreeData {
+/** Static game object data sent from server on room join */
+export interface StaticObjectData {
+  type: string;
   x: number;
   y: number;
-  sprite: string;
 }
 
 /** NPC data sent from server on room join */
@@ -14,7 +14,7 @@ export interface NpcData {
 
 /** Map initialisation message payload */
 export interface MapDataMessage {
-  trees: TreeData[];
+  objects: StaticObjectData[];
   npcs: NpcData[];
 }
 

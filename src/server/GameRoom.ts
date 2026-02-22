@@ -5,6 +5,7 @@ import path from "path";
 import { xpForNextLevel }                    from "../shared/formulas";
 import { getHitbox, isInsideHitbox }          from "../shared/combat";
 import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../shared/economy";
+import { STATIC_OBJECT_REGISTRY }             from "../shared/staticObjects";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -55,7 +56,6 @@ const MAP_HEIGHT = 2000;
 const MAX_SPEED_PX_PER_S = 300;
 const SPEED_TOLERANCE    = 1.6;
 
-const TREE_SPRITES = ["tree1", "tree2", "tree3"];
 
 // Enemy AI
 const ENEMY_AGGRO_RANGE  = 320;  // px  (5 tiles × 64 px) — enemy gives up beyond this
@@ -86,12 +86,6 @@ const WEAPON_DATA: Record<string, { damage: number; cost: number }> = {
 };
 
 // ─── Shared interfaces ────────────────────────────────────────────────────────
-
-export interface TreeData {
-  x: number;
-  y: number;
-  sprite: string;
-}
 
 interface MoveMessage {
   x: number;
@@ -129,7 +123,7 @@ interface PendingCoin {
 export class GameRoom extends Room<GameState> {
   maxClients = 50;
 
-  private treeData: TreeData[] = [];
+  private objectData: Array<{ type: string; x: number; y: number }> = [];
   private npcData: Array<{ type: string; x: number; y: number }> = [];
   private lastPositions = new Map<string, LastPos>();
 
@@ -174,8 +168,8 @@ export class GameRoom extends Room<GameState> {
       npcs?: Array<{ type: string; x: number; y: number }>;
     };
     for (const obj of mapJson.objects) {
-      if (TREE_SPRITES.includes(obj.type)) {
-        this.treeData.push({ x: obj.x, y: obj.y, sprite: obj.type });
+      if (STATIC_OBJECT_REGISTRY[obj.type]) {
+        this.objectData.push({ type: obj.type, x: obj.x, y: obj.y });
       }
     }
     this.npcData = mapJson.npcs ?? [];
@@ -191,7 +185,7 @@ export class GameRoom extends Room<GameState> {
     // ── Message handlers ──────────────────────────────────────────────────────
 
     this.onMessage("get_map", (client) => {
-      client.send("map_data", { trees: this.treeData, npcs: this.npcData });
+      client.send("map_data", { objects: this.objectData, npcs: this.npcData });
     });
 
     this.onMessage("chat", (client, message: string) => {
