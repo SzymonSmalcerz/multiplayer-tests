@@ -181,6 +181,10 @@ export class GameScene extends Phaser.Scene {
   // Active path waypoints
   private pathWaypoints: { x: number; y: number }[] = [];
   private pathIndex = 0;
+  // Stuck detection: if position doesn't change for this long, abandon the path
+  private pathStuckTimer = 0;   // ms elapsed without movement
+  private pathPrevX     = 0;
+  private pathPrevY     = 0;
 
   // Coin animations — keyed by server coin ID
   private coinAnimations = new Map<string, { sprite: Phaser.GameObjects.Sprite; timer: Phaser.Time.TimerEvent }>();
@@ -1748,31 +1752,48 @@ export class GameScene extends Phaser.Scene {
         vy /= norm;
       }
     } else if (this.pathWaypoints.length > 0) {
-      let wp   = this.pathWaypoints[this.pathIndex];
-      let dx   = wp.x - this.localSprite.x;
-      let dy   = wp.y - this.localSprite.y;
-      let dist = Math.sqrt(dx * dx + dy * dy);
-
-      while (dist < WAYPOINT_THRESHOLD && this.pathWaypoints.length > 0) {
-        this.pathIndex++;
-        if (this.pathIndex >= this.pathWaypoints.length) {
+      // Stuck detection: if the sprite hasn't moved for 400 ms, abandon the path
+      const movedX = Math.abs(this.localSprite.x - this.pathPrevX);
+      const movedY = Math.abs(this.localSprite.y - this.pathPrevY);
+      this.pathPrevX = this.localSprite.x;
+      this.pathPrevY = this.localSprite.y;
+      if (movedX < 1 && movedY < 1) {
+        this.pathStuckTimer += delta;
+        if (this.pathStuckTimer >= 400) {
           this.pathWaypoints = [];
-          break;
+          this.pathStuckTimer = 0;
         }
-        wp   = this.pathWaypoints[this.pathIndex];
-        dx   = wp.x - this.localSprite.x;
-        dy   = wp.y - this.localSprite.y;
-        dist = Math.sqrt(dx * dx + dy * dy);
+      } else {
+        this.pathStuckTimer = 0;
       }
 
       if (this.pathWaypoints.length > 0) {
-        vx = (dx / dist) * PLAYER_SPEED;
-        vy = (dy / dist) * PLAYER_SPEED;
-        moving = true;
-        if (Math.abs(dx) >= Math.abs(dy)) {
-          dir = dx > 0 ? 3 : 1;
-        } else {
-          dir = dy > 0 ? 0 : 2;
+        let wp   = this.pathWaypoints[this.pathIndex];
+        let dx   = wp.x - this.localSprite.x;
+        let dy   = wp.y - this.localSprite.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+
+        while (dist < WAYPOINT_THRESHOLD && this.pathWaypoints.length > 0) {
+          this.pathIndex++;
+          if (this.pathIndex >= this.pathWaypoints.length) {
+            this.pathWaypoints = [];
+            break;
+          }
+          wp   = this.pathWaypoints[this.pathIndex];
+          dx   = wp.x - this.localSprite.x;
+          dy   = wp.y - this.localSprite.y;
+          dist = Math.sqrt(dx * dx + dy * dy);
+        }
+
+        if (this.pathWaypoints.length > 0) {
+          vx = (dx / dist) * PLAYER_SPEED;
+          vy = (dy / dist) * PLAYER_SPEED;
+          moving = true;
+          if (Math.abs(dx) >= Math.abs(dy)) {
+            dir = dx > 0 ? 3 : 1;
+          } else {
+            dir = dy > 0 ? 0 : 2;
+          }
         }
       }
     }
@@ -2094,6 +2115,10 @@ export class GameScene extends Phaser.Scene {
       this.localSprite.x, this.localSprite.y,
       worldX, worldY,
     );
+
+    this.pathStuckTimer = 0;
+    this.pathPrevX = this.localSprite.x;
+    this.pathPrevY = this.localSprite.y;
 
     if (path && path.length > 0) {
       this.showMarker(worldX, worldY, true);
