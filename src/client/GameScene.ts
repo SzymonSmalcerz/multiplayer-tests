@@ -203,6 +203,13 @@ export class GameScene extends Phaser.Scene {
   private shopOpen = false;
   private shopObjects: Phaser.GameObjects.GameObject[] = [];
 
+  // Weapon HUD (bottom-right)
+  private weaponHudBg!:      Phaser.GameObjects.Graphics;
+  private weaponHudIcon!:    Phaser.GameObjects.Image;
+  private weaponHudOverlay!: Phaser.GameObjects.Graphics;
+  private weaponHudBorder!:  Phaser.GameObjects.Graphics;
+  private weaponHudHitArea!: Phaser.GameObjects.Rectangle;
+
   // Timing
   private lastSendTime = 0;
 
@@ -296,6 +303,9 @@ export class GameScene extends Phaser.Scene {
 
     // ── Trader NPC ───────────────────────────────────────────────────────────
     this.createTrader();
+
+    // ── Weapon HUD ───────────────────────────────────────────────────────────
+    this.createWeaponHUD();
 
     // ── Input ────────────────────────────────────────────────────────────────
     this.cursors  = this.input.keyboard!.createCursorKeys();
@@ -456,6 +466,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.tickDeathTimer(delta);
+    this.updateWeaponHUD();
     this.sendPositionIfNeeded(time);
   }
 
@@ -2124,6 +2135,86 @@ export class GameScene extends Phaser.Scene {
       duration: 300,
       onComplete: () => anim.sprite.destroy(),
     });
+  }
+
+  // ── Weapon HUD ─────────────────────────────────────────────────────────────
+
+  private createWeaponHUD(): void {
+    const D = 99994;
+    const R = 32;
+
+    this.weaponHudBg      = this.add.graphics().setScrollFactor(0).setDepth(D);
+    this.weaponHudIcon    = this.add.image(0, 0, "axe_attacking")
+      .setScrollFactor(0).setDepth(D + 1).setDisplaySize(44, 44);
+    this.weaponHudOverlay = this.add.graphics().setScrollFactor(0).setDepth(D + 2);
+    this.weaponHudBorder  = this.add.graphics().setScrollFactor(0).setDepth(D + 3);
+
+    const { width, height } = this.scale;
+    const cx = width  - R - 12;
+    const cy = height - R - 12;
+
+    this.weaponHudHitArea = this.add.rectangle(cx, cy, R * 2, R * 2, 0x000000, 0)
+      .setScrollFactor(0).setDepth(D + 4)
+      .setInteractive({ useHandCursor: true });
+
+    this.weaponHudHitArea.on("pointerover", () => {
+      if (this.localAttackCooldownTimer <= 0 && !this.localIsAttacking) {
+        this.weaponHudIcon.setTint(0xaaffaa);
+      }
+    });
+    this.weaponHudHitArea.on("pointerout",  () => this.weaponHudIcon.clearTint());
+    this.weaponHudHitArea.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
+      this.triggerAttack();
+    });
+  }
+
+  private updateWeaponHUD(): void {
+    const R  = 32;
+    const { width, height } = this.scale;
+    const cx = width  - R - 12;
+    const cy = height - R - 12;
+
+    // Keep hit area aligned (handles window resize)
+    this.weaponHudHitArea.setPosition(cx, cy);
+
+    // Sync icon texture to current weapon (always use the attacking sprite)
+    const displayKey = `${this.localWeaponKey}_attacking`;
+    if (this.weaponHudIcon.texture.key !== displayKey) {
+      this.weaponHudIcon.setTexture(displayKey);
+    }
+    this.weaponHudIcon.setPosition(cx, cy);
+
+    const progress = Math.min(1, Math.max(0, this.localAttackCooldownTimer) / ATTACK_COOLDOWN_MS);
+    const ready    = progress === 0 && !this.localIsAttacking;
+
+    // Background circle
+    this.weaponHudBg.clear()
+      .fillStyle(0x111111, 0.85)
+      .fillCircle(cx, cy, R);
+
+    // Icon alpha: full when ready, dimmed on cooldown
+    this.weaponHudIcon.setAlpha(ready ? 1 : 0.4);
+
+    // Radial cooldown overlay — the dark wedge shrinks clockwise as cooldown expires
+    this.weaponHudOverlay.clear();
+    if (progress > 0.01) {
+      // The "cleared" (elapsed) arc grows clockwise from 12 o'clock.
+      // The dark wedge is the remaining portion: from the current hand to 12 o'clock.
+      const clearedAngle = Math.PI * 2 * (1 - progress);
+      const darkStart    = -Math.PI / 2 + clearedAngle; // leading edge of dark region
+      const darkEnd      = Math.PI * 3 / 2;             // 12 o'clock (end of full cycle)
+      this.weaponHudOverlay
+        .fillStyle(0x000000, 0.72)
+        .slice(cx, cy, R - 1, darkStart, darkEnd, false)
+        .fillPath();
+    }
+
+    // Border — gold when ready, grey on cooldown
+    const borderColor = ready ? 0xbbaa44 : 0x555544;
+    this.weaponHudBorder.clear()
+      .lineStyle(2, borderColor, 1)
+      .strokeCircle(cx, cy, R);
   }
 
   // ── Trader NPC & Shop ──────────────────────────────────────────────────────

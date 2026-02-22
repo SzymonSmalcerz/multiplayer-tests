@@ -1,0 +1,7 @@
+ I want to implement money system in the game. When player starts the game he will have 0 money. Enemies have a certain chance of dropping money. Enemy called "hit" will have 30% of dropping 20 money. Money
+   in the game is called "gold" (currency name). When enemy drops the money then one coin animation is shown when enemy was defeted (one coin animation for one killed enemy at most, doe nto matter how much
+   money was dropped of enemy). Money should be dropped where enemy was killed. I have created money coin animation here [public/assets/coins.png] - it show 4 steps spin, each one phase of the spin is 20 px - it shows
+   only half of the full spin,  only need repeat this steps in horizontal mirror for full spin. Each player should see his money at the right of his hp and exp data. When enemy drops coin player that is the
+   closest to the center of the coin should automatically gain this coin (if many players are in the same distance then money should be split evenly rounding it up [no decimals allowed]). When player are in the
+   party then money also shoup be split (no decimals - rounding up whe nsplitting, for example when enemy drops 11 gold to the party of 2 players then each player should receive 6 gold. When players of the same
+   party are far away money should not be split (the same rules as for experiecne points splitting). When player gains gold he should see in the world chat information "you have gained {amount} gold".
