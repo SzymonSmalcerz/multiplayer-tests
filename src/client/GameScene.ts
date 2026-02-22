@@ -232,12 +232,15 @@ export class GameScene extends Phaser.Scene {
     this.load.image("x_green", "/assets/shortestPath/xGreen.png");
     this.load.image("x_red",   "/assets/shortestPath/xRed.png");
 
-    // Static object images (trees + buildings)
-    this.load.image("tree1", "/assets/trees/tree1.png");
-    this.load.image("tree2", "/assets/trees/tree2.png");
-    this.load.image("tree3", "/assets/trees/tree3.png");
-    this.load.image("house_cottage_big",   "/assets/entities/house_cottage_big.png");
-    this.load.image("house_cottage_small", "/assets/entities/house_cottage_small.png");
+    // Static object images — trees live in /assets/trees/, everything else in /assets/entities/
+    const treeKeys = new Set(["tree1", "tree2", "tree3"]);
+    for (const key of Object.keys(STATIC_OBJECT_REGISTRY)) {
+      if (treeKeys.has(key)) {
+        this.load.image(key, `/assets/trees/${key}.png`);
+      } else {
+        this.load.image(key, `/assets/entities/${key}.png`);
+      }
+    }
 
     // Weapon attacking sprites (rotated procedurally during orbit animation)
     this.load.image("axe_attacking",       "/assets/weapons/axe_attacking.png");
