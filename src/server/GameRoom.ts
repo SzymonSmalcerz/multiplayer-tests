@@ -2,6 +2,9 @@ import { Room, Client } from "@colyseus/core";
 import { Schema, MapSchema, type } from "@colyseus/schema";
 import fs   from "fs";
 import path from "path";
+import { xpForNextLevel }                    from "../shared/formulas";
+import { getHitbox, isInsideHitbox }          from "../shared/combat";
+import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../shared/economy";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -116,36 +119,10 @@ interface PendingCoin {
 }
 
 // ─── XP / Levelling ──────────────────────────────────────────────────────────
-
-/** XP needed to advance from `level` to `level + 1`. */
-function xpForNextLevel(level: number): number {
-  return Math.floor(100 * Math.pow(1.1, level - 1));
-}
+// xpForNextLevel imported from ../shared/formulas
 
 // ─── Combat helpers ───────────────────────────────────────────────────────────
-
-function getHitbox(
-  cx: number, cy: number, direction: number, expand = 0,
-): { x0: number; y0: number; x1: number; y1: number } {
-  // Sprites are 64×64, origin at centre. `expand` pushes the far edge outward.
-  switch (direction) {
-    case 3: return { x0: cx,           y0: cy - 32, x1: cx + 32 + expand, y1: cy + 32 }; // right
-    case 1: return { x0: cx - 32 - expand, y0: cy - 32, x1: cx,           y1: cy + 32 }; // left
-    case 2: return { x0: cx - 32, y0: cy - 32 - expand, x1: cx + 32,      y1: cy      }; // up
-    case 0: return { x0: cx - 32, y0: cy,      x1: cx + 32, y1: cy + 32 + expand };      // down
-    default: return { x0: cx,     y0: cy - 32, x1: cx + 32, y1: cy + 32 };
-  }
-}
-
-function isInsideHitbox(
-  cx: number, cy: number, direction: number,
-  targetX: number, targetY: number,
-  expand = 0,
-): boolean {
-  const hb = getHitbox(cx, cy, direction, expand);
-  return targetX >= hb.x0 && targetX <= hb.x1 &&
-         targetY >= hb.y0 && targetY <= hb.y1;
-}
+// getHitbox / isInsideHitbox imported from ../shared/combat
 
 // ─── Room ─────────────────────────────────────────────────────────────────────
 
@@ -774,14 +751,11 @@ export class GameRoom extends Room<GameState> {
     const members = this.partyMembers.get(killer.partyId);
     if (!members) { killer.xp += xpAmount; this.checkLevelUp(killerSessionId); return; }
 
-    const eligible: string[] = [];
-    members.forEach(memberId => {
-      const member = this.state.players.get(memberId);
-      if (!member || member.isDead) return;
-      const dx = member.x - enemyX;
-      const dy = member.y - enemyY;
-      if (Math.sqrt(dx * dx + dy * dy) <= SHARE_RANGE) eligible.push(memberId);
+    const memberPositions = [...members].flatMap(memberId => {
+      const m = this.state.players.get(memberId);
+      return m ? [{ id: memberId, x: m.x, y: m.y, isDead: m.isDead }] : [];
     });
+    const eligible = getShareRecipients(enemyX, enemyY, memberPositions, SHARE_RANGE);
 
     if (eligible.length === 0) { killer.xp += xpAmount; this.checkLevelUp(killerSessionId); return; }
 
@@ -838,20 +812,13 @@ export class GameRoom extends Room<GameState> {
   private awardGold(amount: number, coinX: number, coinY: number): void {
     const COLLECT_RANGE = 20; // px
 
-    const candidates: Array<{ id: string; state: PlayerState; dist: number }> = [];
+    const allPlayers: PositionedPlayer[] = [];
     this.state.players.forEach((p, id) => {
-      if (p.isDead) return;
-      const dx = p.x - coinX;
-      const dy = p.y - coinY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist <= COLLECT_RANGE) candidates.push({ id, state: p, dist });
+      if (!p.isDead) allPlayers.push({ id, x: p.x, y: p.y, partyId: p.partyId });
     });
 
-    if (candidates.length === 0) return; // no player close enough
-
-    const minDist = Math.min(...candidates.map(c => c.dist));
-    const EPSILON = 1; // px — treat as tied if within 1 px of each other
-    const nearest = candidates.filter(c => c.dist <= minDist + EPSILON);
+    const nearest = findNearestPlayers(coinX, coinY, allPlayers, COLLECT_RANGE);
+    if (nearest.length === 0) return;
 
     if (nearest.length === 1) {
       this.distributeGoldToParty(nearest[0].id, amount, coinX, coinY);
@@ -860,7 +827,7 @@ export class GameRoom extends Room<GameState> {
 
     // Multiple equidistant players — group by party
     const inSameParty =
-      nearest.every(c => c.state.partyId !== "" && c.state.partyId === nearest[0].state.partyId);
+      nearest.every(c => c.partyId !== "" && c.partyId === nearest[0].partyId);
 
     if (inSameParty) {
       // Treat as a single party recipient (party split handled inside)
@@ -897,14 +864,11 @@ export class GameRoom extends Room<GameState> {
       return;
     }
 
-    const eligible: string[] = [];
-    members.forEach(memberId => {
-      const member = this.state.players.get(memberId);
-      if (!member || member.isDead) return;
-      const dx = member.x - coinX;
-      const dy = member.y - coinY;
-      if (Math.sqrt(dx * dx + dy * dy) <= SHARE_RANGE) eligible.push(memberId);
+    const memberPositions = [...members].flatMap(memberId => {
+      const m = this.state.players.get(memberId);
+      return m ? [{ id: memberId, x: m.x, y: m.y, isDead: m.isDead }] : [];
     });
+    const eligible = getShareRecipients(coinX, coinY, memberPositions, SHARE_RANGE);
 
     if (eligible.length === 0) {
       recipient.gold += amount;

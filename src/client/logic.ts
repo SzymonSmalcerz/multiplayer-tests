@@ -3,10 +3,9 @@
 
 // ── XP ────────────────────────────────────────────────────────────────────────
 
-/** XP required to advance from `level` to `level+1`. Mirrors the server formula. */
-export function xpForNextLevel(level: number): number {
-  return Math.floor(100 * Math.pow(1.1, level - 1));
-}
+// Single definition lives in src/shared/formulas.ts — re-exported here so
+// GameScene and the existing tests keep their current import paths unchanged.
+export { xpForNextLevel } from "../shared/formulas";
 
 // ── Minimap ───────────────────────────────────────────────────────────────────
 
