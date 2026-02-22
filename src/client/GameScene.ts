@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import {
   GameSceneData, MapDataMessage, RemotePlayer, RemotePlayerEntity,
-  TreeData, EnemyData, EnemyEntity,
+  TreeData, EnemyData, EnemyEntity, NpcData,
 } from "./types";
 import { ALL_SKINS, FRAME_W as FRAME_SIZE } from "./skins";
 import {
@@ -202,6 +202,7 @@ export class GameScene extends Phaser.Scene {
   // Trader shop
   private shopOpen = false;
   private shopObjects: Phaser.GameObjects.GameObject[] = [];
+  private npcPositions: Array<{ type: string; x: number; y: number }> = [];
 
   // Weapon HUD (bottom-right)
   private weaponHudBg!:      Phaser.GameObjects.Graphics;
@@ -301,8 +302,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
     this.cameras.main.startFollow(this.localSprite, true, 0.08, 0.08);
 
-    // ── Trader NPC ───────────────────────────────────────────────────────────
-    this.createTrader();
+    // NPCs are placed after map_data is received (see setupRoomListeners)
 
     // ── Weapon HUD ───────────────────────────────────────────────────────────
     this.createWeaponHUD();
@@ -901,7 +901,21 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // 3. Local Player (Green dot at center)
+    // 3. NPCs (white dots — always visible on minimap)
+    for (const npc of this.npcPositions) {
+      const dx = npc.x - localX;
+      const dy = npc.y - localY;
+      const off = worldToMinimapOffset(dx, dy);
+      const dotX = mmCenterX + off.x;
+      const dotY = mmCenterY + off.y;
+      // clamp to minimap circle radius
+      if (Math.abs(off.x) <= MINIMAP_SIZE / 2 && Math.abs(off.y) <= MINIMAP_SIZE / 2) {
+        this.minimapDots.fillStyle(0xffffff, 1);
+        this.minimapDots.fillCircle(dotX, dotY, 3);
+      }
+    }
+
+    // 4. Local Player (Green dot at center)
     this.minimapDots.fillStyle(0x44ff44, 1);
     this.minimapDots.fillCircle(mmCenterX, mmCenterY, 4);
   }
@@ -1186,6 +1200,7 @@ export class GameScene extends Phaser.Scene {
       this.placeTrees(data.trees);
       this.buildNavGrid(data.trees);
       this.physics.add.collider(this.localSprite, this.treesGroup);
+      this.placeNpcs(data.npcs ?? []);
     });
     this.room.send("get_map");
 
@@ -2219,13 +2234,19 @@ export class GameScene extends Phaser.Scene {
 
   // ── Trader NPC & Shop ──────────────────────────────────────────────────────
 
-  private createTrader(): void {
-    const traderX = MAP_W - 100;
-    const traderY = 100;
+  private placeNpcs(npcs: NpcData[]): void {
+    this.npcPositions = npcs.map(n => ({ type: n.type, x: n.x, y: n.y }));
+    for (const npc of npcs) {
+      if (npc.type === "trader") {
+        this.createTrader(npc.x, npc.y);
+      }
+    }
+  }
+
+  private createTrader(traderX: number, traderY: number): void {
     const depth   = traderY + 40;
 
     const sprite = this.add.image(traderX, traderY, "trader")
-      .setDisplaySize(48, 64)
       .setDepth(depth)
       .setInteractive({ useHandCursor: true });
 

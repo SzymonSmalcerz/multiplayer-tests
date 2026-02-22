@@ -5,9 +5,17 @@ export interface TreeData {
   sprite: string;
 }
 
+/** NPC data sent from server on room join */
+export interface NpcData {
+  type: string;
+  x: number;
+  y: number;
+}
+
 /** Map initialisation message payload */
 export interface MapDataMessage {
   trees: TreeData[];
+  npcs: NpcData[];
 }
 
 /** Chat message payload */

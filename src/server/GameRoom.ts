@@ -1,5 +1,7 @@
 import { Room, Client } from "@colyseus/core";
 import { Schema, MapSchema, type } from "@colyseus/schema";
+import fs   from "fs";
+import path from "path";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -151,6 +153,7 @@ export class GameRoom extends Room<GameState> {
   maxClients = 50;
 
   private treeData: TreeData[] = [];
+  private npcData: Array<{ type: string; x: number; y: number }> = [];
   private lastPositions = new Map<string, LastPos>();
 
   // ── Enemy bookkeeping ──────────────────────────────────────────────────────
@@ -187,14 +190,18 @@ export class GameRoom extends Room<GameState> {
     this.setState(new GameState());
     this.setPatchRate(1000 / 20); // 20 Hz state broadcast
 
-    // ── Generate 150 random trees ────────────────────────────────────────────
-    for (let i = 0; i < 150; i++) {
-      this.treeData.push({
-        x: 80 + Math.random() * (MAP_WIDTH  - 160),
-        y: 80 + Math.random() * (MAP_HEIGHT - 160),
-        sprite: TREE_SPRITES[Math.floor(Math.random() * TREE_SPRITES.length)],
-      });
+    // ── Load fixed tree positions from firstMap.json ─────────────────────────
+    const mapFile  = path.resolve(__dirname, "../../public/assets/maps/placement/firstMap.json");
+    const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
+      objects: Array<{ type: string; x: number; y: number }>;
+      npcs?: Array<{ type: string; x: number; y: number }>;
+    };
+    for (const obj of mapJson.objects) {
+      if (TREE_SPRITES.includes(obj.type)) {
+        this.treeData.push({ x: obj.x, y: obj.y, sprite: obj.type });
+      }
     }
+    this.npcData = mapJson.npcs ?? [];
 
     // ── Spawn initial enemies ─────────────────────────────────────────────────
     for (let i = 0; i < ENEMY_COUNT; i++) {
@@ -207,7 +214,7 @@ export class GameRoom extends Room<GameState> {
     // ── Message handlers ──────────────────────────────────────────────────────
 
     this.onMessage("get_map", (client) => {
-      client.send("map_data", { trees: this.treeData });
+      client.send("map_data", { trees: this.treeData, npcs: this.npcData });
     });
 
     this.onMessage("chat", (client, message: string) => {
