@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Map Designer</title>
+  <link rel="stylesheet" href="/designer/designer.css">
+</head>
+<body>
+  <div id="toolbar">
+    <label>Map name:</label>
+    <input type="text" id="map-name" placeholder="myMap" value="newMap">
+
+    <span class="sep">|</span>
+
+    <label>Size:</label>
+    <input type="number" id="map-width" value="2000" min="100" step="100">
+    <span style="color:#666">×</span>
+    <input type="number" id="map-height" value="2000" min="100" step="100">
+
+    <span class="sep">|</span>
+
+    <button id="save-btn">Save</button>
+    <button id="load-btn">Load</button>
+    <button id="clear-btn" class="danger">Clear all</button>
+
+    <span class="hint">Left-click: place &nbsp;·&nbsp; Right-click: delete &nbsp;·&nbsp; Scroll: zoom &nbsp;·&nbsp; Space+drag or middle-drag: pan</span>
+  </div>
+
+  <div id="main">
+    <div id="sidebar"></div>
+    <div id="canvas-container">
+      <canvas id="map-canvas"></canvas>
+    </div>
+  </div>
+
+  <div id="status">Ready — fetch objects from server…</div>
+
+  <script src="/designer/designer.js"></script>
+</body>
+</html>

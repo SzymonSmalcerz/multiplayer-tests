@@ -161,8 +161,8 @@ export class GameRoom extends Room<GameState> {
     this.setState(new GameState());
     this.setPatchRate(1000 / 20); // 20 Hz state broadcast
 
-    // ── Load fixed tree positions from firstMap.json ─────────────────────────
-    const mapFile  = path.resolve(__dirname, "../../public/assets/maps/placement/firstMap.json");
+    // ── Load fixed objects positions from test.json ─────────────────────────
+    const mapFile  = path.resolve(__dirname, "../../public/assets/maps/placement/test.json");
     const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
       objects: Array<{ type: string; x: number; y: number }>;
       npcs?: Array<{ type: string; x: number; y: number }>;
