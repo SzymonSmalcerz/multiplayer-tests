@@ -87,6 +87,14 @@ const WEAPON_DATA: Record<string, { damage: number; cost: number }> = {
 
 // ─── Shared interfaces ────────────────────────────────────────────────────────
 
+interface EnemySpawnDef {
+  id:          string;   // stable id assigned at load time, e.g. "map_enemy_0"
+  type:        string;
+  x:           number;   // original spawn X
+  y:           number;   // original spawn Y
+  respawnTime: number;   // milliseconds (pre-converted from JSON seconds)
+}
+
 interface MoveMessage {
   x: number;
   y: number;
@@ -129,7 +137,11 @@ export class GameRoom extends Room<GameState> {
   private lastPositions = new Map<string, LastPos>();
 
   // ── Enemy bookkeeping ──────────────────────────────────────────────────────
-  private enemyCounter = 0;
+  private enemyCounter    = 0;
+  /** Spawn definitions loaded from the map JSON */
+  private enemySpawnDefs: EnemySpawnDef[] = [];
+  /** live enemyId → the spawn def it came from (for O(1) death lookup) */
+  private enemyDefById    = new Map<string, EnemySpawnDef>();
 
   // ── Coin bookkeeping ───────────────────────────────────────────────────────
   private coinCounter  = 0;
@@ -145,7 +157,7 @@ export class GameRoom extends Room<GameState> {
   private playerAttacks = new Map<string, number>();
 
   /** Enemies waiting to respawn */
-  private respawnQueue: Array<{ type: string; spawnAt: number }> = [];
+  private respawnQueue: Array<{ def: EnemySpawnDef | null; type: string; spawnAt: number }> = [];
 
   // ── Party bookkeeping ──────────────────────────────────────────────────────
   /** targetSessionId → inviterSessionId */
@@ -165,9 +177,10 @@ export class GameRoom extends Room<GameState> {
     // ── Load fixed objects positions from test.json ─────────────────────────
     const mapFile  = path.resolve(__dirname, "../../public/assets/maps/placement/test.json");
     const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
-      objects: Array<{ type: string; x: number; y: number }>;
-      npcs?:   Array<{ type: string; x: number; y: number }>;
-      mobs?:   Array<Record<string, unknown>>;
+      objects:  Array<{ type: string; x: number; y: number }>;
+      npcs?:    Array<{ type: string; x: number; y: number }>;
+      mobs?:    Array<Record<string, unknown>>;
+      enemies?: Array<{ type: string; x: number; y: number; respawnTime: number }>;
     };
     for (const obj of mapJson.objects) {
       if (STATIC_OBJECT_REGISTRY[obj.type]) {
@@ -177,9 +190,25 @@ export class GameRoom extends Room<GameState> {
     this.npcData = mapJson.npcs ?? [];
     this.mobData = mapJson.mobs ?? [];
 
-    // ── Spawn initial enemies ─────────────────────────────────────────────────
-    for (let i = 0; i < ENEMY_COUNT; i++) {
-      this.spawnEnemy("hit");
+    // ── Spawn enemies from map definition (or fall back to random placement) ──
+    const rawEnemies = mapJson.enemies;
+    if (rawEnemies && rawEnemies.length > 0) {
+      rawEnemies.forEach((e, i) => {
+        const def: EnemySpawnDef = {
+          id:          `map_enemy_${i}`,
+          type:        e.type,
+          x:           Number(e.x),
+          y:           Number(e.y),
+          respawnTime: Number(e.respawnTime) * 1000,
+        };
+        this.enemySpawnDefs.push(def);
+        this.spawnEnemyFromDef(def);
+      });
+    } else {
+      // Legacy fallback for maps without an enemies array
+      for (let i = 0; i < ENEMY_COUNT; i++) {
+        this.spawnEnemy("hit");
+      }
     }
 
     // ── AI simulation loop (20 Hz) ────────────────────────────────────────────
@@ -481,6 +510,27 @@ export class GameRoom extends Room<GameState> {
     this.enemyAttackCooldowns.set(id, new Map());
   }
 
+  private spawnEnemyFromDef(def: EnemySpawnDef): void {
+    const id    = `enemy_${++this.enemyCounter}`;
+    const enemy = new EnemyState();
+
+    enemy.id        = id;
+    enemy.type      = def.type;
+    enemy.x         = def.x;
+    enemy.y         = def.y;
+    enemy.direction = 0;
+    enemy.isDead    = false;
+
+    if (def.type === "hit") {
+      enemy.hp    = HIT_ENEMY_HP;
+      enemy.maxHp = HIT_ENEMY_HP;
+    }
+
+    this.state.enemies.set(id, enemy);
+    this.enemyAttackCooldowns.set(id, new Map());
+    this.enemyDefById.set(id, def);
+  }
+
   // ── AI game loop ─────────────────────────────────────────────────────────────
 
   private tickEnemyAI(dt: number): void {
@@ -492,8 +542,13 @@ export class GameRoom extends Room<GameState> {
 
     // Process respawn queue
     for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
-      if (now >= this.respawnQueue[i].spawnAt) {
-        this.spawnEnemy(this.respawnQueue[i].type);
+      const entry = this.respawnQueue[i];
+      if (now >= entry.spawnAt) {
+        if (entry.def) {
+          this.spawnEnemyFromDef(entry.def);   // fixed-position respawn
+        } else {
+          this.spawnEnemy(entry.type);          // legacy random respawn
+        }
         this.respawnQueue.splice(i, 1);
       }
     }
@@ -708,13 +763,16 @@ export class GameRoom extends Room<GameState> {
     enemy.isDead = true;
 
     // Remove from state after death animation window (500 ms)
+    const spawnDef = this.enemyDefById.get(enemyId) ?? null;
     setTimeout(() => {
       this.state.enemies.delete(enemyId);
       this.enemyAttackCooldowns.delete(enemyId);
+      this.enemyDefById.delete(enemyId);
     }, 500);
 
-    // Queue respawn
-    this.respawnQueue.push({ type: enemy.type, spawnAt: Date.now() + ENEMY_RESPAWN_MS });
+    // Queue respawn — use per-enemy respawn time if defined, else global constant
+    const respawnDelay = spawnDef ? spawnDef.respawnTime : ENEMY_RESPAWN_MS;
+    this.respawnQueue.push({ def: spawnDef, type: enemy.type, spawnAt: Date.now() + respawnDelay });
 
     // Award XP (with party sharing)
     this.awardXP(killerSessionId, HIT_ENEMY_XP, enemy.x, enemy.y);

@@ -28,6 +28,14 @@ export interface MobPlacement {
   specialActionArray?:         number[];
 }
 
+/** One enemy spawn point loaded from the map JSON */
+export interface EnemyPlacement {
+  type:        string;
+  x:           number;
+  y:           number;
+  respawnTime: number;  // seconds
+}
+
 /** Map initialisation message payload */
 export interface MapDataMessage {
   objects: StaticObjectData[];

@@ -9,9 +9,10 @@ const NPC_DISPLAY_W = 48;
 const NPC_DISPLAY_H = 64;
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let registry    = {};       // { [key]: { type, imageWidth, imageHeight, collision } }
-let mobRegistry = {};       // { [key]: { type, frameWidth, frameHeight, … } }
-const images    = {};       // { [key]: HTMLImageElement }
+let registry      = {};     // { [key]: { type, imageWidth, imageHeight, collision } }
+let mobRegistry   = {};     // { [key]: { type, frameWidth, frameHeight, … } }
+let enemyRegistry = {};     // { [key]: { type, label, defaultRespawnTime } }
+const images      = {};     // { [key]: HTMLImageElement }
 
 let mapWidth  = 2000;
 let mapHeight = 2000;
@@ -19,9 +20,10 @@ let mapHeight = 2000;
 let placedObjects = [];     // { type, x, y }[]
 let placedNpcs    = [];     // { type, x, y }[]
 let placedMobs    = [];     // { type, x, y, width, height, quantity }[]
+let placedEnemies = [];     // { type, x, y, respawnTime }[]
 
 let selectedType     = null;  // string | null
-let selectedCategory = null;  // 'object' | 'npc' | 'mob' | null
+let selectedCategory = null;  // 'object' | 'npc' | 'mob' | 'enemy' | null
 
 // Mob drag-to-draw state
 let isDraggingMob  = false;
@@ -108,6 +110,7 @@ function buildSidebar() {
   addSection('Objects', otherKeys, 'object');
   addNpcSection();
   addMobSection();
+  addEnemySection();
 }
 
 function addSection(title, keys, category) {
@@ -198,6 +201,102 @@ function addMobSection() {
     if (!img || img.complete) drawMobThumb();
     else { img.addEventListener('load', drawMobThumb); img.addEventListener('error', drawMobThumb); }
   });
+}
+
+function addEnemySection() {
+  const keys = Object.keys(enemyRegistry).sort();
+  if (keys.length === 0) return;
+
+  const heading = document.createElement('div');
+  heading.className = 'sidebar-heading';
+  heading.textContent = 'Enemies (click to place)';
+  sidebar.appendChild(heading);
+
+  keys.forEach(key => {
+    const def  = enemyRegistry[key];
+    const item = document.createElement('div');
+    item.className        = 'sidebar-item';
+    item.dataset.type     = key;
+    item.dataset.category = 'enemy';
+
+    const thumb = document.createElement('canvas');
+    thumb.width = thumb.height = 48;
+    thumb.className = 'sidebar-thumb';
+    item.appendChild(thumb);
+
+    const label = document.createElement('div');
+    label.className = 'sidebar-label';
+    label.textContent = def.label + ` (${def.defaultRespawnTime}s)`;
+    item.appendChild(label);
+
+    item.addEventListener('click', () => selectType(key, 'enemy'));
+    sidebar.appendChild(item);
+
+    const img = images['enemy_' + key];
+    function drawThumb() {
+      const tc = thumb.getContext('2d');
+      tc.clearRect(0, 0, 48, 48);
+      drawEnemyFrame(tc, img, def, 24, 24, 40);
+    }
+    if (!img || img.complete) drawThumb();
+    else { img.addEventListener('load', drawThumb); img.addEventListener('error', drawThumb); }
+  });
+}
+
+/**
+ * Draw the enemy idle frame centred at (cx, cy) fitting within a square of `size` px.
+ * Falls back to the red X marker if the image isn't loaded yet.
+ */
+function drawEnemyFrame(tc, img, def, cx, cy, size) {
+  if (img && img.complete && img.naturalWidth > 0) {
+    const cols = Math.floor(img.naturalWidth / def.frameWidth);
+    const col  = def.idleFrame % cols;
+    const row  = Math.floor(def.idleFrame / cols);
+    const sx   = col * def.frameWidth;
+    const sy   = row * def.frameHeight;
+    const scale = size / Math.max(def.frameWidth, def.frameHeight);
+    const dw   = def.frameWidth  * scale;
+    const dh   = def.frameHeight * scale;
+    try {
+      tc.drawImage(img, sx, sy, def.frameWidth, def.frameHeight,
+                   cx - dw / 2, cy - dh / 2, dw, dh);
+    } catch (_) {}
+  } else {
+    // Fallback: red circle with X
+    const r = size / 2;
+    tc.beginPath();
+    tc.arc(cx, cy, r, 0, Math.PI * 2);
+    tc.fillStyle = 'rgba(200,40,40,0.85)';
+    tc.fill();
+    tc.strokeStyle = '#ff8888';
+    tc.lineWidth = 1.5;
+    tc.stroke();
+    const d = r * 0.5;
+    tc.strokeStyle = '#fff';
+    tc.lineWidth = 2;
+    tc.beginPath(); tc.moveTo(cx - d, cy - d); tc.lineTo(cx + d, cy + d); tc.stroke();
+    tc.beginPath(); tc.moveTo(cx + d, cy - d); tc.lineTo(cx - d, cy + d); tc.stroke();
+  }
+}
+
+function renderEnemyMarker(enemy, alpha) {
+  const def = enemyRegistry[enemy.type];
+  const img = def ? images['enemy_' + enemy.type] : null;
+  const { x: sx, y: sy } = worldToScreen(enemy.x, enemy.y);
+  ctx.globalAlpha = alpha;
+
+  // Sprite display size matches game (32 px frame upscaled to 48 px)
+  const displaySize = Math.max(12, 48 * zoom);
+  drawEnemyFrame(ctx, img, def, sx, sy, displaySize);
+
+  ctx.fillStyle = '#ffaaaa';
+  const fontSize = Math.max(9, Math.min(13, 11 * zoom));
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`${enemy.type} ${enemy.respawnTime}s`, sx, sy + displaySize / 2 + 2);
+
+  ctx.globalAlpha = 1;
 }
 
 function createSidebarItem(imageKey, type, category) {
@@ -318,6 +417,9 @@ function render() {
   // Placed mob zones
   placedMobs.forEach(mob => renderMobZone(mob, 1.0));
 
+  // Placed enemies
+  placedEnemies.forEach(e => renderEnemyMarker(e, 1.0));
+
   // Mob drag preview
   if (isDraggingMob && selectedType && cursorOnCanvas) {
     const x  = Math.min(mobDragStartWX, cursorWX);
@@ -327,8 +429,18 @@ function render() {
     renderMobZone({ type: selectedType, x, y, width: w, height: h, quantity: 1 }, 0.5);
   }
 
-  // Object/NPC placement preview under cursor (only when not dragging a mob)
-  if (selectedType && cursorOnCanvas && selectedCategory !== 'mob') {
+  // Enemy placement preview
+  if (selectedCategory === 'enemy' && selectedType && cursorOnCanvas) {
+    const def = enemyRegistry[selectedType];
+    renderEnemyMarker(
+      { type: selectedType, x: cursorWX, y: cursorWY,
+        respawnTime: def ? def.defaultRespawnTime : 10 },
+      0.45
+    );
+  }
+
+  // Object/NPC placement preview under cursor (only when not dragging a mob or enemy)
+  if (selectedType && cursorOnCanvas && selectedCategory !== 'mob' && selectedCategory !== 'enemy') {
     renderObject(selectedType, cursorWX, cursorWY, selectedCategory, 0.45);
   }
 
@@ -531,6 +643,18 @@ canvas.addEventListener('mousedown', e => {
 
     if (wx < 0 || wy < 0 || wx > mapWidth || wy > mapHeight) return;
 
+    if (selectedCategory === 'enemy') {
+      const def = enemyRegistry[selectedType];
+      placedEnemies.push({
+        type:        selectedType,
+        x:           wx,
+        y:           wy,
+        respawnTime: def ? def.defaultRespawnTime : 10,
+      });
+      updateStatus();
+      return;
+    }
+
     if (selectedCategory === 'npc') {
       placedNpcs.push({ type: selectedType, x: wx, y: wy });
     } else {
@@ -576,6 +700,16 @@ canvas.addEventListener('contextmenu', e => {
   const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
   const wx    = world.x;
   const wy    = world.y;
+
+  // Try enemies first (point markers, ±12 px square hit area)
+  for (let i = placedEnemies.length - 1; i >= 0; i--) {
+    const e = placedEnemies[i];
+    if (Math.abs(wx - e.x) <= 12 && Math.abs(wy - e.y) <= 12) {
+      placedEnemies.splice(i, 1);
+      updateStatus();
+      return;
+    }
+  }
 
   // Try NPCs first (they appear on top)
   const npcIdx = hitTest(placedNpcs, 'npc', wx, wy);
@@ -630,7 +764,9 @@ document.addEventListener('keydown', e => {
   }
   // Delete/Backspace: remove the last placed item in the active category
   if ((e.code === 'Delete' || e.code === 'Backspace') && document.activeElement === document.body) {
-    if (selectedCategory === 'mob' && placedMobs.length > 0) {
+    if (selectedCategory === 'enemy' && placedEnemies.length > 0) {
+      placedEnemies.pop();
+    } else if (selectedCategory === 'mob' && placedMobs.length > 0) {
       placedMobs.pop();
     } else if (selectedCategory === 'npc' && placedNpcs.length > 0) {
       placedNpcs.pop();
@@ -640,6 +776,8 @@ document.addEventListener('keydown', e => {
       placedMobs.pop();
     } else if (placedNpcs.length > 0) {
       placedNpcs.pop();
+    } else if (placedEnemies.length > 0) {
+      placedEnemies.pop();
     }
     updateStatus();
   }
@@ -681,7 +819,7 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  const data = { objects: placedObjects, npcs: placedNpcs, mobs: placedMobs };
+  const data = { objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies };
 
   statusBar.textContent = `Saving ${name}.json…`;
   try {
@@ -692,7 +830,7 @@ saveBtn.addEventListener('click', async () => {
     });
     const json = await res.json();
     if (json.ok) {
-      statusBar.textContent = `Saved → public/assets/maps/placement/${name}.json  (${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones)`;
+      statusBar.textContent = `Saved → public/assets/maps/placement/${name}.json  (${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies)`;
     } else {
       statusBar.textContent = `Save failed: ${json.error}`;
     }
@@ -717,10 +855,11 @@ loadBtn.addEventListener('click', async () => {
       return;
     }
     const data = await res.json();
-    placedObjects = Array.isArray(data.objects) ? data.objects : [];
-    placedNpcs    = Array.isArray(data.npcs)    ? data.npcs    : [];
-    placedMobs    = Array.isArray(data.mobs)    ? data.mobs    : [];
-    statusBar.textContent = `Loaded ${name}.json — ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones`;
+    placedObjects  = Array.isArray(data.objects)  ? data.objects  : [];
+    placedNpcs     = Array.isArray(data.npcs)     ? data.npcs     : [];
+    placedMobs     = Array.isArray(data.mobs)     ? data.mobs     : [];
+    placedEnemies  = Array.isArray(data.enemies)  ? data.enemies  : [];
+    statusBar.textContent = `Loaded ${name}.json — ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies`;
   } catch (err) {
     statusBar.textContent = `Load error: ${err.message}`;
   }
@@ -728,12 +867,13 @@ loadBtn.addEventListener('click', async () => {
 
 // ── Clear ──────────────────────────────────────────────────────────────────────
 clearBtn.addEventListener('click', () => {
-  const total = placedObjects.length + placedNpcs.length + placedMobs.length;
+  const total = placedObjects.length + placedNpcs.length + placedMobs.length + placedEnemies.length;
   if (total === 0) return;
   if (confirm(`Clear all ${total} placed items?`)) {
-    placedObjects = [];
-    placedNpcs    = [];
-    placedMobs    = [];
+    placedObjects  = [];
+    placedNpcs     = [];
+    placedMobs     = [];
+    placedEnemies  = [];
     updateStatus();
   }
 });
@@ -742,7 +882,7 @@ clearBtn.addEventListener('click', () => {
 function updateStatus() {
   const sel    = selectedType ? `Selected: ${selectedType}` : 'No selection';
   const coords = cursorOnCanvas ? `  Cursor: (${cursorWX}, ${cursorWY})` : '';
-  const count  = `  Objects: ${placedObjects.length}  NPCs: ${placedNpcs.length}  Mob zones: ${placedMobs.length}`;
+  const count  = `  Objects: ${placedObjects.length}  NPCs: ${placedNpcs.length}  Mob zones: ${placedMobs.length}  Enemies: ${placedEnemies.length}`;
   const hint   = selectedCategory === 'mob' ? '  — drag to draw spawn rect' : '';
   statusBar.textContent = sel + hint + coords + count;
 }
@@ -751,10 +891,11 @@ function updateStatus() {
 async function init() {
   resizeCanvas();
 
-  // Fetch both registries in parallel
-  const [objectsRes, mobsRes] = await Promise.allSettled([
+  // Fetch all registries in parallel
+  const [objectsRes, mobsRes, enemiesRes] = await Promise.allSettled([
     fetch('/design/objects'),
     fetch('/design/mobs'),
+    fetch('/design/enemies'),
   ]);
 
   if (objectsRes.status === 'fulfilled' && objectsRes.value.ok) {
@@ -767,6 +908,12 @@ async function init() {
     mobRegistry = await mobsRes.value.json();
   } else {
     statusBar.textContent = 'Failed to load mob registry';
+  }
+
+  if (enemiesRes.status === 'fulfilled' && enemiesRes.value.ok) {
+    enemyRegistry = await enemiesRes.value.json();
+  } else {
+    statusBar.textContent = 'Failed to load enemy registry';
   }
 
   // Load images for all static objects
@@ -784,6 +931,11 @@ async function init() {
   // Load mob sprite sheets
   for (const key of Object.keys(mobRegistry)) {
     loadImage('mob_' + key, `/assets/mobs/${key}.png`);
+  }
+
+  // Load enemy sprite sheets
+  for (const key of Object.keys(enemyRegistry)) {
+    loadImage('enemy_' + key, enemyRegistry[key].spritePath);
   }
 
   // Fit map to viewport and start render loop

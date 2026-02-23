@@ -6,6 +6,7 @@ import { createServer } from "http";
 import path from "path";
 import { STATIC_OBJECT_REGISTRY } from "../shared/staticObjects";
 import { MOB_REGISTRY } from "../shared/mobs";
+import { ENEMY_REGISTRY } from "../shared/enemies";
 import { GameRoom } from "./GameRoom";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -35,6 +36,11 @@ app.get("/design/objects", (_req, res) => {
 // Expose the mob registry for the designer
 app.get("/design/mobs", (_req, res) => {
   res.json(MOB_REGISTRY);
+});
+
+// Expose the enemy registry for the designer
+app.get("/design/enemies", (_req, res) => {
+  res.json(ENEMY_REGISTRY);
 });
 
 // Save a map JSON file

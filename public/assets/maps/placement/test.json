@@ -237,16 +237,6 @@
     },
     {
       "type": "tree3",
-      "x": 1834,
-      "y": 1754
-    },
-    {
-      "type": "tree3",
-      "x": 1598,
-      "y": 1767
-    },
-    {
-      "type": "tree3",
       "x": 1392,
       "y": 1687
     },
@@ -912,6 +902,104 @@
       "specialTime": 4000,
       "chanceOfDoingSpecialAction": 0.3,
       "howManyAnimationsPerSec": 4
+    }
+  ],
+  "enemies": [
+    {
+      "type": "hit",
+      "x": 500,
+      "y": 600,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 900,
+      "y": 400,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1200,
+      "y": 800,
+      "respawnTime": 15
+    },
+    {
+      "type": "hit",
+      "x": 700,
+      "y": 1100,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1500,
+      "y": 500,
+      "respawnTime": 20
+    },
+    {
+      "type": "hit",
+      "x": 300,
+      "y": 1200,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1700,
+      "y": 1400,
+      "respawnTime": 15
+    },
+    {
+      "type": "hit",
+      "x": 400,
+      "y": 1800,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1100,
+      "y": 1600,
+      "respawnTime": 20
+    },
+    {
+      "type": "hit",
+      "x": 800,
+      "y": 300,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 927,
+      "y": 1820,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1860,
+      "y": 1906,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1708,
+      "y": 1993,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1611,
+      "y": 1906,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1571,
+      "y": 1956,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1681,
+      "y": 1787,
+      "respawnTime": 10
     }
   ]
 }
