@@ -1,0 +1,52 @@
+{
+  "hit": {
+    "type": "hit",
+    "label": "Hit Enemy",
+    "level": 3,
+    "hp": 15,
+    "damage": 1,
+    "xpReward": 100,
+    "goldAmount": 20,
+    "goldChance": 0.3,
+    "defaultRespawnTime": 10,
+    "speed": 100,
+    "aggroRange": 320,
+    "attackRange": 48,
+    "attackCooldownMs": 200,
+    "frameWidth": 32,
+    "frameHeight": 32,
+    "framesPerState": 2,
+    "spritePath": "/assets/enemies/hit.png",
+    "hitbox": {
+      "x": 6,
+      "y": 6,
+      "width": 20,
+      "height": 20
+    }
+  },
+  "orc": {
+    "type": "orc",
+    "label": "Orc",
+    "level": 5,
+    "hp": 20,
+    "damage": 2,
+    "xpReward": 150,
+    "goldAmount": 25,
+    "goldChance": 0.3,
+    "defaultRespawnTime": 10,
+    "speed": 100,
+    "aggroRange": 320,
+    "attackRange": 48,
+    "attackCooldownMs": 300,
+    "frameWidth": 64,
+    "frameHeight": 64,
+    "framesPerState": 4,
+    "spritePath": "/assets/enemies/orc.png",
+    "hitbox": {
+      "x": 5,
+      "y": 5,
+      "width": 54,
+      "height": 55
+    }
+  }
+}

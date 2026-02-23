@@ -55,13 +55,9 @@ const ROW_ANIM_NAMES = ["walk_up", "walk_left", "walk_down", "walk_right"] as co
 // Direction index → sprite-sheet row  (down→row2, left→row1, up→row0, right→row3)
 const DIR_TO_ROW = [2, 1, 0, 3] as const;
 
-// Hit-enemy direction name lookup (0=down,1=left,2=up; 3=right uses flip)
-const HIT_DIR_NAMES = ["down", "left", "up"] as const;
-
-// Display info for each enemy type (name + level shown above head)
-const ENEMY_DISPLAY: Record<string, { name: string; level: number }> = {
-  hit: { name: "Hit", level: 3 },
-};
+// Direction index → walk/attack state name (dir 0=down, 1=left/side, 2=up; 3=right uses flipX)
+const DIR_WALK_STATE   = ["walk_down",   "walk_side",   "walk_up"  ] as const;
+const DIR_ATTACK_STATE = ["attack_down", "attack_side", "attack_up"] as const;
 
 // Converts "male/1lvl" → "male_1lvl"
 function skinKey(skin: string): string {
@@ -267,9 +263,18 @@ export class GameScene extends Phaser.Scene {
     // Trader NPC
     this.load.image("trader", "/assets/npcs/trader.png");
 
-    // Hit enemy sprite sheet (32×32 frames, 2 cols × 7 rows)
-    this.load.spritesheet("hit_enemy", "/assets/enemies/hit.png", {
-      frameWidth: 32, frameHeight: 32,
+    // Enemy spritesheets — loaded dynamically from enemies.json
+    this.load.json("enemies_registry", "/assets/enemies/enemies.json");
+    // Queue individual spritesheets once the JSON is parsed (still within the same load pass)
+    this.load.once("filecomplete-json-enemies_registry", () => {
+      const defs = this.cache.json.get("enemies_registry") as
+        Record<string, { frameWidth: number; frameHeight: number; spritePath: string }>;
+      for (const [type, def] of Object.entries(defs)) {
+        this.load.spritesheet(`enemy_${type}`, def.spritePath, {
+          frameWidth:  def.frameWidth,
+          frameHeight: def.frameHeight,
+        });
+      }
     });
 
     // Grave shown at player's death location
@@ -1191,29 +1196,38 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // ── Hit enemy animations (2 frames per row, 7 rows) ───────────────────────
-    // Row layout: 0=stand, 1=walk_up, 2=walk_left, 3=walk_down,
-    //             4=attack_up, 5=attack_left, 6=attack_down
-    // Right variants use left + flipX at runtime
-    if (this.textures.exists("hit_enemy")) {
-      const hitWalkDefs: [string, number[]][] = [
-        ["hit_idle",        [0,  1 ]],
-        ["hit_walk_up",     [2,  3 ]],
-        ["hit_walk_left",   [4,  5 ]],
-        ["hit_walk_down",   [6,  7 ]],
-        ["hit_attack_up",   [8,  9 ]],
-        ["hit_attack_left", [10, 11]],
-        ["hit_attack_down", [12, 13]],
-      ];
-      for (const [aKey, frames] of hitWalkDefs) {
-        if (!this.anims.exists(aKey)) {
+    // ── Enemy animations — generated dynamically from enemies_registry ──────────
+    // Canonical spritesheet row order (all enemy types must follow this layout):
+    //   0=idle  1=walk_up  2=walk_side(left)  3=walk_down
+    //   4=attack_up  5=attack_side(left)  6=attack_down
+    // Right-facing variants use the _side row + setFlipX(true) at runtime.
+    const STATE_NAMES = [
+      "idle",
+      "walk_up", "walk_side", "walk_down",
+      "attack_up", "attack_side", "attack_down",
+    ] as const;
+
+    const enemyDefs = this.cache.json.get("enemies_registry") as
+      Record<string, { framesPerState: number }> | undefined;
+
+    if (enemyDefs) {
+      for (const [type, def] of Object.entries(enemyDefs)) {
+        const texKey = `enemy_${type}`;
+        if (!this.textures.exists(texKey)) continue;
+        const N = def.framesPerState;
+
+        STATE_NAMES.forEach((stateName, rowIndex) => {
+          const animKey = `${type}_${stateName}`;
+          if (this.anims.exists(animKey)) return;
+          // Row R, N frames per state → frame indices [R*N .. R*N+N-1]
+          const frames = Array.from({ length: N }, (_, i) => rowIndex * N + i);
           this.anims.create({
-            key: aKey,
-            frames: this.anims.generateFrameNumbers("hit_enemy", { frames }),
+            key:       animKey,
+            frames:    this.anims.generateFrameNumbers(texKey, { frames }),
             frameRate: 6,
-            repeat: -1,
+            repeat:    -1,
           });
-        }
+        });
       }
     }
   }
@@ -1608,16 +1622,29 @@ export class GameScene extends Phaser.Scene {
   // ── Enemy management ───────────────────────────────────────────────────────
 
   private addEnemy(enemy: EnemyData, id: string): void {
-    const sprite = this.add.sprite(enemy.x, enemy.y, "hit_enemy");
-    sprite.setDisplaySize(48, 48); // upscale 32×32 → 48×48
+    const defs   = this.cache.json.get("enemies_registry") as
+      Record<string, { label: string; level: number; frameWidth: number; frameHeight: number }> | undefined;
+    const regDef = defs?.[enemy.type];
+    const texKey = `enemy_${enemy.type}`;
+
+    const sprite = this.textures.exists(texKey)
+      ? this.add.sprite(enemy.x, enemy.y, texKey)
+      : this.add.sprite(enemy.x, enemy.y, "grave");  // fallback if texture missing
+
+    const fw = regDef?.frameWidth  ?? 32;
+    const fh = regDef?.frameHeight ?? 32;
+    sprite.setDisplaySize(fw, fh);
     sprite.setDepth(enemy.y + 24);
-    sprite.play("hit_idle");
+
+    const idleKey = `${enemy.type}_idle`;
+    if (this.anims.exists(idleKey)) sprite.play(idleKey);
 
     const hpBar = this.add.graphics();
     hpBar.setDepth(sprite.depth + 1);
 
-    const info  = ENEMY_DISPLAY[enemy.type] ?? { name: enemy.type, level: 1 };
-    const label = this.add.text(enemy.x, enemy.y - 44, `${info.name} [Lv.${info.level}]`, {
+    const displayName  = regDef?.label ?? enemy.type;
+    const displayLevel = regDef?.level ?? 1;
+    const label = this.add.text(enemy.x, enemy.y - 44, `${displayName} [Lv.${displayLevel}]`, {
       fontSize: "12px",
       color: "#ff4444",
       stroke: "#000000",
@@ -1711,32 +1738,34 @@ export class GameScene extends Phaser.Scene {
       const dir    = entity.isAttacking ? entity.attackDirection : entity.direction;
       const moving = Math.abs(entity.targetX - sprite.x) > 1 || Math.abs(entity.targetY - sprite.y) > 1;
 
+      const type = entity.type;
       if (entity.isAttacking) {
         if (dir === 3) {
-          // right attack = left attack frames + flipX
+          // right attack = attack_side frames + flipX
           sprite.setFlipX(true);
-          sprite.play("hit_attack_left", true);
+          const k = `${type}_attack_side`;
+          if (this.anims.exists(k)) sprite.play(k, true);
         } else {
           sprite.setFlipX(false);
-          const aKey = dir < 3 ? `hit_attack_${HIT_DIR_NAMES[dir]}` : "hit_attack_down";
-          sprite.play(aKey, true);
+          const k = `${type}_${DIR_ATTACK_STATE[dir] ?? "attack_down"}`;
+          if (this.anims.exists(k)) sprite.play(k, true);
         }
       } else if (moving) {
         if (entity.direction === 3) {
-          // right walk = left walk frames + flipX
+          // right walk = walk_side frames + flipX
           sprite.setFlipX(true);
-          sprite.play("hit_walk_left", true);
+          const k = `${type}_walk_side`;
+          if (this.anims.exists(k)) sprite.play(k, true);
         } else {
           sprite.setFlipX(false);
-          const wKey = entity.direction < 3
-            ? `hit_walk_${HIT_DIR_NAMES[entity.direction]}`
-            : "hit_walk_down";
-          sprite.play(wKey, true);
+          const k = `${type}_${DIR_WALK_STATE[entity.direction] ?? "walk_down"}`;
+          if (this.anims.exists(k)) sprite.play(k, true);
         }
       } else {
-        // No target / out of range — always return to waiting (row 0) animation
+        // No target / out of range — idle
         sprite.setFlipX(false);
-        sprite.play("hit_idle", true);
+        const k = `${type}_idle`;
+        if (this.anims.exists(k)) sprite.play(k, true);
       }
     });
   }

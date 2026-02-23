@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Enemy Builder</title>
+  <link rel="stylesheet" href="/designer/enemy-builder.css">
+</head>
+<body>
+  <div id="toolbar">
+    <strong>Enemy Builder</strong>
+    <span class="sep"> | </span>
+    <a href="/design" style="color:#aaa;font-size:12px">← Back to Map Designer</a>
+  </div>
+
+  <div id="eb-container">
+    <div id="step-indicator"></div>
+
+    <!-- Step 1: Upload -->
+    <div id="step-upload" class="eb-step"></div>
+
+    <!-- Step 2: Frame size -->
+    <div id="step-frame-size" class="eb-step"></div>
+
+    <!-- Step 3: Frames per state -->
+    <div id="step-frames-n" class="eb-step"></div>
+
+    <!-- Steps 4–10: Animation pickers -->
+    <div id="step-anim-idle"        class="eb-step"></div>
+    <div id="step-anim-walk-side"   class="eb-step"></div>
+    <div id="step-anim-walk-down"   class="eb-step"></div>
+    <div id="step-anim-walk-up"     class="eb-step"></div>
+    <div id="step-anim-attack-side" class="eb-step"></div>
+    <div id="step-anim-attack-down" class="eb-step"></div>
+    <div id="step-anim-attack-up"   class="eb-step"></div>
+
+    <!-- Step 11: Collision box -->
+    <div id="step-collision" class="eb-step"></div>
+
+    <!-- Step 12: Stats -->
+    <div id="step-stats" class="eb-step"></div>
+
+    <!-- Step 13: Review & save -->
+    <div id="step-review" class="eb-step"></div>
+
+    <div id="eb-nav">
+      <button id="btn-prev">← Back</button>
+      <button id="btn-next">Next →</button>
+      <button id="btn-save" style="display:none">Save Enemy</button>
+    </div>
+    <div id="eb-status"></div>
+  </div>
+
+  <script src="/designer/enemy-builder.js"></script>
+</body>
+</html>

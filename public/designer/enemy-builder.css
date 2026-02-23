@@ -1,0 +1,217 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: #1a1a1a;
+  color: #eee;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #2a2a2a;
+  border-bottom: 1px solid #444;
+  flex-shrink: 0;
+}
+#toolbar strong { font-size: 14px; }
+#toolbar .sep   { color: #555; }
+
+/* ── Outer container ─────────────────────────────────────────────────────── */
+#eb-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Step indicator ──────────────────────────────────────────────────────── */
+#step-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 10px 20px 6px;
+  background: #222;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.step-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #444;
+  cursor: default;
+}
+.step-dot.done    { background: #4a8a4a; }
+.step-dot.active  { background: #7adf7a; box-shadow: 0 0 4px #7adf7a; }
+
+/* ── Step panels ─────────────────────────────────────────────────────────── */
+.eb-step {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: auto;
+  padding: 20px;
+  gap: 14px;
+}
+.eb-step.active { display: flex; }
+
+.eb-step h2 {
+  font-size: 16px;
+  color: #ddd;
+  margin-bottom: 4px;
+}
+.eb-step p {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.5;
+}
+
+/* ── Upload step ─────────────────────────────────────────────────────────── */
+#upload-preview {
+  max-width: 100%;
+  max-height: 260px;
+  border: 1px solid #444;
+  background: #111;
+  image-rendering: pixelated;
+}
+
+/* ── Grid canvas ─────────────────────────────────────────────────────────── */
+.grid-wrap {
+  overflow: auto;
+  border: 1px solid #444;
+  background: #111;
+  max-height: 380px;
+  cursor: crosshair;
+}
+#grid-canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* ── Collision canvas ────────────────────────────────────────────────────── */
+#collision-wrap {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+#collision-canvas {
+  display: block;
+  border: 1px solid #666;
+  background: #111;
+  image-rendering: pixelated;
+  cursor: crosshair;
+}
+#collision-info {
+  font-size: 12px;
+  color: #aaa;
+  line-height: 1.8;
+}
+
+/* ── Stats form ──────────────────────────────────────────────────────────── */
+#stats-form {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 8px 12px;
+  max-width: 480px;
+  align-items: center;
+}
+#stats-form label {
+  font-size: 12px;
+  color: #bbb;
+  text-align: right;
+}
+#stats-form input {
+  padding: 5px 8px;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #eee;
+  border-radius: 3px;
+  font-size: 13px;
+  width: 100%;
+}
+#stats-form input:focus {
+  outline: none;
+  border-color: #7adf7a;
+}
+
+/* ── Review ──────────────────────────────────────────────────────────────── */
+#review-wrap {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+#review-summary {
+  font-size: 12px;
+  color: #bbb;
+  line-height: 1.9;
+  min-width: 220px;
+}
+#review-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+#review-canvas {
+  border: 1px solid #444;
+  background: #111;
+  image-rendering: pixelated;
+}
+#review-label {
+  font-size: 11px;
+  color: #888;
+}
+
+/* ── Navigation bar ──────────────────────────────────────────────────────── */
+#eb-nav {
+  display: flex;
+  gap: 10px;
+  padding: 10px 20px;
+  background: #222;
+  border-top: 1px solid #333;
+  flex-shrink: 0;
+}
+#eb-nav button {
+  padding: 7px 20px;
+  border-radius: 3px;
+  border: 1px solid #555;
+  background: #3a3a3a;
+  color: #ddd;
+  cursor: pointer;
+  font-size: 13px;
+}
+#eb-nav button:hover    { background: #4a4a4a; }
+#eb-nav button:disabled { opacity: 0.4; cursor: default; }
+#btn-save {
+  background: #3a5a3a;
+  border-color: #5a8a5a;
+}
+#btn-save:hover { background: #4a6a4a; }
+
+/* ── Status bar ──────────────────────────────────────────────────────────── */
+#eb-status {
+  padding: 4px 20px;
+  font-size: 11px;
+  color: #888;
+  background: #1a1a1a;
+  border-top: 1px solid #2a2a2a;
+  flex-shrink: 0;
+  min-height: 22px;
+}
+#eb-status.ok  { color: #7adf7a; }
+#eb-status.err { color: #df7a7a; }
+
+/* ── Selection count badge ───────────────────────────────────────────────── */
+.sel-count {
+  font-size: 12px;
+  color: #7adf7a;
+  margin-left: 6px;
+}
+.sel-count.warn { color: #dfaa7a; }

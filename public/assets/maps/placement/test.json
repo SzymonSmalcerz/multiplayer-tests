@@ -1000,6 +1000,60 @@
       "x": 1681,
       "y": 1787,
       "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1744,
+      "y": 1644,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1624,
+      "y": 1754,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1485,
+      "y": 1820,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1927,
+      "y": 1740,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1840,
+      "y": 1900,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1708,
+      "y": 1671,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1827,
+      "y": 1571,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1744,
+      "y": 1508,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1558,
+      "y": 1634,
+      "respawnTime": 10
     }
   ]
 }

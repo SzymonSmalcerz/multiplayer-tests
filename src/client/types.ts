@@ -28,6 +28,17 @@ export interface MobPlacement {
   specialActionArray?:         number[];
 }
 
+/** Enemy definition fields the client needs (display + animation; stats stay server-side) */
+export interface ClientEnemyDef {
+  type:           string;
+  label:          string;
+  level:          number;
+  frameWidth:     number;
+  frameHeight:    number;
+  framesPerState: number;
+  spritePath:     string;
+}
+
 /** One enemy spawn point loaded from the map JSON */
 export interface EnemyPlacement {
   type:        string;

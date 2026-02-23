@@ -6,7 +6,7 @@ import { createServer } from "http";
 import path from "path";
 import { STATIC_OBJECT_REGISTRY } from "../shared/staticObjects";
 import { MOB_REGISTRY } from "../shared/mobs";
-import { ENEMY_REGISTRY } from "../shared/enemies";
+import { ENEMY_REGISTRY, loadEnemyRegistry, EnemyDef } from "../shared/enemies";
 import { GameRoom } from "./GameRoom";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -19,13 +19,22 @@ const httpServer = createServer(app);
 // (dist/server/index.js → ../../public)
 const publicDir = path.resolve(__dirname, "../../public");
 app.use(express.static(publicDir));
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "4mb" }));  // raised to 4 mb for spritesheet base64 payloads
+
+// ── Load enemy registry from JSON (must happen before any route uses it) ─────
+const enemiesJsonPath = path.join(publicDir, "assets/enemies/enemies.json");
+loadEnemyRegistry(enemiesJsonPath);
 
 // ── Map designer endpoints (must come before the catch-all) ──────────────────
 
 // Serve the designer HTML page
 app.get("/design", (_req, res) => {
   res.sendFile(path.join(publicDir, "designer/index.html"));
+});
+
+// Serve the enemy builder page
+app.get("/design/enemy-builder", (_req, res) => {
+  res.sendFile(path.join(publicDir, "designer/enemy-builder.html"));
 });
 
 // Expose the static object registry so designer JS needs no TypeScript import
@@ -57,6 +66,105 @@ app.post("/design/save", (req, res) => {
       return;
     }
     res.json({ ok: true, path: filePath });
+  });
+});
+
+// Save a new enemy: write PNG + update enemies.json + hot-reload in-memory registry
+app.post("/design/save-enemy", (req, res) => {
+  const body = req.body as {
+    type:               string;
+    label:              string;
+    level:              number;
+    hp:                 number;
+    damage:             number;
+    xpReward:           number;
+    goldAmount:         number;
+    goldChance:         number;
+    defaultRespawnTime: number;
+    speed:              number;
+    aggroRange:         number;
+    attackRange:        number;
+    attackCooldownMs:   number;
+    frameWidth:         number;
+    frameHeight:        number;
+    framesPerState:     number;
+    hitbox:             { x: number; y: number; width: number; height: number };
+    spriteBase64:       string;   // full data:image/png;base64,… URL
+  };
+
+  if (!body.type || !/^[a-z0-9_]+$/.test(body.type)) {
+    res.status(400).json({ error: "Invalid type key (lowercase alphanumeric and _ only)" });
+    return;
+  }
+
+  const numericFields = [
+    "level", "hp", "damage", "xpReward", "goldAmount", "goldChance",
+    "defaultRespawnTime", "speed", "aggroRange", "attackRange", "attackCooldownMs",
+    "frameWidth", "frameHeight", "framesPerState",
+  ];
+  for (const f of numericFields) {
+    if (typeof (body as Record<string, unknown>)[f] !== "number") {
+      res.status(400).json({ error: `Missing or invalid field: ${f}` });
+      return;
+    }
+  }
+
+  if (!body.spriteBase64) {
+    res.status(400).json({ error: "Missing spriteBase64" });
+    return;
+  }
+
+  const base64    = body.spriteBase64.replace(/^data:image\/png;base64,/, "");
+  const pngBuffer = Buffer.from(base64, "base64");
+  const pngPath   = path.join(publicDir, "assets/enemies", `${body.type}.png`);
+
+  fs.writeFile(pngPath, pngBuffer, (pngErr) => {
+    if (pngErr) {
+      res.status(500).json({ error: `Failed to save PNG: ${pngErr.message}` });
+      return;
+    }
+
+    let existing: Record<string, unknown> = {};
+    try {
+      existing = JSON.parse(fs.readFileSync(enemiesJsonPath, "utf-8"));
+    } catch {
+      // File doesn't exist yet — create fresh
+    }
+
+    const spritePath = `/assets/enemies/${body.type}.png`;
+    const entry: EnemyDef = {
+      type:               body.type,
+      label:              body.label,
+      level:              body.level,
+      hp:                 body.hp,
+      damage:             body.damage,
+      xpReward:           body.xpReward,
+      goldAmount:         body.goldAmount,
+      goldChance:         body.goldChance,
+      defaultRespawnTime: body.defaultRespawnTime,
+      speed:              body.speed,
+      aggroRange:         body.aggroRange,
+      attackRange:        body.attackRange,
+      attackCooldownMs:   body.attackCooldownMs,
+      frameWidth:         body.frameWidth,
+      frameHeight:        body.frameHeight,
+      framesPerState:     body.framesPerState,
+      spritePath,
+      hitbox:             body.hitbox,
+    };
+    existing[body.type] = entry;
+
+    fs.writeFile(enemiesJsonPath, JSON.stringify(existing, null, 2), (jsonErr) => {
+      if (jsonErr) {
+        res.status(500).json({ error: `Saved PNG but failed to update enemies.json: ${jsonErr.message}` });
+        return;
+      }
+
+      // Hot-reload: new enemy immediately visible in GET /design/enemies
+      ENEMY_REGISTRY[body.type] = entry;
+
+      res.json({ ok: true, type: body.type, spritePath });
+    });
   });
 });
 

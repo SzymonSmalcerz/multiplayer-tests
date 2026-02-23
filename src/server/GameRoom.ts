@@ -6,6 +6,7 @@ import { xpForNextLevel }                    from "../shared/formulas";
 import { getHitbox, isInsideHitbox }          from "../shared/combat";
 import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../shared/economy";
 import { STATIC_OBJECT_REGISTRY }             from "../shared/staticObjects";
+import { ENEMY_REGISTRY }                     from "../shared/enemies";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -57,20 +58,9 @@ const MAX_SPEED_PX_PER_S = 300;
 const SPEED_TOLERANCE    = 1.6;
 
 
-// Enemy AI
-const ENEMY_AGGRO_RANGE  = 320;  // px  (5 tiles × 64 px) — enemy gives up beyond this
-const ENEMY_SPEED        = 100;  // px / s
-const ENEMY_ATTACK_RANGE = 48;   // px — enter melee range
-const ENEMY_COUNT        = 10;
-const ENEMY_RESPAWN_MS   = 10_000;
-
-// "hit" enemy stats
-const HIT_ENEMY_HP           = 15;
-const HIT_ENEMY_XP           = 100;
-const HIT_ENEMY_DAMAGE       = 1;
-const HIT_ATTACK_CD_MS       = 200;   // 1 dmg every 0.2 s = 5 DPS
-const HIT_ENEMY_GOLD_AMOUNT  = 20;
-const HIT_ENEMY_GOLD_CHANCE  = 0.3;   // 30% drop rate
+// Enemy AI — per-enemy stats now come from ENEMY_REGISTRY; these are legacy fallbacks
+const ENEMY_COUNT      = 10;
+const ENEMY_RESPAWN_MS = 10_000;
 
 // Player weapon
 const AXE_ORBIT_RADIUS      = 15;   // px — matches client orbit radius
@@ -491,6 +481,9 @@ export class GameRoom extends Room<GameState> {
   // ── Enemy spawning ──────────────────────────────────────────────────────────
 
   private spawnEnemy(type: string): void {
+    const regDef = ENEMY_REGISTRY[type];
+    if (!regDef) { console.warn(`[Room] Unknown enemy type: ${type}`); return; }
+
     const id    = `enemy_${++this.enemyCounter}`;
     const enemy = new EnemyState();
 
@@ -500,17 +493,17 @@ export class GameRoom extends Room<GameState> {
     enemy.y         = 80 + Math.random() * (MAP_HEIGHT - 160);
     enemy.direction = 0;
     enemy.isDead    = false;
-
-    if (type === "hit") {
-      enemy.hp    = HIT_ENEMY_HP;
-      enemy.maxHp = HIT_ENEMY_HP;
-    }
+    enemy.hp        = regDef.hp;
+    enemy.maxHp     = regDef.hp;
 
     this.state.enemies.set(id, enemy);
     this.enemyAttackCooldowns.set(id, new Map());
   }
 
   private spawnEnemyFromDef(def: EnemySpawnDef): void {
+    const regDef = ENEMY_REGISTRY[def.type];
+    if (!regDef) { console.warn(`[Room] Unknown enemy type: ${def.type}`); return; }
+
     const id    = `enemy_${++this.enemyCounter}`;
     const enemy = new EnemyState();
 
@@ -520,11 +513,8 @@ export class GameRoom extends Room<GameState> {
     enemy.y         = def.y;
     enemy.direction = 0;
     enemy.isDead    = false;
-
-    if (def.type === "hit") {
-      enemy.hp    = HIT_ENEMY_HP;
-      enemy.maxHp = HIT_ENEMY_HP;
-    }
+    enemy.hp        = regDef.hp;
+    enemy.maxHp     = regDef.hp;
 
     this.state.enemies.set(id, enemy);
     this.enemyAttackCooldowns.set(id, new Map());
@@ -576,7 +566,10 @@ export class GameRoom extends Room<GameState> {
         if (d < nearestDist) { nearestDist = d; nearest = p; }
       }
 
-      if (!nearest || nearestDist > ENEMY_AGGRO_RANGE) {
+      const regDef = ENEMY_REGISTRY[enemy.type];
+      if (!regDef) return;
+
+      if (!nearest || nearestDist > regDef.aggroRange) {
         enemy.isAttacking = false;
         return;
       }
@@ -590,7 +583,7 @@ export class GameRoom extends Room<GameState> {
       const dx = nearest.state.x - enemy.x;
       const dy = nearest.state.y - enemy.y;
 
-      if (nearestDist > ENEMY_ATTACK_RANGE) {
+      if (nearestDist > regDef.attackRange) {
         // ── Move toward player ──────────────────────────────────────────────
         enemy.isAttacking = false;
         if (Math.abs(dx) >= Math.abs(dy)) {
@@ -598,7 +591,7 @@ export class GameRoom extends Room<GameState> {
         } else {
           enemy.direction = dy > 0 ? 0 : 2;
         }
-        const speed = ENEMY_SPEED * dtSec;
+        const speed = regDef.speed * dtSec;
         enemy.x = Math.max(32, Math.min(MAP_WIDTH  - 32, enemy.x + (dx / nearestDist) * speed));
         enemy.y = Math.max(32, Math.min(MAP_HEIGHT - 32, enemy.y + (dy / nearestDist) * speed));
 
@@ -615,9 +608,9 @@ export class GameRoom extends Room<GameState> {
         const cdMap   = this.enemyAttackCooldowns.get(enemyId)!;
         const lastHit = cdMap.get(nearest.id) ?? 0;
 
-        if (now - lastHit >= HIT_ATTACK_CD_MS) {
+        if (now - lastHit >= regDef.attackCooldownMs) {
           if (isInsideHitbox(enemy.x, enemy.y, atkDir, nearest.state.x, nearest.state.y, 20)) {
-            nearest.state.hp = Math.max(0, nearest.state.hp - HIT_ENEMY_DAMAGE);
+            nearest.state.hp = Math.max(0, nearest.state.hp - regDef.damage);
             cdMap.set(nearest.id, now);
 
             if (nearest.state.hp <= 0) {
@@ -774,17 +767,21 @@ export class GameRoom extends Room<GameState> {
     const respawnDelay = spawnDef ? spawnDef.respawnTime : ENEMY_RESPAWN_MS;
     this.respawnQueue.push({ def: spawnDef, type: enemy.type, spawnAt: Date.now() + respawnDelay });
 
-    // Award XP (with party sharing)
-    this.awardXP(killerSessionId, HIT_ENEMY_XP, enemy.x, enemy.y);
+    const regDef = ENEMY_REGISTRY[enemy.type];
 
-    // Gold drop (type-specific) — create a persistent pickup for 15 s
-    if (enemy.type === "hit" && Math.random() < HIT_ENEMY_GOLD_CHANCE) {
+    // Award XP (with party sharing)
+    this.awardXP(killerSessionId, regDef?.xpReward ?? 0, enemy.x, enemy.y);
+
+    // Gold drop — any enemy type with goldChance > 0 can drop
+    const goldAmount = regDef?.goldAmount ?? 0;
+    const goldChance = regDef?.goldChance ?? 0;
+    if (goldAmount > 0 && Math.random() < goldChance) {
       const coinId = `coin_${++this.coinCounter}`;
       this.pendingCoins.set(coinId, {
         id: coinId,
         x: enemy.x,
         y: enemy.y,
-        amount: HIT_ENEMY_GOLD_AMOUNT,
+        amount: goldAmount,
         expiresAt: Date.now() + 15_000,
       });
       this.broadcast("coin_drop", { id: coinId, x: enemy.x, y: enemy.y });
