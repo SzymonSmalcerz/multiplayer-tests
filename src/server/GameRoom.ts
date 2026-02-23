@@ -125,6 +125,7 @@ export class GameRoom extends Room<GameState> {
 
   private objectData: Array<{ type: string; x: number; y: number }> = [];
   private npcData: Array<{ type: string; x: number; y: number }> = [];
+  private mobData: Array<Record<string, unknown>> = [];
   private lastPositions = new Map<string, LastPos>();
 
   // ── Enemy bookkeeping ──────────────────────────────────────────────────────
@@ -165,7 +166,8 @@ export class GameRoom extends Room<GameState> {
     const mapFile  = path.resolve(__dirname, "../../public/assets/maps/placement/test.json");
     const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
       objects: Array<{ type: string; x: number; y: number }>;
-      npcs?: Array<{ type: string; x: number; y: number }>;
+      npcs?:   Array<{ type: string; x: number; y: number }>;
+      mobs?:   Array<Record<string, unknown>>;
     };
     for (const obj of mapJson.objects) {
       if (STATIC_OBJECT_REGISTRY[obj.type]) {
@@ -173,6 +175,7 @@ export class GameRoom extends Room<GameState> {
       }
     }
     this.npcData = mapJson.npcs ?? [];
+    this.mobData = mapJson.mobs ?? [];
 
     // ── Spawn initial enemies ─────────────────────────────────────────────────
     for (let i = 0; i < ENEMY_COUNT; i++) {
@@ -185,7 +188,7 @@ export class GameRoom extends Room<GameState> {
     // ── Message handlers ──────────────────────────────────────────────────────
 
     this.onMessage("get_map", (client) => {
-      client.send("map_data", { objects: this.objectData, npcs: this.npcData });
+      client.send("map_data", { objects: this.objectData, npcs: this.npcData, mobs: this.mobData });
     });
 
     this.onMessage("chat", (client, message: string) => {

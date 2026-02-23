@@ -12,10 +12,27 @@ export interface NpcData {
   y: number;
 }
 
+/** One mob spawn zone received from the server — always represents exactly one mob instance */
+export interface MobPlacement {
+  type:   string;
+  x:      number;
+  y:      number;
+  width:  number;
+  height: number;
+  // behaviour values — always present (filled from registry defaults by the designer)
+  speed?:                      number;
+  changeTime?:                 number;
+  specialTime?:                number;
+  chanceOfDoingSpecialAction?: number;
+  howManyAnimationsPerSec?:    number;
+  specialActionArray?:         number[];
+}
+
 /** Map initialisation message payload */
 export interface MapDataMessage {
   objects: StaticObjectData[];
-  npcs: NpcData[];
+  npcs:    NpcData[];
+  mobs:    MobPlacement[];
 }
 
 /** Chat message payload */

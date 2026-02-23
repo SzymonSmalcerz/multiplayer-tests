@@ -9,17 +9,24 @@ const NPC_DISPLAY_W = 48;
 const NPC_DISPLAY_H = 64;
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let registry = {};          // { [key]: { type, imageWidth, imageHeight, collision } }
-const images = {};          // { [key]: HTMLImageElement }
+let registry    = {};       // { [key]: { type, imageWidth, imageHeight, collision } }
+let mobRegistry = {};       // { [key]: { type, frameWidth, frameHeight, … } }
+const images    = {};       // { [key]: HTMLImageElement }
 
-let mapWidth = 2000;
+let mapWidth  = 2000;
 let mapHeight = 2000;
 
 let placedObjects = [];     // { type, x, y }[]
 let placedNpcs    = [];     // { type, x, y }[]
+let placedMobs    = [];     // { type, x, y, width, height, quantity }[]
 
 let selectedType     = null;  // string | null
-let selectedCategory = null;  // 'object' | 'npc' | null
+let selectedCategory = null;  // 'object' | 'npc' | 'mob' | null
+
+// Mob drag-to-draw state
+let isDraggingMob  = false;
+let mobDragStartWX = 0;
+let mobDragStartWY = 0;
 
 // Canvas transform
 let zoom        = 0.3;
@@ -100,6 +107,7 @@ function buildSidebar() {
   addSection('Trees', treeKeys, 'object');
   addSection('Objects', otherKeys, 'object');
   addNpcSection();
+  addMobSection();
 }
 
 function addSection(title, keys, category) {
@@ -127,6 +135,68 @@ function addNpcSection() {
     // Relabel
     item.querySelector('.sidebar-label').textContent = key + ' (NPC)';
     sidebar.appendChild(item);
+  });
+}
+
+function addMobSection() {
+  const keys = Object.keys(mobRegistry).sort();
+  if (keys.length === 0) return;
+
+  const heading = document.createElement('div');
+  heading.className = 'sidebar-heading';
+  heading.textContent = 'Mobs (drag to place)';
+  sidebar.appendChild(heading);
+
+  keys.forEach(key => {
+    const def = mobRegistry[key];
+    const item = document.createElement('div');
+    item.className = 'sidebar-item';
+    item.dataset.type = key;
+    item.dataset.category = 'mob';
+
+    const thumb = document.createElement('canvas');
+    thumb.width  = 48;
+    thumb.height = 48;
+    thumb.className = 'sidebar-thumb';
+    item.appendChild(thumb);
+
+    const label = document.createElement('div');
+    label.className = 'sidebar-label';
+    label.textContent = key;
+    item.appendChild(label);
+
+    item.addEventListener('click', () => selectType(key, 'mob'));
+    sidebar.appendChild(item);
+
+    // Draw the first "goDown" frame (row 3, col 0) as thumbnail
+    const img = images['mob_' + key];
+    function drawMobThumb() {
+      const tc = thumb.getContext('2d');
+      tc.clearRect(0, 0, 48, 48);
+      if (img && img.complete && img.naturalWidth > 0) {
+        const cols = img.naturalWidth / def.frameWidth;
+        const goDownFirstFrame = 3 * cols; // row 3, col 0
+        const sx = (goDownFirstFrame % cols) * def.frameWidth;
+        const sy = Math.floor(goDownFirstFrame / cols) * def.frameHeight;
+        const scale = Math.min(48 / def.frameWidth, 48 / def.frameHeight);
+        const dw = def.frameWidth  * scale;
+        const dh = def.frameHeight * scale;
+        try {
+          tc.drawImage(img, sx, sy, def.frameWidth, def.frameHeight,
+                       (48 - dw) / 2, (48 - dh) / 2, dw, dh);
+        } catch (_) {}
+      } else {
+        tc.fillStyle = '#2a5a3a';
+        tc.fillRect(4, 4, 40, 40);
+        tc.fillStyle = '#ccc';
+        tc.font = '9px sans-serif';
+        tc.textAlign = 'center';
+        tc.textBaseline = 'middle';
+        tc.fillText(key, 24, 24);
+      }
+    }
+    if (!img || img.complete) drawMobThumb();
+    else { img.addEventListener('load', drawMobThumb); img.addEventListener('error', drawMobThumb); }
   });
 }
 
@@ -245,8 +315,20 @@ function render() {
   // Placed NPCs
   placedNpcs.forEach(obj => renderObject(obj.type, obj.x, obj.y, 'npc', 1.0));
 
-  // Placement preview under cursor
-  if (selectedType && cursorOnCanvas) {
+  // Placed mob zones
+  placedMobs.forEach(mob => renderMobZone(mob, 1.0));
+
+  // Mob drag preview
+  if (isDraggingMob && selectedType && cursorOnCanvas) {
+    const x  = Math.min(mobDragStartWX, cursorWX);
+    const y  = Math.min(mobDragStartWY, cursorWY);
+    const w  = Math.abs(cursorWX - mobDragStartWX) || 50;
+    const h  = Math.abs(cursorWY - mobDragStartWY) || 50;
+    renderMobZone({ type: selectedType, x, y, width: w, height: h, quantity: 1 }, 0.5);
+  }
+
+  // Object/NPC placement preview under cursor (only when not dragging a mob)
+  if (selectedType && cursorOnCanvas && selectedCategory !== 'mob') {
     renderObject(selectedType, cursorWX, cursorWY, selectedCategory, 0.45);
   }
 
@@ -291,13 +373,12 @@ function renderObject(type, wx, wy, category, alpha) {
 
   if (category === 'npc') {
     const img = images['npc_' + type];
-    const dw = NPC_DISPLAY_W * zoom;
-    const dh = NPC_DISPLAY_H * zoom;
-    if (img && img.complete && img.naturalWidth > 0) {
-      // Draw just the first "walk-down" frame (row 0, col 0) — sprite sheet is 576×256, 9 cols × 4 rows
-      const frameW = img.naturalWidth  / 9;
-      const frameH = img.naturalHeight / 4;
-      ctx.drawImage(img, 0, 0, frameW, frameH, sx, sy, dw, dh);
+    const loaded = img && img.complete && img.naturalWidth > 0;
+    // Use the image's own dimensions so any NPC sprite renders at its natural size
+    const dw = (loaded ? img.naturalWidth  : NPC_DISPLAY_W) * zoom;
+    const dh = (loaded ? img.naturalHeight : NPC_DISPLAY_H) * zoom;
+    if (loaded) {
+      ctx.drawImage(img, sx, sy, dw, dh);
     } else {
       ctx.fillStyle = '#2a5a9a';
       ctx.fillRect(sx, sy, dw, dh);
@@ -315,6 +396,56 @@ function renderObject(type, wx, wy, category, alpha) {
     const dh = def.imageHeight * zoom;
     drawImageFit(ctx, img, def, sx, sy, dw, dh, type);
   }
+
+  ctx.globalAlpha = 1;
+}
+
+function renderMobZone(mob, alpha) {
+  const def = mobRegistry[mob.type];
+  if (!def) return;
+
+  const tl = worldToScreen(mob.x, mob.y);
+  const br = worldToScreen(mob.x + mob.width, mob.y + mob.height);
+  const zw = br.x - tl.x;
+  const zh = br.y - tl.y;
+  if (zw < 1 || zh < 1) return;
+
+  ctx.globalAlpha = alpha;
+
+  // Zone fill
+  ctx.fillStyle = 'rgba(40,110,40,0.18)';
+  ctx.fillRect(tl.x, tl.y, zw, zh);
+
+  // Dashed border
+  ctx.strokeStyle = '#6add6a';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.strokeRect(tl.x, tl.y, zw, zh);
+  ctx.setLineDash([]);
+
+  // Mob sprite (first goDown frame) centred in zone
+  const img = images['mob_' + mob.type];
+  if (img && img.complete && img.naturalWidth > 0) {
+    const cols = img.naturalWidth / def.frameWidth;
+    const row3col0 = 3 * cols;
+    const sx = (row3col0 % cols) * def.frameWidth;
+    const sy = Math.floor(row3col0 / cols) * def.frameHeight;
+    const scale = Math.min((zw * 0.45) / def.frameWidth, (zh * 0.45) / def.frameHeight, 2);
+    const dw = def.frameWidth  * scale;
+    const dh = def.frameHeight * scale;
+    try {
+      ctx.drawImage(img, sx, sy, def.frameWidth, def.frameHeight,
+                    tl.x + zw / 2 - dw / 2, tl.y + zh / 2 - dh / 2, dw, dh);
+    } catch (_) {}
+  }
+
+  // Label
+  ctx.fillStyle = '#aeffae';
+  const fontSize = Math.max(10, Math.min(14, zw / 8));
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(mob.type, tl.x + zw / 2, tl.y + 3);
 
   ctx.globalAlpha = 1;
 }
@@ -382,11 +513,22 @@ canvas.addEventListener('mousedown', e => {
     return;
   }
 
-  // Left click: place selected object
+  // Left click: start mob drag OR place object/NPC
   if (e.button === 0 && selectedType) {
     const world = screenToWorld(sx, sy);
     const wx = Math.round(world.x);
     const wy = Math.round(world.y);
+
+    if (selectedCategory === 'mob') {
+      // Begin drag to define spawn rectangle
+      isDraggingMob  = true;
+      mobDragStartWX = wx;
+      mobDragStartWY = wy;
+      canvas.style.cursor = 'crosshair';
+      e.preventDefault();
+      return;
+    }
+
     if (wx < 0 || wy < 0 || wx > mapWidth || wy > mapHeight) return;
 
     if (selectedCategory === 'npc') {
@@ -398,8 +540,30 @@ canvas.addEventListener('mousedown', e => {
   }
 });
 
-// Stop panning on mouseup anywhere in the document
+// Stop panning / finalise mob rect on mouseup anywhere in the document
 document.addEventListener('mouseup', e => {
+  if (isDraggingMob) {
+    isDraggingMob = false;
+    if (selectedType) {
+      const def = mobRegistry[selectedType];
+      const x = Math.min(mobDragStartWX, cursorWX);
+      const y = Math.min(mobDragStartWY, cursorWY);
+      const w = Math.max(50, Math.abs(cursorWX - mobDragStartWX));
+      const h = Math.max(50, Math.abs(cursorWY - mobDragStartWY));
+      placedMobs.push({
+        type:                       selectedType,
+        x, y, width: w, height: h,
+        speed:                      def.defaultSpeed,
+        changeTime:                 def.defaultChangeTime,
+        specialTime:                def.defaultSpecialTime,
+        chanceOfDoingSpecialAction: def.defaultChanceOfSpecialAction,
+        howManyAnimationsPerSec:    def.defaultFrameRate,
+      });
+      updateStatus();
+    }
+    canvas.style.cursor = 'crosshair';
+    return;
+  }
   if (isPanning) {
     isPanning = false;
     canvas.style.cursor = spaceDown ? 'grab' : 'crosshair';
@@ -426,6 +590,17 @@ canvas.addEventListener('contextmenu', e => {
   if (objIdx !== -1) {
     placedObjects.splice(objIdx, 1);
     updateStatus();
+    return;
+  }
+
+  // Then mob zones (click anywhere inside the rectangle)
+  for (let i = placedMobs.length - 1; i >= 0; i--) {
+    const m = placedMobs[i];
+    if (wx >= m.x && wx <= m.x + m.width && wy >= m.y && wy <= m.y + m.height) {
+      placedMobs.splice(i, 1);
+      updateStatus();
+      return;
+    }
   }
 });
 
@@ -453,18 +628,20 @@ document.addEventListener('keydown', e => {
       canvas.style.cursor = 'grab';
     }
   }
-  // Delete/Backspace: remove last placed object
+  // Delete/Backspace: remove the last placed item in the active category
   if ((e.code === 'Delete' || e.code === 'Backspace') && document.activeElement === document.body) {
-    if (placedNpcs.length > 0 || placedObjects.length > 0) {
-      // Remove whichever was placed last by comparing array lengths
-      // Simple heuristic: remove from whichever category was used last
-      if (placedObjects.length > 0) {
-        placedObjects.pop();
-      } else {
-        placedNpcs.pop();
-      }
-      updateStatus();
+    if (selectedCategory === 'mob' && placedMobs.length > 0) {
+      placedMobs.pop();
+    } else if (selectedCategory === 'npc' && placedNpcs.length > 0) {
+      placedNpcs.pop();
+    } else if (placedObjects.length > 0) {
+      placedObjects.pop();
+    } else if (placedMobs.length > 0) {
+      placedMobs.pop();
+    } else if (placedNpcs.length > 0) {
+      placedNpcs.pop();
     }
+    updateStatus();
   }
   // Escape: deselect
   if (e.code === 'Escape') {
@@ -504,7 +681,7 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  const data = { objects: placedObjects, npcs: placedNpcs };
+  const data = { objects: placedObjects, npcs: placedNpcs, mobs: placedMobs };
 
   statusBar.textContent = `Saving ${name}.json…`;
   try {
@@ -515,7 +692,7 @@ saveBtn.addEventListener('click', async () => {
     });
     const json = await res.json();
     if (json.ok) {
-      statusBar.textContent = `Saved → public/assets/maps/placement/${name}.json  (${placedObjects.length} objects, ${placedNpcs.length} NPCs)`;
+      statusBar.textContent = `Saved → public/assets/maps/placement/${name}.json  (${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones)`;
     } else {
       statusBar.textContent = `Save failed: ${json.error}`;
     }
@@ -542,7 +719,8 @@ loadBtn.addEventListener('click', async () => {
     const data = await res.json();
     placedObjects = Array.isArray(data.objects) ? data.objects : [];
     placedNpcs    = Array.isArray(data.npcs)    ? data.npcs    : [];
-    statusBar.textContent = `Loaded ${name}.json — ${placedObjects.length} objects, ${placedNpcs.length} NPCs`;
+    placedMobs    = Array.isArray(data.mobs)    ? data.mobs    : [];
+    statusBar.textContent = `Loaded ${name}.json — ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones`;
   } catch (err) {
     statusBar.textContent = `Load error: ${err.message}`;
   }
@@ -550,10 +728,12 @@ loadBtn.addEventListener('click', async () => {
 
 // ── Clear ──────────────────────────────────────────────────────────────────────
 clearBtn.addEventListener('click', () => {
-  if (placedObjects.length === 0 && placedNpcs.length === 0) return;
-  if (confirm(`Clear all ${placedObjects.length + placedNpcs.length} placed items?`)) {
+  const total = placedObjects.length + placedNpcs.length + placedMobs.length;
+  if (total === 0) return;
+  if (confirm(`Clear all ${total} placed items?`)) {
     placedObjects = [];
     placedNpcs    = [];
+    placedMobs    = [];
     updateStatus();
   }
 });
@@ -562,37 +742,48 @@ clearBtn.addEventListener('click', () => {
 function updateStatus() {
   const sel    = selectedType ? `Selected: ${selectedType}` : 'No selection';
   const coords = cursorOnCanvas ? `  Cursor: (${cursorWX}, ${cursorWY})` : '';
-  const count  = `  Objects: ${placedObjects.length}  NPCs: ${placedNpcs.length}`;
-  statusBar.textContent = sel + coords + count;
+  const count  = `  Objects: ${placedObjects.length}  NPCs: ${placedNpcs.length}  Mob zones: ${placedMobs.length}`;
+  const hint   = selectedCategory === 'mob' ? '  — drag to draw spawn rect' : '';
+  statusBar.textContent = sel + hint + coords + count;
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────────
 async function init() {
   resizeCanvas();
 
-  // Try to fetch registry from server
-  let rawRegistry = {};
-  try {
-    const res = await fetch('/design/objects');
-    rawRegistry = await res.json();
-  } catch (err) {
-    statusBar.textContent = `Failed to load object registry: ${err.message}`;
+  // Fetch both registries in parallel
+  const [objectsRes, mobsRes] = await Promise.allSettled([
+    fetch('/design/objects'),
+    fetch('/design/mobs'),
+  ]);
+
+  if (objectsRes.status === 'fulfilled' && objectsRes.value.ok) {
+    registry = await objectsRes.value.json();
+  } else {
+    statusBar.textContent = 'Failed to load object registry';
   }
 
-  registry = rawRegistry;
+  if (mobsRes.status === 'fulfilled' && mobsRes.value.ok) {
+    mobRegistry = await mobsRes.value.json();
+  } else {
+    statusBar.textContent = 'Failed to load mob registry';
+  }
 
   // Load images for all static objects
   for (const key of Object.keys(registry)) {
     loadImage(key, imagePathForKey(key));
   }
 
-  // Load NPC sprite images (the player skin sheets serve as stand-ins)
-  // Trader uses the first male skin as a placeholder if no dedicated sprite exists
+  // Load NPC sprite images
   for (const npcType of NPC_TYPES) {
     const img = new Image();
-    // Try a dedicated NPC sprite first; fall back gracefully (no onerror needed)
     img.src = `/assets/npcs/${npcType}.png`;
     images['npc_' + npcType] = img;
+  }
+
+  // Load mob sprite sheets
+  for (const key of Object.keys(mobRegistry)) {
+    loadImage('mob_' + key, `/assets/mobs/${key}.png`);
   }
 
   // Fit map to viewport and start render loop

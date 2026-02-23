@@ -456,11 +456,6 @@
       "y": 115
     },
     {
-      "type": "house_cottage_big",
-      "x": 1830,
-      "y": 1700
-    },
-    {
       "type": "house_cottage_small",
       "x": 1560,
       "y": 1575
@@ -651,6 +646,88 @@
       "type": "trader",
       "x": 1000,
       "y": 1000
+    }
+  ],
+  "mobs": [
+    {
+      "type": "butterfly",
+      "x": 934,
+      "y": 1063,
+      "width": 50,
+      "height": 50,
+      "quantity": 1
+    },
+    {
+      "type": "chicken",
+      "x": 973,
+      "y": 1162,
+      "width": 50,
+      "height": 50,
+      "quantity": 1
+    },
+    {
+      "type": "cat",
+      "x": 870,
+      "y": 1182,
+      "width": 50,
+      "height": 50,
+      "quantity": 1
+    },
+    {
+      "type": "cow",
+      "x": 920,
+      "y": 1252,
+      "width": 50,
+      "height": 50,
+      "quantity": 1
+    },
+    {
+      "type": "cow",
+      "x": 1040,
+      "y": 1262,
+      "width": 50,
+      "height": 50,
+      "quantity": 1
+    },
+    {
+      "type": "dog",
+      "x": 854,
+      "y": 1143,
+      "width": 50,
+      "height": 50,
+      "quantity": 1
+    },
+    {
+      "type": "pig",
+      "x": 831,
+      "y": 1435,
+      "width": 50,
+      "height": 50,
+      "quantity": 1
+    },
+    {
+      "type": "butterfly",
+      "x": 1611,
+      "y": 1179,
+      "width": 50,
+      "height": 50,
+      "quantity": 1
+    },
+    {
+      "type": "butterfly",
+      "x": 1326,
+      "y": 505,
+      "width": 50,
+      "height": 50,
+      "quantity": 1
+    },
+    {
+      "type": "butterfly",
+      "x": 1050,
+      "y": 525,
+      "width": 50,
+      "height": 50,
+      "quantity": 1
     }
   ]
 }

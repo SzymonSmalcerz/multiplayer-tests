@@ -4,6 +4,8 @@ import {
   StaticObjectData, EnemyData, EnemyEntity, NpcData,
 } from "./types";
 import { STATIC_OBJECT_REGISTRY } from "../shared/staticObjects";
+import { MOB_REGISTRY } from "../shared/mobs";
+import { MobSystem } from "./MobSystem";
 import { ShopUI } from "./ui/ShopUI";
 import { ALL_SKINS, FRAME_W as FRAME_SIZE } from "./skins";
 import {
@@ -193,6 +195,9 @@ export class GameScene extends Phaser.Scene {
   private shopUI!: ShopUI;
   private npcPositions: Array<{ type: string; x: number; y: number }> = [];
 
+  // Mobs (client-side only, purely decorative)
+  private mobSystem!: MobSystem;
+
   // Weapon HUD (bottom-right)
   private weaponHudBg!:      Phaser.GameObjects.Graphics;
   private weaponHudIcon!:    Phaser.GameObjects.Image;
@@ -240,6 +245,14 @@ export class GameScene extends Phaser.Scene {
       } else {
         this.load.image(key, `/assets/entities/${key}.png`);
       }
+    }
+
+    // Mob sprite sheets (client-side only, no server logic)
+    for (const [key, def] of Object.entries(MOB_REGISTRY)) {
+      this.load.spritesheet(key, `/assets/mobs/${key}.png`, {
+        frameWidth:  def.frameWidth,
+        frameHeight: def.frameHeight,
+      });
     }
 
     // Weapon attacking sprites (rotated procedurally during orbit animation)
@@ -311,6 +324,10 @@ export class GameScene extends Phaser.Scene {
 
     // ── Weapon HUD ───────────────────────────────────────────────────────────
     this.createWeaponHUD();
+
+    // ── Mob system ───────────────────────────────────────────────────────────
+    this.mobSystem = new MobSystem(this);
+    this.events.once("shutdown", () => this.mobSystem.destroy());
 
     // ── Input ────────────────────────────────────────────────────────────────
     this.cursors  = this.input.keyboard!.createCursorKeys();
@@ -462,6 +479,7 @@ export class GameScene extends Phaser.Scene {
     this.handleLocalMovement(delta);
     this.interpolateRemotePlayers(delta);
     this.updateEnemies();
+    this.mobSystem.update();
     this.updateHUD();
     this.updatePartyHUD();
     this.updateLeaderboard();
@@ -1206,6 +1224,7 @@ export class GameScene extends Phaser.Scene {
       this.buildNavGrid(data.objects);
       this.physics.add.collider(this.localSprite, this.staticObjectsGroup);
       this.placeNpcs(data.npcs ?? []);
+      this.mobSystem.createMobs(data.mobs ?? []);
     });
     this.room.send("get_map");
 

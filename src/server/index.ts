@@ -5,6 +5,7 @@ import fs from "fs";
 import { createServer } from "http";
 import path from "path";
 import { STATIC_OBJECT_REGISTRY } from "../shared/staticObjects";
+import { MOB_REGISTRY } from "../shared/mobs";
 import { GameRoom } from "./GameRoom";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -29,6 +30,11 @@ app.get("/design", (_req, res) => {
 // Expose the static object registry so designer JS needs no TypeScript import
 app.get("/design/objects", (_req, res) => {
   res.json(STATIC_OBJECT_REGISTRY);
+});
+
+// Expose the mob registry for the designer
+app.get("/design/mobs", (_req, res) => {
+  res.json(MOB_REGISTRY);
 });
 
 // Save a map JSON file
