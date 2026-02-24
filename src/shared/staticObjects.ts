@@ -12,6 +12,10 @@ export interface StaticObjectDef {
   imageHeight: number;
   /** Collision rectangle in image-local pixels (from top-left of the image). */
   collision: { x0: number; y0: number; x1: number; y1: number };
+  /** Number of horizontal animation frames in the sprite sheet. Omit for static (non-animated) objects. */
+  frameCount?: number;
+  /** Animation playback speed in frames per second. Only used when frameCount > 1. */
+  frameRate?: number;
 }
 
 export const STATIC_OBJECT_REGISTRY: Record<string, StaticObjectDef> = {
@@ -192,10 +196,12 @@ export const STATIC_OBJECT_REGISTRY: Record<string, StaticObjectDef> = {
   },
   lamp: {
     type: "lamp",
-    // Displayed at 28×78 (1/3 original width); collision matches that display size
+    // imageWidth is one frame width (full image is 84×78 = 3 frames × 28 px)
     imageWidth: 28,
     imageHeight: 78,
     collision: { x0: 9, y0: 62, x1: 19, y1: 78 },
+    frameCount: 3,
+    frameRate: 8,
   },
   monument_lion: {
     type: "monument_lion",
@@ -212,10 +218,12 @@ export const STATIC_OBJECT_REGISTRY: Record<string, StaticObjectDef> = {
   },
   waterFountain: {
     type: "waterFountain",
-    // Displayed at 64×76 (½ original width); collision matches that display size
+    // imageWidth is one frame width (full image is 128×76 = 2 frames × 64 px)
     imageWidth: 64,
     imageHeight: 76,
     collision: { x0: 0, y0: 33, x1: 64, y1: 70 },
+    frameCount: 2,
+    frameRate: 6,
   },
   well: {
     type: "well",

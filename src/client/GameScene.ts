@@ -120,8 +120,9 @@ export class GameScene extends Phaser.Scene {
   private chatDisplay!: HTMLElement;
   private isTyping = false;
 
-  // Trees
+  // Static objects
   private staticObjectsGroup!: Phaser.Physics.Arcade.StaticGroup;
+  private animatedObjectsGroup!: Phaser.Physics.Arcade.StaticGroup;
 
   // HUD
   private hudHpBar!: Phaser.GameObjects.Graphics;
@@ -234,12 +235,14 @@ export class GameScene extends Phaser.Scene {
     this.load.image("x_red",   "/assets/shortestPath/xRed.png");
 
     // Static object images — trees live in /assets/trees/, everything else in /assets/entities/
+    // Animated objects (frameCount > 1) are loaded as spritesheets so Phaser can slice frames.
     const treeKeys = new Set(["tree1", "tree2", "tree3"]);
-    for (const key of Object.keys(STATIC_OBJECT_REGISTRY)) {
-      if (treeKeys.has(key)) {
-        this.load.image(key, `/assets/trees/${key}.png`);
+    for (const [key, def] of Object.entries(STATIC_OBJECT_REGISTRY)) {
+      const path = treeKeys.has(key) ? `/assets/trees/${key}.png` : `/assets/entities/${key}.png`;
+      if (def.frameCount && def.frameCount > 1) {
+        this.load.spritesheet(key, path, { frameWidth: def.imageWidth, frameHeight: def.imageHeight });
       } else {
-        this.load.image(key, `/assets/entities/${key}.png`);
+        this.load.image(key, path);
       }
     }
 
@@ -293,8 +296,9 @@ export class GameScene extends Phaser.Scene {
     // ── Physics world bounds ────────────────────────────────────────────────
     this.physics.world.setBounds(0, 0, MAP_W, MAP_H);
 
-    // ── Trees static group ──────────────────────────────────────────────────
-    this.staticObjectsGroup = this.physics.add.staticGroup();
+    // ── Static object groups ─────────────────────────────────────────────────
+    this.staticObjectsGroup    = this.physics.add.staticGroup();
+    this.animatedObjectsGroup  = this.physics.add.staticGroup({ classType: Phaser.Physics.Arcade.Sprite });
 
     // ── Animations ─────────────────────────────────────────────────────────
     this.createAnimations();
@@ -1230,6 +1234,21 @@ export class GameScene extends Phaser.Scene {
         });
       }
     }
+
+    // ── Animated static object animations ────────────────────────────────────
+    for (const [key, def] of Object.entries(STATIC_OBJECT_REGISTRY)) {
+      if (!def.frameCount || def.frameCount <= 1) continue;
+      if (!this.textures.exists(key)) continue;
+      const animKey = `anim_${key}`;
+      if (!this.anims.exists(animKey)) {
+        this.anims.create({
+          key:       animKey,
+          frames:    this.anims.generateFrameNumbers(key, { start: 0, end: def.frameCount - 1 }),
+          frameRate: def.frameRate ?? 8,
+          repeat:    -1,
+        });
+      }
+    }
   }
 
   private setupRoomListeners(): void {
@@ -1237,6 +1256,7 @@ export class GameScene extends Phaser.Scene {
       this.placeStaticObjects(data.objects);
       this.buildNavGrid(data.objects);
       this.physics.add.collider(this.localSprite, this.staticObjectsGroup);
+      this.physics.add.collider(this.localSprite, this.animatedObjectsGroup);
       this.placeNpcs(data.npcs ?? []);
       this.mobSystem.createMobs(data.mobs ?? []);
     });
@@ -2036,15 +2056,27 @@ export class GameScene extends Phaser.Scene {
       const def = STATIC_OBJECT_REGISTRY[obj.type];
       if (!def) continue;
 
-      const img = this.staticObjectsGroup.create(obj.x, obj.y, obj.type) as Phaser.Physics.Arcade.Image;
-      img.setDisplaySize(def.imageWidth, def.imageHeight);
-
-      const body = img.body as Phaser.Physics.Arcade.StaticBody;
-      body.setSize(def.collision.x1 - def.collision.x0, def.collision.y1 - def.collision.y0);
-      body.setOffset(def.collision.x0, def.collision.y0);
-      img.setDepth(obj.y + def.imageHeight / 2);
+      if (def.frameCount && def.frameCount > 1) {
+        // Animated — create sprite in animated group and play its looping animation
+        const sprite = this.animatedObjectsGroup.create(obj.x, obj.y, obj.type, 0) as Phaser.Physics.Arcade.Sprite;
+        sprite.setDisplaySize(def.imageWidth, def.imageHeight);
+        const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
+        body.setSize(def.collision.x1 - def.collision.x0, def.collision.y1 - def.collision.y0);
+        body.setOffset(def.collision.x0, def.collision.y0);
+        sprite.setDepth(obj.y + def.imageHeight / 2);
+        sprite.play(`anim_${obj.type}`);
+      } else {
+        // Non-animated — plain image
+        const img = this.staticObjectsGroup.create(obj.x, obj.y, obj.type) as Phaser.Physics.Arcade.Image;
+        img.setDisplaySize(def.imageWidth, def.imageHeight);
+        const body = img.body as Phaser.Physics.Arcade.StaticBody;
+        body.setSize(def.collision.x1 - def.collision.x0, def.collision.y1 - def.collision.y0);
+        body.setOffset(def.collision.x0, def.collision.y0);
+        img.setDepth(obj.y + def.imageHeight / 2);
+      }
     }
     this.staticObjectsGroup.refresh();
+    this.animatedObjectsGroup.refresh();
   }
 
   // ── Chat display ────────────────────────────────────────────────────────────

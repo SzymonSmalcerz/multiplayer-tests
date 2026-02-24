@@ -614,6 +614,16 @@
       "type": "wheat",
       "x": 1425,
       "y": 282
+    },
+    {
+      "type": "waterFountain",
+      "x": 1545,
+      "y": 345
+    },
+    {
+      "type": "lamp",
+      "x": 1661,
+      "y": 305
     }
   ],
   "npcs": [
