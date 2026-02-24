@@ -8,6 +8,7 @@ import { WeaponDef } from "../shared/weapons";
 import { MOB_REGISTRY } from "../shared/mobs";
 import { MobSystem } from "./MobSystem";
 import { ShopUI } from "./ui/ShopUI";
+import { EquipmentUI } from "./ui/EquipmentUI";
 import { ALL_SKINS, FRAME_W as FRAME_SIZE } from "./skins";
 import {
   xpForNextLevel,
@@ -192,6 +193,8 @@ export class GameScene extends Phaser.Scene {
 
   // Trader shop
   private shopUI!: ShopUI;
+  // Equipment panel
+  private equipmentUI!: EquipmentUI;
   private npcPositions: Array<{ type: string; x: number; y: number }> = [];
 
   // Mobs (client-side only, purely decorative)
@@ -267,6 +270,9 @@ export class GameScene extends Phaser.Scene {
         this.load.image(def.type, def.spritePath);
       }
     });
+
+    // Equipment panel background
+    this.load.image("eq_background", "/assets/design/eq_background.png");
 
     // Trader NPC
     this.load.image("trader", "/assets/npcs/trader.png");
@@ -344,6 +350,17 @@ export class GameScene extends Phaser.Scene {
       () => { this.ignoreNextMapClick = true; },
     );
 
+    // ── Equipment UI ─────────────────────────────────────────────────────────
+    this.equipmentUI = new EquipmentUI(
+      this,
+      this.weaponsRegistry,
+      () => {
+        const ps = this.room.state.players.get(this.mySessionId);
+        return ps ? { weapon: ps.weapon as string } : null;
+      },
+      () => { this.ignoreNextMapClick = true; },
+    );
+
     // ── Weapon HUD ───────────────────────────────────────────────────────────
     this.createWeaponHUD();
 
@@ -366,12 +383,13 @@ export class GameScene extends Phaser.Scene {
     // ── Chat UI ──────────────────────────────────────────────────────────────
     this.setupChatUI();
 
-    // ── I / Space key → attack ────────────────────────────────────────────────
+    // ── I key → equipment panel ───────────────────────────────────────────────
     this.keyI.on("down", () => {
       if (this.isTyping) return;
-      this.triggerAttack();
+      this.equipmentUI.toggle();
     });
 
+    // ── Space key → attack ────────────────────────────────────────────────────
     this.keySpace.on("down", () => {
       if (this.isTyping) return;
       this.triggerAttack();
@@ -392,8 +410,8 @@ export class GameScene extends Phaser.Scene {
     // ── Click / tap to move ──────────────────────────────────────────────────
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.isTyping) return;
-      // Block map clicks while the trader shop is open
-      if (this.shopUI.isShopOpen) return;
+      // Block map clicks while the trader shop or equipment panel is open
+      if (this.shopUI.isShopOpen || this.equipmentUI.isEquipmentOpen) return;
       // Sprite click handlers set this flag first; scene fires after
       if (this.ignoreNextMapClick) {
         this.ignoreNextMapClick = false;
