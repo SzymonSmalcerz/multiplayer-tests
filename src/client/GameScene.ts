@@ -3,7 +3,7 @@ import {
   GameSceneData, MapDataMessage, RemotePlayer, RemotePlayerEntity,
   StaticObjectData, EnemyData, EnemyEntity, NpcData,
 } from "./types";
-import { STATIC_OBJECT_REGISTRY } from "../shared/staticObjects";
+import { StaticObjectDef } from "../shared/staticObjects";
 import { MOB_REGISTRY } from "../shared/mobs";
 import { MobSystem } from "./MobSystem";
 import { ShopUI } from "./ui/ShopUI";
@@ -123,6 +123,7 @@ export class GameScene extends Phaser.Scene {
   // Static objects
   private staticObjectsGroup!: Phaser.Physics.Arcade.StaticGroup;
   private animatedObjectsGroup!: Phaser.Physics.Arcade.StaticGroup;
+  private objectsRegistry: Record<string, StaticObjectDef> = {};
 
   // HUD
   private hudHpBar!: Phaser.GameObjects.Graphics;
@@ -234,17 +235,20 @@ export class GameScene extends Phaser.Scene {
     this.load.image("x_green", "/assets/shortestPath/xGreen.png");
     this.load.image("x_red",   "/assets/shortestPath/xRed.png");
 
-    // Static object images — trees live in /assets/trees/, everything else in /assets/entities/
+    // All static object images — loaded from objects.json (built-ins + user-added).
     // Animated objects (frameCount > 1) are loaded as spritesheets so Phaser can slice frames.
-    const treeKeys = new Set(["tree1", "tree2", "tree3"]);
-    for (const [key, def] of Object.entries(STATIC_OBJECT_REGISTRY)) {
-      const path = treeKeys.has(key) ? `/assets/trees/${key}.png` : `/assets/entities/${key}.png`;
-      if (def.frameCount && def.frameCount > 1) {
-        this.load.spritesheet(key, path, { frameWidth: def.imageWidth, frameHeight: def.imageHeight });
-      } else {
-        this.load.image(key, path);
+    this.load.json("objects_registry", "/assets/entities/objects.json");
+    this.load.once("filecomplete-json-objects_registry", () => {
+      const defs = (this.cache.json.get("objects_registry") ?? {}) as Record<string, StaticObjectDef>;
+      for (const [key, def] of Object.entries(defs)) {
+        const spritePath = def.spritePath ?? `/assets/entities/${key}.png`;
+        if ((def.frameCount ?? 1) > 1) {
+          this.load.spritesheet(key, spritePath, { frameWidth: def.imageWidth, frameHeight: def.imageHeight });
+        } else {
+          this.load.image(key, spritePath);
+        }
       }
-    }
+    });
 
     // Mob sprite sheets (client-side only, no server logic)
     for (const [key, def] of Object.entries(MOB_REGISTRY)) {
@@ -299,6 +303,9 @@ export class GameScene extends Phaser.Scene {
     // ── Static object groups ─────────────────────────────────────────────────
     this.staticObjectsGroup    = this.physics.add.staticGroup();
     this.animatedObjectsGroup  = this.physics.add.staticGroup({ classType: Phaser.Physics.Arcade.Sprite });
+
+    // ── Object registry (populated from objects.json loaded in preload) ────────
+    this.objectsRegistry = (this.cache.json.get("objects_registry") ?? {}) as Record<string, StaticObjectDef>;
 
     // ── Animations ─────────────────────────────────────────────────────────
     this.createAnimations();
@@ -1236,7 +1243,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // ── Animated static object animations ────────────────────────────────────
-    for (const [key, def] of Object.entries(STATIC_OBJECT_REGISTRY)) {
+    for (const [key, def] of Object.entries(this.objectsRegistry)) {
       if (!def.frameCount || def.frameCount <= 1) continue;
       if (!this.textures.exists(key)) continue;
       const animKey = `anim_${key}`;
@@ -2053,26 +2060,43 @@ export class GameScene extends Phaser.Scene {
 
   private placeStaticObjects(objects: StaticObjectData[]): void {
     for (const obj of objects) {
-      const def = STATIC_OBJECT_REGISTRY[obj.type];
+      const def = this.objectsRegistry[obj.type];
       if (!def) continue;
 
-      if (def.frameCount && def.frameCount > 1) {
-        // Animated — create sprite in animated group and play its looping animation
-        const sprite = this.animatedObjectsGroup.create(obj.x, obj.y, obj.type, 0) as Phaser.Physics.Arcade.Sprite;
-        sprite.setDisplaySize(def.imageWidth, def.imageHeight);
-        const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
-        body.setSize(def.collision.x1 - def.collision.x0, def.collision.y1 - def.collision.y0);
-        body.setOffset(def.collision.x0, def.collision.y0);
-        sprite.setDepth(obj.y + def.imageHeight / 2);
-        sprite.play(`anim_${obj.type}`);
+      const animated = (def.frameCount ?? 1) > 1;
+
+      if (animated) {
+        if (def.collision) {
+          // Animated with collision — physics sprite
+          const sprite = this.animatedObjectsGroup.create(obj.x, obj.y, obj.type, 0) as Phaser.Physics.Arcade.Sprite;
+          sprite.setDisplaySize(def.imageWidth, def.imageHeight);
+          const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
+          body.setSize(def.collision.x1 - def.collision.x0, def.collision.y1 - def.collision.y0);
+          body.setOffset(def.collision.x0, def.collision.y0);
+          sprite.setDepth(obj.y + def.imageHeight / 2);
+          sprite.play(`anim_${obj.type}`);
+        } else {
+          // Animated, no collision — visual-only sprite
+          const sprite = this.add.sprite(obj.x, obj.y, obj.type, 0);
+          sprite.setDisplaySize(def.imageWidth, def.imageHeight);
+          sprite.setDepth(obj.y + def.imageHeight / 2);
+          sprite.play(`anim_${obj.type}`);
+        }
       } else {
-        // Non-animated — plain image
-        const img = this.staticObjectsGroup.create(obj.x, obj.y, obj.type) as Phaser.Physics.Arcade.Image;
-        img.setDisplaySize(def.imageWidth, def.imageHeight);
-        const body = img.body as Phaser.Physics.Arcade.StaticBody;
-        body.setSize(def.collision.x1 - def.collision.x0, def.collision.y1 - def.collision.y0);
-        body.setOffset(def.collision.x0, def.collision.y0);
-        img.setDepth(obj.y + def.imageHeight / 2);
+        if (def.collision) {
+          // Static with collision — physics image
+          const img = this.staticObjectsGroup.create(obj.x, obj.y, obj.type) as Phaser.Physics.Arcade.Image;
+          img.setDisplaySize(def.imageWidth, def.imageHeight);
+          const body = img.body as Phaser.Physics.Arcade.StaticBody;
+          body.setSize(def.collision.x1 - def.collision.x0, def.collision.y1 - def.collision.y0);
+          body.setOffset(def.collision.x0, def.collision.y0);
+          img.setDepth(obj.y + def.imageHeight / 2);
+        } else {
+          // Static, no collision — visual-only image
+          const img = this.add.image(obj.x, obj.y, obj.type);
+          img.setDisplaySize(def.imageWidth, def.imageHeight);
+          img.setDepth(obj.y + def.imageHeight / 2);
+        }
       }
     }
     this.staticObjectsGroup.refresh();
@@ -2160,8 +2184,8 @@ export class GameScene extends Phaser.Scene {
     this.navGrid = new Uint8Array(this.navCols * this.navRows);
 
     for (const obj of objects) {
-      const def = STATIC_OBJECT_REGISTRY[obj.type];
-      if (!def) continue;
+      const def = this.objectsRegistry[obj.type];
+      if (!def || !def.collision) continue;  // skip objects with no collision box
 
       // Convert image-local collision coords to world coords
       const imgLeft = obj.x - def.imageWidth  / 2;

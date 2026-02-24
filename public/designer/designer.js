@@ -107,7 +107,7 @@ function buildSidebar() {
   const otherKeys = Object.keys(registry).filter(k => !TREE_KEYS.has(k)).sort();
 
   addSection('Trees', treeKeys, 'object');
-  addSection('Objects', otherKeys, 'object');
+  addObjectSection(otherKeys);
   addNpcSection();
   addMobSection();
   addEnemySection();
@@ -125,6 +125,24 @@ function addSection(title, keys, category) {
     const item  = createSidebarItem(key, key, category);
     sidebar.appendChild(item);
   });
+}
+
+function addObjectSection(keys) {
+  const heading = document.createElement('div');
+  heading.className = 'sidebar-heading';
+  heading.textContent = 'Objects';
+  sidebar.appendChild(heading);
+
+  keys.forEach(key => {
+    const item = createSidebarItem(key, key, 'object');
+    sidebar.appendChild(item);
+  });
+
+  const addBtn = document.createElement('a');
+  addBtn.href      = '/design/object-builder';
+  addBtn.className = 'sidebar-add-btn';
+  addBtn.textContent = '+ Add new object';
+  sidebar.appendChild(addBtn);
 }
 
 function addNpcSection() {
@@ -204,14 +222,12 @@ function addMobSection() {
 }
 
 function addEnemySection() {
-  const keys = Object.keys(enemyRegistry).sort();
-  if (keys.length === 0) return;
-
   const heading = document.createElement('div');
   heading.className = 'sidebar-heading';
   heading.textContent = 'Enemies (click to place)';
   sidebar.appendChild(heading);
 
+  const keys = Object.keys(enemyRegistry).sort();
   keys.forEach(key => {
     const def  = enemyRegistry[key];
     const item = document.createElement('div');
@@ -241,6 +257,12 @@ function addEnemySection() {
     if (!img || img.complete) drawThumb();
     else { img.addEventListener('load', drawThumb); img.addEventListener('error', drawThumb); }
   });
+
+  const addBtn = document.createElement('a');
+  addBtn.href      = '/design/enemy-builder';
+  addBtn.className = 'sidebar-add-btn';
+  addBtn.textContent = '+ Add new enemy';
+  sidebar.appendChild(addBtn);
 }
 
 /**
@@ -249,14 +271,12 @@ function addEnemySection() {
  */
 function drawEnemyFrame(tc, img, def, cx, cy, size) {
   if (img && img.complete && img.naturalWidth > 0) {
-    const cols = Math.floor(img.naturalWidth / def.frameWidth);
-    const col  = def.idleFrame % cols;
-    const row  = Math.floor(def.idleFrame / cols);
-    const sx   = col * def.frameWidth;
-    const sy   = row * def.frameHeight;
+    // The assembled spritesheet always has idle row at y=0; first idle frame is at (0,0).
+    const sx    = 0;
+    const sy    = 0;
     const scale = size / Math.max(def.frameWidth, def.frameHeight);
-    const dw   = def.frameWidth  * scale;
-    const dh   = def.frameHeight * scale;
+    const dw    = def.frameWidth  * scale;
+    const dh    = def.frameHeight * scale;
     try {
       tc.drawImage(img, sx, sy, def.frameWidth, def.frameHeight,
                    cx - dw / 2, cy - dh / 2, dw, dh);

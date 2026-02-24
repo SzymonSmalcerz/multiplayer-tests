@@ -166,6 +166,27 @@ body {
   color: #ccc;
 }
 
+/* ── Sidebar add button ─────────────────────────────────────────────────────── */
+.sidebar-add-btn {
+  display: block;
+  margin: 6px 8px;
+  padding: 6px 10px;
+  background: #2a3d2a;
+  border: 1px dashed #5a8a5a;
+  border-radius: 4px;
+  color: #7abf7a;
+  font-size: 11px;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-add-btn:hover {
+  background: #3a5a3a;
+  color: #aaffaa;
+}
+
 /* ── Canvas container ───────────────────────────────────────────────────────── */
 #canvas-container {
   flex: 1;

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Object Builder</title>
+  <link rel="stylesheet" href="/designer/enemy-builder.css">
+  <style>
+    .ob-form {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      gap: 8px 12px;
+      max-width: 420px;
+      align-items: center;
+    }
+    .ob-form label {
+      font-size: 12px;
+      color: #bbb;
+      text-align: right;
+    }
+    .ob-form input[type="number"],
+    .ob-form input[type="text"] {
+      padding: 5px 8px;
+      background: #2a2a2a;
+      border: 1px solid #555;
+      color: #eee;
+      border-radius: 3px;
+      font-size: 13px;
+      width: 100%;
+    }
+    .ob-form input:focus { outline: none; border-color: #7adf7a; }
+    .ob-radio-row {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 14px;
+    }
+    .ob-radio-row label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #upload-drop {
+      border: 2px dashed #555;
+      border-radius: 6px;
+      padding: 28px 20px;
+      text-align: center;
+      color: #888;
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      max-width: 420px;
+    }
+    #upload-drop.drag-over { border-color: #7adf7a; background: #1e2e1e; }
+    #upload-drop input[type="file"] { display: none; }
+    #upload-preview {
+      display: none;
+      max-width: 100%;
+      max-height: 260px;
+      border: 1px solid #444;
+      background: #111;
+      image-rendering: pixelated;
+      margin-top: 10px;
+    }
+    #collision-canvas { cursor: crosshair; }
+    code {
+      background: #2a2a2a;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 12px;
+      color: #adf;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <strong>Object Builder</strong>
+    <span class="sep"> | </span>
+    <a href="/design" style="color:#aaa;font-size:12px">← Back to Map Designer</a>
+  </div>
+
+  <div id="eb-container">
+    <div id="step-indicator"></div>
+
+    <!-- Step 1: Upload -->
+    <div id="step-upload" class="eb-step"></div>
+
+    <!-- Step 2: Identifier -->
+    <div id="step-identifier" class="eb-step"></div>
+
+    <!-- Step 3: Animation config -->
+    <div id="step-animation" class="eb-step"></div>
+
+    <!-- Step 4: Collision box -->
+    <div id="step-collision" class="eb-step"></div>
+
+    <!-- Step 5: Review & Save -->
+    <div id="step-review" class="eb-step"></div>
+
+    <div id="eb-nav">
+      <button id="btn-prev">← Back</button>
+      <button id="btn-next">Next →</button>
+      <button id="btn-save" style="display:none">Save Object</button>
+    </div>
+    <div id="eb-status"></div>
+  </div>
+
+  <script src="/designer/object-builder.js"></script>
+</body>
+</html>

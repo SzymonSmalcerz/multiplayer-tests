@@ -5,7 +5,7 @@ import path from "path";
 import { xpForNextLevel }                    from "../shared/formulas";
 import { getHitbox, isInsideHitbox }          from "../shared/combat";
 import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../shared/economy";
-import { STATIC_OBJECT_REGISTRY }             from "../shared/staticObjects";
+import { OBJECT_REGISTRY }                    from "../shared/objects";
 import { ENEMY_REGISTRY }                     from "../shared/enemies";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ export class GameRoom extends Room<GameState> {
       enemies?: Array<{ type: string; x: number; y: number; respawnTime: number }>;
     };
     for (const obj of mapJson.objects) {
-      if (STATIC_OBJECT_REGISTRY[obj.type]) {
+      if (OBJECT_REGISTRY[obj.type]) {
         this.objectData.push({ type: obj.type, x: obj.x, y: obj.y });
       }
     }

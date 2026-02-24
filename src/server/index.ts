@@ -4,7 +4,7 @@ import express from "express";
 import fs from "fs";
 import { createServer } from "http";
 import path from "path";
-import { STATIC_OBJECT_REGISTRY } from "../shared/staticObjects";
+import { OBJECT_REGISTRY, loadObjectRegistry, StaticObjectDef } from "../shared/objects";
 import { MOB_REGISTRY } from "../shared/mobs";
 import { ENEMY_REGISTRY, loadEnemyRegistry, EnemyDef } from "../shared/enemies";
 import { GameRoom } from "./GameRoom";
@@ -21,7 +21,10 @@ const publicDir = path.resolve(__dirname, "../../public");
 app.use(express.static(publicDir));
 app.use(express.json({ limit: "4mb" }));  // raised to 4 mb for spritesheet base64 payloads
 
-// ── Load enemy registry from JSON (must happen before any route uses it) ─────
+// ── Load registries from JSON (must happen before any route uses them) ────────
+const objectsJsonPath = path.join(publicDir, "assets/entities/objects.json");
+loadObjectRegistry(objectsJsonPath);
+
 const enemiesJsonPath = path.join(publicDir, "assets/enemies/enemies.json");
 loadEnemyRegistry(enemiesJsonPath);
 
@@ -37,9 +40,14 @@ app.get("/design/enemy-builder", (_req, res) => {
   res.sendFile(path.join(publicDir, "designer/enemy-builder.html"));
 });
 
-// Expose the static object registry so designer JS needs no TypeScript import
+// Serve the object builder page
+app.get("/design/object-builder", (_req, res) => {
+  res.sendFile(path.join(publicDir, "designer/object-builder.html"));
+});
+
+// Expose the full object registry (built-ins + user-added)
 app.get("/design/objects", (_req, res) => {
-  res.json(STATIC_OBJECT_REGISTRY);
+  res.json(OBJECT_REGISTRY);
 });
 
 // Expose the mob registry for the designer
@@ -163,6 +171,79 @@ app.post("/design/save-enemy", (req, res) => {
       // Hot-reload: new enemy immediately visible in GET /design/enemies
       ENEMY_REGISTRY[body.type] = entry;
 
+      res.json({ ok: true, type: body.type, spritePath });
+    });
+  });
+});
+
+// Save a new static object: write PNG + update objects.json + hot-reload in-memory registry
+app.post("/design/save-object", (req, res) => {
+  const body = req.body as {
+    type:        string;
+    imageWidth:  number;
+    imageHeight: number;
+    frameCount?: number;
+    frameRate?:  number;
+    collision?:  { x0: number; y0: number; x1: number; y1: number };
+    imageBase64: string;
+  };
+
+  if (!body.type || !/^[a-z0-9_]+$/.test(body.type)) {
+    res.status(400).json({ error: "Invalid type key (lowercase alphanumeric and _ only)" });
+    return;
+  }
+
+  if (OBJECT_REGISTRY[body.type]) {
+    res.status(409).json({ error: `Type '${body.type}' already exists` });
+    return;
+  }
+
+  if (typeof body.imageWidth !== "number" || typeof body.imageHeight !== "number") {
+    res.status(400).json({ error: "Missing or invalid imageWidth / imageHeight" });
+    return;
+  }
+
+  if (!body.imageBase64) {
+    res.status(400).json({ error: "Missing imageBase64" });
+    return;
+  }
+
+  const base64    = body.imageBase64.replace(/^data:image\/png;base64,/, "");
+  const pngBuffer = Buffer.from(base64, "base64");
+  const spritePath = `/assets/entities/${body.type}.png`;
+  const pngPath   = path.join(publicDir, spritePath);
+
+  fs.writeFile(pngPath, pngBuffer, (pngErr) => {
+    if (pngErr) {
+      res.status(500).json({ error: `Failed to save PNG: ${pngErr.message}` });
+      return;
+    }
+
+    const entry: StaticObjectDef = {
+      type:        body.type,
+      imageWidth:  body.imageWidth,
+      imageHeight: body.imageHeight,
+      spritePath,
+      ...(body.frameCount && body.frameCount > 1 ? { frameCount: body.frameCount } : {}),
+      ...(body.frameRate  ? { frameRate: body.frameRate }  : {}),
+      ...(body.collision  ? { collision: body.collision }  : {}),
+    };
+
+    // Hot-reload into in-memory registry
+    OBJECT_REGISTRY[body.type] = entry;
+
+    // Persist to objects.json
+    const existing: Record<string, StaticObjectDef> = {};
+    try {
+      Object.assign(existing, JSON.parse(fs.readFileSync(objectsJsonPath, "utf-8")));
+    } catch { /* file might not exist yet */ }
+    existing[body.type] = entry;
+
+    fs.writeFile(objectsJsonPath, JSON.stringify(existing, null, 2), (jsonErr) => {
+      if (jsonErr) {
+        res.status(500).json({ error: `Saved PNG but failed to update objects.json: ${jsonErr.message}` });
+        return;
+      }
       res.json({ ok: true, type: body.type, spritePath });
     });
   });
