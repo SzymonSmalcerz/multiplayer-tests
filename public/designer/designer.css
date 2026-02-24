@@ -150,6 +150,13 @@ body {
   padding-left: 3px;
 }
 
+.sidebar-thumb-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+}
+
 .sidebar-thumb {
   width: 48px;
   height: 48px;
@@ -157,6 +164,37 @@ body {
   background: #2a2a2a;
   border-radius: 2px;
   border: 1px solid #383838;
+}
+
+/* Edit pencil icon overlaid on the thumbnail */
+.sidebar-edit-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 15px;
+  height: 15px;
+  background: rgba(20, 20, 20, 0.88);
+  border: 1px solid #555;
+  border-radius: 2px;
+  color: #aaa;
+  font-size: 9px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
+  z-index: 2;
+}
+
+.sidebar-item:hover .sidebar-edit-btn {
+  opacity: 1;
+}
+
+.sidebar-edit-btn:hover {
+  background: #3a5a3a;
+  border-color: #7adf7a;
+  color: #fff;
 }
 
 .sidebar-label {

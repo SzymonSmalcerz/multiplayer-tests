@@ -235,10 +235,22 @@ function addEnemySection() {
     item.dataset.type     = key;
     item.dataset.category = 'enemy';
 
+    const thumbWrap = document.createElement('div');
+    thumbWrap.className = 'sidebar-thumb-wrap';
+    item.appendChild(thumbWrap);
+
     const thumb = document.createElement('canvas');
     thumb.width = thumb.height = 48;
     thumb.className = 'sidebar-thumb';
-    item.appendChild(thumb);
+    thumbWrap.appendChild(thumb);
+
+    const editBtn = document.createElement('a');
+    editBtn.href      = `/design/enemy-editor?edit=${encodeURIComponent(key)}`;
+    editBtn.className = 'sidebar-edit-btn';
+    editBtn.title     = 'Edit enemy';
+    editBtn.textContent = '✏';
+    editBtn.addEventListener('click', e => e.stopPropagation());
+    thumbWrap.appendChild(editBtn);
 
     const label = document.createElement('div');
     label.className = 'sidebar-label';
@@ -325,12 +337,28 @@ function createSidebarItem(imageKey, type, category) {
   item.dataset.type = type;
   item.dataset.category = category;
 
+  // Thumbnail + edit-icon wrapper
+  const thumbWrap = document.createElement('div');
+  thumbWrap.className = 'sidebar-thumb-wrap';
+  item.appendChild(thumbWrap);
+
   // Thumbnail canvas
   const thumb = document.createElement('canvas');
   thumb.width  = 48;
   thumb.height = 48;
   thumb.className = 'sidebar-thumb';
-  item.appendChild(thumb);
+  thumbWrap.appendChild(thumb);
+
+  // Edit icon (objects only)
+  if (category === 'object') {
+    const editBtn = document.createElement('a');
+    editBtn.href      = `/design/object-builder?edit=${encodeURIComponent(type)}`;
+    editBtn.className = 'sidebar-edit-btn';
+    editBtn.title     = 'Edit object';
+    editBtn.textContent = '✏';
+    editBtn.addEventListener('click', e => e.stopPropagation());
+    thumbWrap.appendChild(editBtn);
+  }
 
   const label = document.createElement('div');
   label.className = 'sidebar-label';
@@ -936,9 +964,10 @@ async function init() {
     statusBar.textContent = 'Failed to load enemy registry';
   }
 
-  // Load images for all static objects
+  // Load images for all static objects (use spritePath from registry when available)
   for (const key of Object.keys(registry)) {
-    loadImage(key, imagePathForKey(key));
+    const src = (registry[key] && registry[key].spritePath) ? registry[key].spritePath : imagePathForKey(key);
+    loadImage(key, src);
   }
 
   // Load NPC sprite images

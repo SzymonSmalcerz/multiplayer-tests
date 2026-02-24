@@ -427,12 +427,6 @@
     "type": "bower_1",
     "imageWidth": 96,
     "imageHeight": 132,
-    "collision": {
-      "x0": 30,
-      "y0": 100,
-      "x1": 66,
-      "y1": 132
-    },
     "spritePath": "/assets/entities/bower_1.png"
   },
   "bower_2": {

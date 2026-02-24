@@ -45,6 +45,11 @@ app.get("/design/object-builder", (_req, res) => {
   res.sendFile(path.join(publicDir, "designer/object-builder.html"));
 });
 
+// Serve the enemy editor page
+app.get("/design/enemy-editor", (_req, res) => {
+  res.sendFile(path.join(publicDir, "designer/enemy-editor.html"));
+});
+
 // Expose the full object registry (built-ins + user-added)
 app.get("/design/objects", (_req, res) => {
   res.json(OBJECT_REGISTRY);
@@ -247,6 +252,187 @@ app.post("/design/save-object", (req, res) => {
       res.json({ ok: true, type: body.type, spritePath });
     });
   });
+});
+
+// Update an existing static object: optional image, optional rename, update objects.json
+app.post("/design/update-object", (req, res) => {
+  const body = req.body as {
+    originalType: string;
+    type:         string;
+    imageWidth:   number;
+    imageHeight:  number;
+    frameCount?:  number;
+    frameRate?:   number;
+    collision?:   { x0: number; y0: number; x1: number; y1: number };
+    imageBase64?: string;
+  };
+
+  const { originalType, type: newType } = body;
+
+  if (!originalType || !OBJECT_REGISTRY[originalType]) {
+    res.status(404).json({ error: `Type '${originalType}' not found` });
+    return;
+  }
+  if (!newType || !/^[a-z0-9_]+$/.test(newType)) {
+    res.status(400).json({ error: "Invalid type key (lowercase alphanumeric and _ only)" });
+    return;
+  }
+  if (newType !== originalType && OBJECT_REGISTRY[newType]) {
+    res.status(409).json({ error: `Type '${newType}' already exists` });
+    return;
+  }
+
+  const existingDef = OBJECT_REGISTRY[originalType];
+
+  const finalize = (spritePath: string) => {
+    const entry: StaticObjectDef = {
+      type:        newType,
+      imageWidth:  body.imageWidth,
+      imageHeight: body.imageHeight,
+      spritePath,
+      ...(body.frameCount && body.frameCount > 1 ? { frameCount: body.frameCount } : {}),
+      ...(body.frameRate  ? { frameRate: body.frameRate }  : {}),
+      ...(body.collision  ? { collision: body.collision }  : {}),
+    };
+
+    const existing: Record<string, StaticObjectDef> = {};
+    try {
+      Object.assign(existing, JSON.parse(fs.readFileSync(objectsJsonPath, "utf-8")));
+    } catch { /* file missing */ }
+
+    if (newType !== originalType) {
+      delete existing[originalType];
+      delete OBJECT_REGISTRY[originalType];
+    }
+    existing[newType]       = entry;
+    OBJECT_REGISTRY[newType] = entry;
+
+    fs.writeFile(objectsJsonPath, JSON.stringify(existing, null, 2), (jsonErr) => {
+      if (jsonErr) {
+        res.status(500).json({ error: `Failed to update objects.json: ${jsonErr.message}` });
+        return;
+      }
+      res.json({ ok: true, type: newType, spritePath });
+    });
+  };
+
+  if (body.imageBase64) {
+    const base64        = body.imageBase64.replace(/^data:image\/png;base64,/, "");
+    const pngBuffer     = Buffer.from(base64, "base64");
+    const newSpritePath = `/assets/entities/${newType}.png`;
+    const pngPath       = path.join(publicDir, newSpritePath);
+    fs.writeFile(pngPath, pngBuffer, (pngErr) => {
+      if (pngErr) {
+        res.status(500).json({ error: `Failed to save PNG: ${pngErr.message}` });
+        return;
+      }
+      finalize(newSpritePath);
+    });
+  } else {
+    // Keep the existing sprite path (no file rename needed)
+    finalize(existingDef.spritePath ?? `/assets/entities/${originalType}.png`);
+  }
+});
+
+// Update an existing enemy: optional image, optional rename, update enemies.json
+app.post("/design/update-enemy", (req, res) => {
+  const body = req.body as {
+    originalType:       string;
+    type:               string;
+    label:              string;
+    level:              number;
+    hp:                 number;
+    damage:             number;
+    xpReward:           number;
+    goldAmount:         number;
+    goldChance:         number;
+    defaultRespawnTime: number;
+    speed:              number;
+    aggroRange:         number;
+    attackRange:        number;
+    attackCooldownMs:   number;
+    frameWidth:         number;
+    frameHeight:        number;
+    framesPerState:     number;
+    hitbox:             { x: number; y: number; width: number; height: number };
+    spriteBase64?:      string;
+  };
+
+  const { originalType, type: newType } = body;
+
+  if (!originalType || !ENEMY_REGISTRY[originalType]) {
+    res.status(404).json({ error: `Enemy type '${originalType}' not found` });
+    return;
+  }
+  if (!newType || !/^[a-z0-9_]+$/.test(newType)) {
+    res.status(400).json({ error: "Invalid type key (lowercase alphanumeric and _ only)" });
+    return;
+  }
+  if (newType !== originalType && ENEMY_REGISTRY[newType]) {
+    res.status(409).json({ error: `Type '${newType}' already exists` });
+    return;
+  }
+
+  const existingDef = ENEMY_REGISTRY[originalType];
+
+  const finalize = (spritePath: string) => {
+    const entry: EnemyDef = {
+      type:               newType,
+      label:              body.label,
+      level:              body.level,
+      hp:                 body.hp,
+      damage:             body.damage,
+      xpReward:           body.xpReward,
+      goldAmount:         body.goldAmount,
+      goldChance:         body.goldChance,
+      defaultRespawnTime: body.defaultRespawnTime,
+      speed:              body.speed,
+      aggroRange:         body.aggroRange,
+      attackRange:        body.attackRange,
+      attackCooldownMs:   body.attackCooldownMs,
+      frameWidth:         body.frameWidth,
+      frameHeight:        body.frameHeight,
+      framesPerState:     body.framesPerState,
+      spritePath,
+      hitbox:             body.hitbox,
+    };
+
+    const existing: Record<string, unknown> = {};
+    try {
+      Object.assign(existing, JSON.parse(fs.readFileSync(enemiesJsonPath, "utf-8")));
+    } catch { /* file missing */ }
+
+    if (newType !== originalType) {
+      delete existing[originalType];
+      delete ENEMY_REGISTRY[originalType];
+    }
+    existing[newType]        = entry;
+    ENEMY_REGISTRY[newType]  = entry;
+
+    fs.writeFile(enemiesJsonPath, JSON.stringify(existing, null, 2), (jsonErr) => {
+      if (jsonErr) {
+        res.status(500).json({ error: `Failed to update enemies.json: ${jsonErr.message}` });
+        return;
+      }
+      res.json({ ok: true, type: newType, spritePath });
+    });
+  };
+
+  if (body.spriteBase64) {
+    const base64        = body.spriteBase64.replace(/^data:image\/png;base64,/, "");
+    const pngBuffer     = Buffer.from(base64, "base64");
+    const newSpritePath = `/assets/enemies/${newType}.png`;
+    const pngPath       = path.join(publicDir, "assets/enemies", `${newType}.png`);
+    fs.writeFile(pngPath, pngBuffer, (pngErr) => {
+      if (pngErr) {
+        res.status(500).json({ error: `Failed to save PNG: ${pngErr.message}` });
+        return;
+      }
+      finalize(newSpritePath);
+    });
+  } else {
+    finalize(existingDef.spritePath);
+  }
 });
 
 // Catch-all: always serve index.html for unknown routes

@@ -4,23 +4,30 @@
 const STEP_COUNT  = 5;
 const STEP_LABELS = ['Upload', 'Identifier', 'Animation', 'Collision', 'Review'];
 
+// Edit-mode state (set during init if ?edit= param is present)
+const editType         = new URLSearchParams(window.location.search).get('edit');
+const isEditMode       = !!editType;
+let   originalType     = null;   // the type being edited (before potential rename)
+let   existingSpritePath = null; // URL to current sprite on server
+
+// Wizard state
 let currentStep     = 1;
-let uploadedDataURL = null;   // full data:image/png;base64,… string
-let naturalW        = 0;      // original image pixel width
-let naturalH        = 0;      // original image pixel height
+let uploadedDataURL = null;   // data URL of a newly uploaded replacement image; null = keep existing
+let naturalW        = 0;
+let naturalH        = 0;
 let typeKey         = '';
 let isAnimated      = false;
 let frameCount      = 1;
 let frameRate       = 8;
-let frameWidth      = 0;      // single-frame width (naturalW when static)
+let frameWidth      = 0;
 let noCollision     = false;
-let collision       = null;   // { x0, y0, x1, y1 } in frame-local pixels, or null
+let collision       = null;   // { x0, y0, x1, y1 } in frame-local pixels
 
 let existingTypes   = new Set();
 
 // Collision canvas helpers
-let colImg          = null;   // HTMLImageElement used by collision canvas
-let colImgSrc       = null;   // tracks which dataURL colImg was built from
+let colImg          = null;
+let colImgSrc       = null;
 let colDragging     = false;
 let colDragStartImgX = 0;
 let colDragStartImgY = 0;
@@ -31,6 +38,12 @@ const statusEl = document.getElementById('eb-status');
 const btnPrev  = document.getElementById('btn-prev');
 const btnNext  = document.getElementById('btn-next');
 const btnSave  = document.getElementById('btn-save');
+
+// ── Image source helper ────────────────────────────────────────────────────────
+// In edit mode, fall back to the existing server-side sprite if no new file was uploaded.
+function getActiveImageSrc() {
+  return uploadedDataURL ?? existingSpritePath;
+}
 
 // ── Step management ────────────────────────────────────────────────────────────
 
@@ -58,10 +71,10 @@ function showStep(n) {
   document.querySelectorAll('.eb-step').forEach(el => el.classList.remove('active'));
   document.getElementById(STEP_IDS[n - 1]).classList.add('active');
 
-  btnPrev.disabled        = (n === 1);
-  btnNext.style.display   = (n < STEP_COUNT) ? '' : 'none';
-  btnSave.style.display   = (n === STEP_COUNT) ? '' : 'none';
-  btnSave.disabled        = false;
+  btnPrev.disabled      = (n === 1);
+  btnNext.style.display = (n < STEP_COUNT) ? '' : 'none';
+  btnSave.style.display = (n === STEP_COUNT) ? '' : 'none';
+  btnSave.disabled      = false;
 
   updateIndicator();
   clearStatus();
@@ -96,7 +109,7 @@ function clearStatus() {
 
 function validateStep(n) {
   if (n === 1) {
-    if (!uploadedDataURL) { setStatus('Please upload an image first.', true); return false; }
+    if (!getActiveImageSrc()) { setStatus('Please upload an image first.', true); return false; }
     return true;
   }
   if (n === 2) {
@@ -106,7 +119,8 @@ function validateStep(n) {
       setStatus('Type must be lowercase letters, digits, or underscores only.', true);
       return false;
     }
-    if (existingTypes.has(val)) {
+    const isUnchanged = isEditMode && val === originalType;
+    if (!isUnchanged && existingTypes.has(val)) {
       setStatus(`'${val}' already exists. Choose a different identifier.`, true);
       return false;
     }
@@ -119,7 +133,6 @@ function validateStep(n) {
     if (animated) {
       const fc = parseInt(document.getElementById('frame-count-input').value, 10);
       if (!fc || fc < 2) { setStatus('Frame count must be at least 2.', true); return false; }
-      if (fc > naturalW)  { setStatus('Frame count exceeds image width.', true); return false; }
       frameCount = fc;
       frameRate  = parseFloat(document.getElementById('frame-rate-input').value) || 8;
       if (frameRate <= 0) frameRate = 8;
@@ -131,20 +144,72 @@ function validateStep(n) {
     }
     return true;
   }
-  // Steps 4 and 5 need no mandatory validation
   return true;
+}
+
+// ── Edit-mode data loading ─────────────────────────────────────────────────────
+
+async function loadEditData(type) {
+  try {
+    const res = await fetch('/design/objects');
+    if (!res.ok) throw new Error('Failed to fetch objects registry');
+    const registry = await res.json();
+    const def = registry[type];
+    if (!def) { setStatus(`Object '${type}' not found in registry.`, true); return false; }
+
+    originalType      = type;
+    typeKey           = type;
+    existingSpritePath = def.spritePath || `/assets/entities/${type}.png`;
+
+    frameWidth = def.imageWidth;
+    naturalH   = def.imageHeight;
+    frameCount = def.frameCount || 1;
+    frameRate  = def.frameRate  || 8;
+    isAnimated = frameCount > 1;
+    naturalW   = frameWidth * frameCount;  // computed; real image may differ
+
+    if (def.collision) {
+      collision   = { ...def.collision };
+      noCollision = false;
+    } else {
+      collision   = null;
+      noCollision = true;
+    }
+
+    // Verify actual image dimensions (may differ from registry if manually edited)
+    await new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        naturalW = img.naturalWidth;
+        naturalH = img.naturalHeight;
+        frameWidth = isAnimated ? Math.round(naturalW / frameCount) : naturalW;
+        resolve();
+      };
+      img.onerror = resolve;
+      img.src = existingSpritePath;
+    });
+
+    return true;
+  } catch (err) {
+    setStatus(`Failed to load object data: ${err.message}`, true);
+    return false;
+  }
 }
 
 // ── Step 1: Upload ─────────────────────────────────────────────────────────────
 
 function buildUploadStep() {
   const el = document.getElementById('step-upload');
+  const editNote = isEditMode
+    ? '<p style="color:#7adf7a;font-size:12px;margin-top:4px">Edit mode — upload a replacement image, or skip to keep the current sprite.</p>'
+    : '';
   el.innerHTML = `
-    <h2>Step 1 — Upload Image</h2>
+    <h2>Step 1 — ${isEditMode ? 'Replace Image (optional)' : 'Upload Image'}</h2>
     <p>Upload a PNG for your object. For animated objects all frames must be in a single horizontal row of equal width.</p>
+    ${editNote}
     <div id="upload-drop">
       <input type="file" id="upload-file-input" accept=".png,image/png">
-      <div id="upload-drop-label">Click or drag-and-drop a PNG here</div>
+      <div id="upload-drop-label">${isEditMode ? 'Click or drag to upload a replacement PNG' : 'Click or drag-and-drop a PNG here'}</div>
     </div>
     <img id="upload-preview">
     <div id="upload-info" style="font-size:12px;color:#888;margin-top:6px"></div>
@@ -154,6 +219,13 @@ function buildUploadStep() {
   const fileInput = document.getElementById('upload-file-input');
   const preview   = document.getElementById('upload-preview');
   const infoEl    = document.getElementById('upload-info');
+
+  // In edit mode, show existing image immediately
+  if (isEditMode && existingSpritePath) {
+    preview.src = existingSpritePath;
+    preview.style.display = '';
+    infoEl.textContent = `Current: ${existingSpritePath}`;
+  }
 
   function handleFile(file) {
     if (!file || !file.type.startsWith('image/')) return;
@@ -165,9 +237,11 @@ function buildUploadStep() {
         uploadedDataURL = dataURL;
         naturalW = img.naturalWidth;
         naturalH = img.naturalHeight;
+        // Update frameWidth if animation config already set
+        frameWidth = isAnimated ? Math.round(naturalW / frameCount) : naturalW;
         preview.src = dataURL;
         preview.style.display = '';
-        infoEl.textContent = `${naturalW} × ${naturalH} px`;
+        infoEl.textContent = `${naturalW} × ${naturalH} px (new)`;
         clearStatus();
       };
       img.src = dataURL;
@@ -190,12 +264,17 @@ function buildUploadStep() {
 
 function buildIdentifierStep() {
   const el = document.getElementById('step-identifier');
+  const renameNote = isEditMode
+    ? '<p style="color:#dfaa7a;font-size:12px;margin-top:4px">⚠ Renaming will not update existing map files that reference this type.</p>'
+    : '';
   el.innerHTML = `
-    <h2>Step 2 — Object Identifier</h2>
-    <p>Choose a unique type key for this object. Only lowercase letters, digits, and underscores (e.g. <code>my_lamp</code>).</p>
+    <h2>Step 2 — ${isEditMode ? 'Type Identifier (rename optional)' : 'Object Identifier'}</h2>
+    <p>Unique type key for this object. Only lowercase letters, digits, and underscores (e.g. <code>my_lamp</code>).</p>
+    ${renameNote}
     <div class="ob-form" style="margin-top:8px">
       <label for="type-key-input">Type key</label>
-      <input id="type-key-input" type="text" placeholder="e.g. my_lamp" autocomplete="off" spellcheck="false">
+      <input id="type-key-input" type="text" placeholder="e.g. my_lamp" autocomplete="off" spellcheck="false"
+             value="${isEditMode ? typeKey : ''}">
     </div>
     <div id="type-check-hint" style="font-size:12px;margin-top:10px;color:#888"></div>
   `;
@@ -203,12 +282,15 @@ function buildIdentifierStep() {
   const input = document.getElementById('type-key-input');
   const hint  = document.getElementById('type-check-hint');
 
-  input.addEventListener('input', () => {
+  function updateHint() {
     const v = input.value.trim().toLowerCase();
     if (!v) { hint.textContent = ''; return; }
     if (!/^[a-z0-9_]+$/.test(v)) {
       hint.style.color = '#df7a7a';
       hint.textContent = 'Only lowercase letters, digits, and underscores allowed.';
+    } else if (isEditMode && v === originalType) {
+      hint.style.color = '#888';
+      hint.textContent = `'${v}' — current identifier (unchanged).`;
     } else if (existingTypes.has(v)) {
       hint.style.color = '#df7a7a';
       hint.textContent = `'${v}' is already taken.`;
@@ -216,7 +298,9 @@ function buildIdentifierStep() {
       hint.style.color = '#7adf7a';
       hint.textContent = `'${v}' is available.`;
     }
-  });
+  }
+  input.addEventListener('input', updateHint);
+  if (isEditMode) updateHint();
 }
 
 // ── Step 3: Animation ──────────────────────────────────────────────────────────
@@ -227,15 +311,15 @@ function buildAnimationStep() {
     <h2>Step 3 — Animation</h2>
     <p>Is this a static image or an animated spritesheet with all frames in one horizontal row?</p>
     <div class="ob-radio-row">
-      <label><input type="radio" name="anim-mode" value="static" checked> Static (no animation)</label>
-      <label><input type="radio" name="anim-mode" value="animated"> Animated spritesheet</label>
+      <label><input type="radio" name="anim-mode" value="static" ${!isAnimated ? 'checked' : ''}> Static (no animation)</label>
+      <label><input type="radio" name="anim-mode" value="animated" ${isAnimated ? 'checked' : ''}> Animated spritesheet</label>
     </div>
-    <div id="anim-config" style="display:none">
+    <div id="anim-config" style="display:${isAnimated ? '' : 'none'}">
       <div class="ob-form">
         <label for="frame-count-input">Number of frames</label>
-        <input id="frame-count-input" type="number" min="2" max="256" value="2">
+        <input id="frame-count-input" type="number" min="2" max="256" value="${frameCount > 1 ? frameCount : 2}">
         <label for="frame-rate-input">Frame rate (fps)</label>
-        <input id="frame-rate-input" type="number" min="1" max="60" value="8">
+        <input id="frame-rate-input" type="number" min="1" max="60" value="${frameRate}">
       </div>
       <div id="anim-frame-info" style="font-size:12px;color:#888;margin-top:10px"></div>
       <canvas id="anim-preview-canvas"
@@ -251,14 +335,7 @@ function onEnterAnimationStep() {
   const fcInput    = document.getElementById('frame-count-input');
   const frInput    = document.getElementById('frame-rate-input');
 
-  // Restore previously chosen values
-  if (isAnimated) {
-    document.querySelector('input[name="anim-mode"][value="animated"]').checked = true;
-    fcInput.value = frameCount;
-    frInput.value = frameRate;
-    animConfig.style.display = '';
-    updateAnimPreview();
-  }
+  if (isAnimated) updateAnimPreview();
 
   radios.forEach(r => r.addEventListener('change', () => {
     const anim = document.querySelector('input[name="anim-mode"]:checked').value === 'animated';
@@ -266,31 +343,30 @@ function onEnterAnimationStep() {
     if (anim) updateAnimPreview();
   }));
   fcInput.addEventListener('input', updateAnimPreview);
-  frInput.addEventListener('input', updateAnimPreview);
 }
 
 function updateAnimPreview() {
-  const fcInput   = document.getElementById('frame-count-input');
-  const infoEl    = document.getElementById('anim-frame-info');
-  const cvs       = document.getElementById('anim-preview-canvas');
+  const fcInput = document.getElementById('frame-count-input');
+  const infoEl  = document.getElementById('anim-frame-info');
+  const cvs     = document.getElementById('anim-preview-canvas');
   const fc = parseInt(fcInput.value, 10) || 0;
-  if (!fc || fc < 2 || !uploadedDataURL) { if (infoEl) infoEl.textContent = ''; return; }
+  if (!fc || fc < 2 || !getActiveImageSrc()) { if (infoEl) infoEl.textContent = ''; return; }
   const fw = Math.round(naturalW / fc);
   if (infoEl) infoEl.textContent = `Each frame: ${fw} × ${naturalH} px`;
 
   const img = new Image();
   img.onload = () => {
     const maxDisplay = 200;
-    const scale = Math.min(maxDisplay / fw, maxDisplay / naturalH);
+    const scale = Math.min(maxDisplay / fw, maxDisplay / img.naturalHeight);
+    const fh = img.naturalHeight;
     cvs.width  = Math.round(fw * scale);
-    cvs.height = Math.round(naturalH * scale);
+    cvs.height = Math.round(fh * scale);
     const tc = cvs.getContext('2d');
     tc.imageSmoothingEnabled = false;
     tc.clearRect(0, 0, cvs.width, cvs.height);
-    // Draw first frame only
-    tc.drawImage(img, 0, 0, fw, naturalH, 0, 0, cvs.width, cvs.height);
+    tc.drawImage(img, 0, 0, fw, fh, 0, 0, cvs.width, cvs.height);
   };
-  img.src = uploadedDataURL;
+  img.src = getActiveImageSrc();
 }
 
 // ── Step 4: Collision ──────────────────────────────────────────────────────────
@@ -321,22 +397,25 @@ function buildCollisionStep() {
 }
 
 function onEnterCollisionStep() {
-  const noCbEl  = document.getElementById('no-collision-cb');
-  const editor  = document.getElementById('collision-editor');
-  const coordEl = document.getElementById('col-coords');
+  const noCbEl   = document.getElementById('no-collision-cb');
+  const coordEl  = document.getElementById('col-coords');
   const resetBtn = document.getElementById('col-reset-btn');
-  const colCvs  = document.getElementById('collision-canvas');
+  const colCvs   = document.getElementById('collision-canvas');
 
   noCbEl.checked = noCollision;
   setEditorEnabled(!noCollision);
 
+  // Restore collision coord display if entering from a previous visit
+  if (!noCollision && collision) {
+    coordEl.textContent =
+      `x0:${collision.x0}  y0:${collision.y0}  x1:${collision.x1}  y1:${collision.y1}` +
+      `  (${collision.x1 - collision.x0} × ${collision.y1 - collision.y0} px)`;
+  }
+
   noCbEl.addEventListener('change', () => {
     noCollision = noCbEl.checked;
     setEditorEnabled(!noCollision);
-    if (noCollision) {
-      collision = null;
-      coordEl.textContent = 'No collision box';
-    }
+    if (noCollision) { collision = null; coordEl.textContent = 'No collision box'; }
   });
 
   resetBtn.addEventListener('click', () => {
@@ -372,18 +451,12 @@ function onEnterCollisionStep() {
       `  (${collision.x1 - collision.x0} × ${collision.y1 - collision.y0} px)`;
   });
 
-  // Restore existing collision coords text if user navigates back and forward
-  if (!noCollision && collision) {
-    coordEl.textContent =
-      `x0:${collision.x0}  y0:${collision.y0}  x1:${collision.x1}  y1:${collision.y1}` +
-      `  (${collision.x1 - collision.x0} × ${collision.y1 - collision.y0} px)`;
-  }
-
-  // Rebuild colImg if data URL changed (e.g., user went back and re-uploaded)
-  if (!colImg || colImgSrc !== uploadedDataURL) {
+  // Reset colImg if the active source changed
+  const activeSrc = getActiveImageSrc();
+  if (!colImg || colImgSrc !== activeSrc) {
     colImg    = new Image();
-    colImgSrc = uploadedDataURL;
-    colImg.src = uploadedDataURL;
+    colImgSrc = activeSrc;
+    colImg.src = activeSrc;
   }
 
   drawCollisionCanvas();
@@ -402,8 +475,6 @@ function drawCollisionCanvas() {
 
   const fw = frameWidth || naturalW;
   const fh = naturalH;
-
-  // Scale to fit within 380 px; upscale small images (max 6×) for usability
   const MAX_DISPLAY = 380;
   colDisplayScale = Math.max(1, Math.min(6, Math.min(MAX_DISPLAY / fw, MAX_DISPLAY / fh)));
 
@@ -415,7 +486,6 @@ function drawCollisionCanvas() {
 
   function draw() {
     tc.clearRect(0, 0, colCvs.width, colCvs.height);
-    // Draw first frame only (crop to frameWidth)
     tc.drawImage(colImg, 0, 0, fw, fh, 0, 0, colCvs.width, colCvs.height);
     if (collision) {
       const { x0, y0, x1, y1 } = collision;
@@ -444,13 +514,15 @@ function renderReview() {
     : `x0:${collision.x0}  y0:${collision.y0}  x1:${collision.x1}  y1:${collision.y1}`;
 
   el.innerHTML = `
-    <h2>Step 5 — Review & Save</h2>
+    <h2>Step 5 — Review & ${isEditMode ? 'Update' : 'Save'}</h2>
     <div id="review-wrap">
       <div id="review-summary">
+        <strong>Action:</strong> ${isEditMode ? `Update '${originalType}'${typeKey !== originalType ? ` → rename to '${typeKey}'` : ''}` : `Create '${typeKey}'`}<br>
         <strong>Type:</strong> ${typeKey}<br>
         <strong>Animated:</strong> ${isAnimated ? `Yes — ${frameCount} frames @ ${frameRate} fps` : 'No'}<br>
         <strong>Frame size:</strong> ${frameWidth} × ${naturalH} px<br>
         <strong>Collision:</strong> ${colInfo}<br>
+        ${isEditMode && !uploadedDataURL ? '<strong>Image:</strong> keeping existing sprite<br>' : ''}
       </div>
       <div id="review-preview-wrap">
         <canvas id="review-canvas"></canvas>
@@ -481,33 +553,39 @@ function renderReview() {
       tc.strokeRect(x0 * scale, y0 * scale, (x1 - x0) * scale, (y1 - y0) * scale);
     }
   };
-  img.src = uploadedDataURL;
+  img.src = getActiveImageSrc();
 }
 
-// ── Save ───────────────────────────────────────────────────────────────────────
+// ── Save / Update ──────────────────────────────────────────────────────────────
 
 async function saveObject() {
   btnSave.disabled = true;
-  setStatus('Saving…');
+  setStatus(isEditMode ? 'Updating…' : 'Saving…');
 
   const body = {
     type:        typeKey,
     imageWidth:  frameWidth,
     imageHeight: naturalH,
-    imageBase64: uploadedDataURL,
     ...(isAnimated ? { frameCount, frameRate } : {}),
     ...(!noCollision && collision ? { collision } : {}),
+    ...(uploadedDataURL ? { imageBase64: uploadedDataURL } : {}),
+    ...(isEditMode ? { originalType } : {}),
   };
 
+  const endpoint = isEditMode ? '/design/update-object' : '/design/save-object';
+
   try {
-    const res  = await fetch('/design/save-object', {
+    const res  = await fetch(endpoint, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(body),
     });
     const json = await res.json();
     if (json.ok) {
-      setStatus(`Saved! '${typeKey}' is now available in the map designer.`);
+      setStatus(isEditMode
+        ? `Updated! '${typeKey}' has been saved.`
+        : `Saved! '${typeKey}' is now available in the map designer.`
+      );
     } else {
       setStatus(`Error: ${json.error}`, true);
       btnSave.disabled = false;
@@ -530,6 +608,13 @@ async function init() {
     const res = await fetch('/design/objects');
     if (res.ok) existingTypes = new Set(Object.keys(await res.json()));
   } catch (_) {}
+
+  // In edit mode, load existing object data
+  if (isEditMode) {
+    document.querySelector('#toolbar strong').textContent = `Object Builder — Edit: ${editType}`;
+    const ok = await loadEditData(editType);
+    if (!ok) return;
+  }
 
   buildIndicator();
   buildUploadStep();

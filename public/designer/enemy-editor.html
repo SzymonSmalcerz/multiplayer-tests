@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Enemy Editor</title>
+  <link rel="stylesheet" href="/designer/enemy-builder.css">
+  <style>
+    #ee-layout {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+    #ee-form-col {
+      width: 380px;
+      flex-shrink: 0;
+      padding: 20px;
+      overflow-y: auto;
+      border-right: 1px solid #333;
+    }
+    #ee-canvas-col {
+      flex: 1;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow: auto;
+    }
+    #ee-form {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      gap: 8px 12px;
+      align-items: center;
+    }
+    #ee-form label {
+      font-size: 12px;
+      color: #bbb;
+      text-align: right;
+    }
+    #ee-form input[type="text"],
+    #ee-form input[type="number"] {
+      padding: 5px 8px;
+      background: #2a2a2a;
+      border: 1px solid #555;
+      color: #eee;
+      border-radius: 3px;
+      font-size: 13px;
+      width: 100%;
+    }
+    #ee-form input:focus { outline: none; border-color: #7adf7a; }
+    .ee-section-title {
+      grid-column: 1 / -1;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #666;
+      border-top: 1px solid #333;
+      padding-top: 10px;
+      margin-top: 4px;
+    }
+    #ee-rename-warn {
+      display: none;
+      grid-column: 1 / -1;
+      font-size: 11px;
+      color: #dfaa7a;
+      padding: 4px 0;
+    }
+    #ee-hitbox-canvas {
+      display: block;
+      border: 1px solid #666;
+      background: #111;
+      image-rendering: pixelated;
+      cursor: crosshair;
+    }
+    #ee-hitbox-info {
+      font-size: 12px;
+      color: #aaa;
+      line-height: 1.9;
+    }
+    #ee-upload-section {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid #333;
+    }
+    #ee-upload-section > p {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+    #ee-upload-drop {
+      border: 2px dashed #555;
+      border-radius: 6px;
+      padding: 14px 12px;
+      text-align: center;
+      color: #888;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    #ee-upload-drop.drag-over { border-color: #7adf7a; background: #1e2e1e; }
+    #ee-upload-drop input[type="file"] { display: none; }
+    #ee-new-preview {
+      display: none;
+      max-width: 100%;
+      max-height: 140px;
+      border: 1px solid #444;
+      background: #111;
+      image-rendering: pixelated;
+      margin-top: 8px;
+    }
+    #ee-bottom {
+      padding: 10px 20px;
+      background: #222;
+      border-top: 1px solid #333;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    #btn-save-enemy {
+      padding: 7px 24px;
+      background: #3a5a3a;
+      border: 1px solid #5a8a5a;
+      color: #ddd;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #btn-save-enemy:hover { background: #4a6a4a; }
+    #btn-save-enemy:disabled { opacity: 0.4; cursor: default; }
+    #ee-status { font-size: 12px; color: #888; }
+    #ee-status.ok  { color: #7adf7a; }
+    #ee-status.err { color: #df7a7a; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <strong id="page-title">Enemy Editor</strong>
+    <span class="sep"> | </span>
+    <a href="/design" style="color:#aaa;font-size:12px">← Back to Map Designer</a>
+  </div>
+
+  <div id="ee-layout">
+    <!-- Left: form fields -->
+    <div id="ee-form-col">
+      <div id="ee-form">
+        <div class="ee-section-title" style="border-top:none;padding-top:0;margin-top:0">Identity</div>
+        <label>Type key</label>
+        <input type="text" id="inp-type" placeholder="e.g. goblin">
+        <div id="ee-rename-warn">⚠ Renaming will not update existing map files that reference this type.</div>
+        <label>Display label</label>
+        <input type="text" id="inp-label" placeholder="e.g. Goblin">
+        <label>Level</label>
+        <input type="number" id="inp-level" min="1" value="1">
+
+        <div class="ee-section-title">Combat</div>
+        <label>Max HP</label>
+        <input type="number" id="inp-hp" min="1" value="50">
+        <label>Damage</label>
+        <input type="number" id="inp-damage" min="0" value="10">
+        <label>XP reward</label>
+        <input type="number" id="inp-xp" min="0" value="20">
+        <label>Gold amount</label>
+        <input type="number" id="inp-gold" min="0" value="5">
+        <label>Gold chance (0–1)</label>
+        <input type="number" id="inp-gold-chance" min="0" max="1" step="0.05" value="0.5">
+        <label>Attack range (px)</label>
+        <input type="number" id="inp-attack-range" min="1" value="40">
+        <label>Attack cooldown (ms)</label>
+        <input type="number" id="inp-attack-cd" min="100" value="1500">
+
+        <div class="ee-section-title">Behaviour</div>
+        <label>Speed (px/s)</label>
+        <input type="number" id="inp-speed" min="1" value="80">
+        <label>Aggro range (px)</label>
+        <input type="number" id="inp-aggro" min="1" value="320">
+        <label>Respawn time (s)</label>
+        <input type="number" id="inp-respawn" min="1" value="10">
+      </div>
+
+      <!-- Optional asset re-upload -->
+      <div id="ee-upload-section">
+        <p>Optional: upload a replacement sprite sheet. Leave blank to keep the existing sprite.</p>
+        <div id="ee-upload-drop">
+          <input type="file" id="ee-file-input" accept="image/png">
+          <span id="ee-upload-label">Click or drop a replacement PNG here</span>
+        </div>
+        <img id="ee-new-preview" alt="new sprite preview">
+      </div>
+    </div>
+
+    <!-- Right: hitbox canvas -->
+    <div id="ee-canvas-col">
+      <h2 style="font-size:15px;color:#ddd">Hitbox Editor</h2>
+      <p style="font-size:12px;color:#888">Drag on the idle frame to redefine the collision hitbox. The red overlay shows the current hitbox.</p>
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+        <canvas id="ee-hitbox-canvas"></canvas>
+        <div id="ee-hitbox-info">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ee-bottom">
+    <button id="btn-save-enemy" disabled>Save Changes</button>
+    <span id="ee-status"></span>
+  </div>
+
+  <script src="/designer/enemy-editor.js"></script>
+</body>
+</html>

@@ -18,10 +18,10 @@
     "framesPerState": 2,
     "spritePath": "/assets/enemies/hit.png",
     "hitbox": {
-      "x": 6,
-      "y": 6,
-      "width": 20,
-      "height": 20
+      "x": 2,
+      "y": 2,
+      "width": 28,
+      "height": 27
     }
   },
   "orc": {
