@@ -18,18 +18,24 @@ const images      = {};     // { [key]: HTMLImageElement }
 let mapWidth  = 2000;
 let mapHeight = 2000;
 
-let placedObjects = [];     // { type, x, y }[]
-let placedNpcs    = [];     // { type, x, y }[]
-let placedMobs    = [];     // { type, x, y, width, height, quantity }[]
-let placedEnemies = [];     // { type, x, y, respawnTime }[]
+let placedObjects      = [];     // { type, x, y }[]
+let placedNpcs         = [];     // { type, x, y }[]
+let placedMobs         = [];     // { type, x, y, width, height, quantity }[]
+let placedEnemies      = [];     // { type, x, y, respawnTime }[]
+let placedNeutralZones = [];     // { x, y, width, height }[]
 
 let selectedType     = null;  // string | null
-let selectedCategory = null;  // 'object' | 'npc' | 'mob' | 'enemy' | null
+let selectedCategory = null;  // 'object' | 'npc' | 'mob' | 'enemy' | 'neutralZone' | null
 
 // Mob drag-to-draw state
 let isDraggingMob  = false;
 let mobDragStartWX = 0;
 let mobDragStartWY = 0;
+
+// Neutral zone drag-to-draw state
+let isDraggingNeutralZone  = false;
+let neutralZoneDragStartWX = 0;
+let neutralZoneDragStartWY = 0;
 
 // Canvas transform
 let zoom        = 0.3;
@@ -113,6 +119,7 @@ function buildSidebar() {
   addMobSection();
   addEnemySection();
   addWeaponSection();
+  addNeutralZoneSection();
 }
 
 function addSection(title, keys, category) {
@@ -346,6 +353,49 @@ function addWeaponSection() {
   sidebar.appendChild(addBtn);
 }
 
+function addNeutralZoneSection() {
+  const heading = document.createElement('div');
+  heading.className = 'sidebar-heading';
+  heading.textContent = 'Zones';
+  sidebar.appendChild(heading);
+
+  const item = document.createElement('div');
+  item.className = 'sidebar-item';
+  item.dataset.type     = 'neutral_zone';
+  item.dataset.category = 'neutralZone';
+
+  const thumb = document.createElement('canvas');
+  thumb.width  = 48;
+  thumb.height = 48;
+  thumb.className = 'sidebar-thumb';
+
+  // Draw a static blue dashed rectangle thumbnail
+  const tc = thumb.getContext('2d');
+  tc.fillStyle = 'rgba(80,80,255,0.18)';
+  tc.fillRect(4, 4, 40, 40);
+  tc.strokeStyle = '#8888ff';
+  tc.lineWidth = 1.5;
+  tc.setLineDash([4, 3]);
+  tc.strokeRect(4, 4, 40, 40);
+  tc.setLineDash([]);
+  tc.fillStyle = '#aaaaff';
+  tc.font = '7px sans-serif';
+  tc.textAlign = 'center';
+  tc.textBaseline = 'middle';
+  tc.fillText('Neutral', 24, 22);
+  tc.fillText('Zone', 24, 31);
+
+  item.appendChild(thumb);
+
+  const label = document.createElement('div');
+  label.className = 'sidebar-label';
+  label.textContent = 'Neutral Zone (drag)';
+  item.appendChild(label);
+
+  item.addEventListener('click', () => selectType('neutral_zone', 'neutralZone'));
+  sidebar.appendChild(item);
+}
+
 /**
  * Draw the enemy idle frame centred at (cx, cy) fitting within a square of `size` px.
  * Falls back to the red X marker if the image isn't loaded yet.
@@ -534,6 +584,9 @@ function render() {
   // Placed mob zones
   placedMobs.forEach(mob => renderMobZone(mob, 1.0));
 
+  // Placed neutral zones
+  placedNeutralZones.forEach(zone => renderNeutralZone(zone, 1.0));
+
   // Placed enemies
   placedEnemies.forEach(e => renderEnemyMarker(e, 1.0));
 
@@ -546,6 +599,15 @@ function render() {
     renderMobZone({ type: selectedType, x, y, width: w, height: h, quantity: 1 }, 0.5);
   }
 
+  // Neutral zone drag preview
+  if (isDraggingNeutralZone && cursorOnCanvas) {
+    const x = Math.min(neutralZoneDragStartWX, cursorWX);
+    const y = Math.min(neutralZoneDragStartWY, cursorWY);
+    const w = Math.abs(cursorWX - neutralZoneDragStartWX) || 50;
+    const h = Math.abs(cursorWY - neutralZoneDragStartWY) || 50;
+    renderNeutralZone({ x, y, width: w, height: h }, 0.5);
+  }
+
   // Enemy placement preview
   if (selectedCategory === 'enemy' && selectedType && cursorOnCanvas) {
     const def = enemyRegistry[selectedType];
@@ -556,8 +618,8 @@ function render() {
     );
   }
 
-  // Object/NPC placement preview under cursor (only when not dragging a mob or enemy)
-  if (selectedType && cursorOnCanvas && selectedCategory !== 'mob' && selectedCategory !== 'enemy') {
+  // Object/NPC placement preview under cursor (only when not dragging a mob, enemy, or neutral zone)
+  if (selectedType && cursorOnCanvas && selectedCategory !== 'mob' && selectedCategory !== 'enemy' && selectedCategory !== 'neutralZone') {
     renderObject(selectedType, cursorWX, cursorWY, selectedCategory, 0.45);
   }
 
@@ -679,6 +741,37 @@ function renderMobZone(mob, alpha) {
   ctx.globalAlpha = 1;
 }
 
+function renderNeutralZone(zone, alpha) {
+  const tl = worldToScreen(zone.x, zone.y);
+  const br = worldToScreen(zone.x + zone.width, zone.y + zone.height);
+  const zw = br.x - tl.x;
+  const zh = br.y - tl.y;
+  if (zw < 1 || zh < 1) return;
+
+  ctx.globalAlpha = alpha;
+
+  // Zone fill
+  ctx.fillStyle = 'rgba(80,80,255,0.12)';
+  ctx.fillRect(tl.x, tl.y, zw, zh);
+
+  // Dashed border
+  ctx.strokeStyle = '#8888ff';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.strokeRect(tl.x, tl.y, zw, zh);
+  ctx.setLineDash([]);
+
+  // Label
+  ctx.fillStyle = '#aaaaff';
+  const fontSize = Math.max(10, Math.min(14, zw / 8));
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('Neutral Zone', tl.x + zw / 2, tl.y + zh / 2);
+
+  ctx.globalAlpha = 1;
+}
+
 // ── Coordinate helpers ─────────────────────────────────────────────────────────
 function objectDisplaySize(type, category) {
   if (category === 'npc') return { w: NPC_DISPLAY_W, h: NPC_DISPLAY_H };
@@ -758,6 +851,15 @@ canvas.addEventListener('mousedown', e => {
       return;
     }
 
+    if (selectedCategory === 'neutralZone') {
+      isDraggingNeutralZone  = true;
+      neutralZoneDragStartWX = wx;
+      neutralZoneDragStartWY = wy;
+      canvas.style.cursor = 'crosshair';
+      e.preventDefault();
+      return;
+    }
+
     if (wx < 0 || wy < 0 || wx > mapWidth || wy > mapHeight) return;
 
     if (selectedCategory === 'enemy') {
@@ -781,7 +883,7 @@ canvas.addEventListener('mousedown', e => {
   }
 });
 
-// Stop panning / finalise mob rect on mouseup anywhere in the document
+// Stop panning / finalise mob rect / finalise neutral zone on mouseup anywhere in the document
 document.addEventListener('mouseup', e => {
   if (isDraggingMob) {
     isDraggingMob = false;
@@ -802,6 +904,17 @@ document.addEventListener('mouseup', e => {
       });
       updateStatus();
     }
+    canvas.style.cursor = 'crosshair';
+    return;
+  }
+  if (isDraggingNeutralZone) {
+    isDraggingNeutralZone = false;
+    const x = Math.min(neutralZoneDragStartWX, cursorWX);
+    const y = Math.min(neutralZoneDragStartWY, cursorWY);
+    const w = Math.max(50, Math.abs(cursorWX - neutralZoneDragStartWX));
+    const h = Math.max(50, Math.abs(cursorWY - neutralZoneDragStartWY));
+    placedNeutralZones.push({ x, y, width: w, height: h });
+    updateStatus();
     canvas.style.cursor = 'crosshair';
     return;
   }
@@ -853,6 +966,16 @@ canvas.addEventListener('contextmenu', e => {
       return;
     }
   }
+
+  // Then neutral zones
+  for (let i = placedNeutralZones.length - 1; i >= 0; i--) {
+    const z = placedNeutralZones[i];
+    if (wx >= z.x && wx <= z.x + z.width && wy >= z.y && wy <= z.y + z.height) {
+      placedNeutralZones.splice(i, 1);
+      updateStatus();
+      return;
+    }
+  }
 });
 
 canvas.addEventListener('wheel', e => {
@@ -885,12 +1008,16 @@ document.addEventListener('keydown', e => {
       placedEnemies.pop();
     } else if (selectedCategory === 'mob' && placedMobs.length > 0) {
       placedMobs.pop();
+    } else if (selectedCategory === 'neutralZone' && placedNeutralZones.length > 0) {
+      placedNeutralZones.pop();
     } else if (selectedCategory === 'npc' && placedNpcs.length > 0) {
       placedNpcs.pop();
     } else if (placedObjects.length > 0) {
       placedObjects.pop();
     } else if (placedMobs.length > 0) {
       placedMobs.pop();
+    } else if (placedNeutralZones.length > 0) {
+      placedNeutralZones.pop();
     } else if (placedNpcs.length > 0) {
       placedNpcs.pop();
     } else if (placedEnemies.length > 0) {
@@ -936,7 +1063,7 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  const data = { objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies };
+  const data = { objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies, neutralZones: placedNeutralZones };
 
   statusBar.textContent = `Saving ${name}.json…`;
   try {
@@ -947,7 +1074,7 @@ saveBtn.addEventListener('click', async () => {
     });
     const json = await res.json();
     if (json.ok) {
-      statusBar.textContent = `Saved → public/assets/maps/placement/${name}.json  (${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies)`;
+      statusBar.textContent = `Saved → public/assets/maps/placement/${name}.json  (${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies, ${placedNeutralZones.length} neutral zones)`;
     } else {
       statusBar.textContent = `Save failed: ${json.error}`;
     }
@@ -972,11 +1099,12 @@ loadBtn.addEventListener('click', async () => {
       return;
     }
     const data = await res.json();
-    placedObjects  = Array.isArray(data.objects)  ? data.objects  : [];
-    placedNpcs     = Array.isArray(data.npcs)     ? data.npcs     : [];
-    placedMobs     = Array.isArray(data.mobs)     ? data.mobs     : [];
-    placedEnemies  = Array.isArray(data.enemies)  ? data.enemies  : [];
-    statusBar.textContent = `Loaded ${name}.json — ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies`;
+    placedObjects      = Array.isArray(data.objects)      ? data.objects      : [];
+    placedNpcs         = Array.isArray(data.npcs)         ? data.npcs         : [];
+    placedMobs         = Array.isArray(data.mobs)         ? data.mobs         : [];
+    placedEnemies      = Array.isArray(data.enemies)      ? data.enemies      : [];
+    placedNeutralZones = Array.isArray(data.neutralZones) ? data.neutralZones : [];
+    statusBar.textContent = `Loaded ${name}.json — ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies, ${placedNeutralZones.length} neutral zones`;
   } catch (err) {
     statusBar.textContent = `Load error: ${err.message}`;
   }
@@ -984,13 +1112,14 @@ loadBtn.addEventListener('click', async () => {
 
 // ── Clear ──────────────────────────────────────────────────────────────────────
 clearBtn.addEventListener('click', () => {
-  const total = placedObjects.length + placedNpcs.length + placedMobs.length + placedEnemies.length;
+  const total = placedObjects.length + placedNpcs.length + placedMobs.length + placedEnemies.length + placedNeutralZones.length;
   if (total === 0) return;
   if (confirm(`Clear all ${total} placed items?`)) {
-    placedObjects  = [];
-    placedNpcs     = [];
-    placedMobs     = [];
-    placedEnemies  = [];
+    placedObjects      = [];
+    placedNpcs         = [];
+    placedMobs         = [];
+    placedEnemies      = [];
+    placedNeutralZones = [];
     updateStatus();
   }
 });
@@ -999,8 +1128,8 @@ clearBtn.addEventListener('click', () => {
 function updateStatus() {
   const sel    = selectedType ? `Selected: ${selectedType}` : 'No selection';
   const coords = cursorOnCanvas ? `  Cursor: (${cursorWX}, ${cursorWY})` : '';
-  const count  = `  Objects: ${placedObjects.length}  NPCs: ${placedNpcs.length}  Mob zones: ${placedMobs.length}  Enemies: ${placedEnemies.length}`;
-  const hint   = selectedCategory === 'mob' ? '  — drag to draw spawn rect' : '';
+  const count  = `  Objects: ${placedObjects.length}  NPCs: ${placedNpcs.length}  Mob zones: ${placedMobs.length}  Enemies: ${placedEnemies.length}  Neutral zones: ${placedNeutralZones.length}`;
+  const hint   = (selectedCategory === 'mob' || selectedCategory === 'neutralZone') ? '  — drag to draw rect' : '';
   statusBar.textContent = sel + hint + coords + count;
 }
 

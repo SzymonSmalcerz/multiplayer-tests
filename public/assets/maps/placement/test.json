@@ -222,11 +222,6 @@
     },
     {
       "type": "tree3",
-      "x": 1923,
-      "y": 661
-    },
-    {
-      "type": "tree3",
       "x": 1960,
       "y": 1079
     },
@@ -564,11 +559,6 @@
       "type": "cart_full",
       "x": 1787,
       "y": 1143
-    },
-    {
-      "type": "house_cottage_big",
-      "x": 1628,
-      "y": 352
     },
     {
       "type": "house_town_5",
@@ -966,12 +956,6 @@
     },
     {
       "type": "hit",
-      "x": 1500,
-      "y": 500,
-      "respawnTime": 20
-    },
-    {
-      "type": "hit",
       "x": 300,
       "y": 1200,
       "respawnTime": 10
@@ -1089,6 +1073,20 @@
       "x": 1558,
       "y": 1634,
       "respawnTime": 10
+    }
+  ],
+  "neutralZones": [
+    {
+      "x": 1246,
+      "y": 16,
+      "width": 747,
+      "height": 681
+    },
+    {
+      "x": 1678,
+      "y": 1139,
+      "width": 315,
+      "height": 206
     }
   ]
 }

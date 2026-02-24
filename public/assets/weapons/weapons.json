@@ -1,38 +1,65 @@
 {
-  "axe": {
-    "type": "axe",
-    "label": "Axe",
-    "damage": 50,
-    "cost": 0,
-    "hitRadius": 39,
-    "orbitRadius": 47,
-    "spritePath": "/assets/weapons/axe_attacking.png"
-  },
-  "great_axe": {
-    "type": "great_axe",
-    "label": "Great Axe",
-    "damage": 100,
-    "cost": 200,
-    "hitRadius": 41,
-    "orbitRadius": 51,
-    "spritePath": "/assets/weapons/great_axe_attacking.png"
-  },
-  "solid_axe": {
-    "type": "solid_axe",
-    "label": "Solid Axe",
-    "damage": 75,
-    "cost": 100,
-    "hitRadius": 40,
-    "orbitRadius": 45,
-    "spritePath": "/assets/weapons/solid_axe_attacking.png"
-  },
   "great_spear": {
     "type": "great_spear",
     "label": "Great spear",
-    "damage": 200,
-    "cost": 1000,
-    "hitRadius": 26,
+    "damage": 100,
+    "cost": 4000,
+    "hitRadius": 27,
     "orbitRadius": 38,
     "spritePath": "/assets/weapons/great_spear.png"
+  },
+  "sword": {
+    "type": "sword",
+    "label": "Sword",
+    "damage": 30,
+    "cost": 0,
+    "hitRadius": 17,
+    "orbitRadius": 26,
+    "spritePath": "/assets/weapons/sword.png"
+  },
+  "broad_sword": {
+    "type": "broad_sword",
+    "label": "Broad sword",
+    "damage": 70,
+    "cost": 200,
+    "hitRadius": 20,
+    "orbitRadius": 29,
+    "spritePath": "/assets/weapons/broad_sword.png"
+  },
+  "great_sword": {
+    "type": "great_sword",
+    "label": "Great sword",
+    "damage": 90,
+    "cost": 300,
+    "hitRadius": 23,
+    "orbitRadius": 33,
+    "spritePath": "/assets/weapons/great_sword.png"
+  },
+  "sun_spear": {
+    "type": "sun_spear",
+    "label": "Sun spear",
+    "damage": 120,
+    "cost": 600,
+    "hitRadius": 34,
+    "orbitRadius": 42,
+    "spritePath": "/assets/weapons/sun_spear.png"
+  },
+  "forest_spear": {
+    "type": "forest_spear",
+    "label": "Forest spear",
+    "damage": 140,
+    "cost": 800,
+    "hitRadius": 45,
+    "orbitRadius": 55,
+    "spritePath": "/assets/weapons/forest_spear.png"
+  },
+  "long_sword": {
+    "type": "long_sword",
+    "label": "Long sword",
+    "damage": 180,
+    "cost": 1000,
+    "hitRadius": 63,
+    "orbitRadius": 76,
+    "spritePath": "/assets/weapons/long_sword.png"
   }
 }

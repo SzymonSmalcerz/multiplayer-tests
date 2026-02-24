@@ -30,7 +30,7 @@ export class PlayerState extends Schema {
   @type("boolean") isPartyOwner: boolean = false;
   @type("string")  partyName: string = "";
   @type("number")  gold: number = 0;
-  @type("string")  weapon: string = "axe";
+  @type("string")  weapon: string = "sword";
 }
 
 export class EnemyState extends Schema {
@@ -67,7 +67,7 @@ const ENEMY_RESPAWN_MS = 10_000;
 const WEAPON_HIT_CD_MS      = 1_000; // prevent hitting the same enemy twice in one swing
 const PLAYER_ATTACK_ANIM_MS = 750;  // 0.75-second orbit animation
 const DEFAULT_HIT_RADIUS    = 33;   // fallback if weapon not in registry
-const DEFAULT_ORBIT_RADIUS  = 47;   // fallback orbit radius (axe: 74/2+10)
+const DEFAULT_ORBIT_RADIUS  = 47;   // fallback orbit radius (sword: 74/2+10)
 
 // ─── Shared interfaces ────────────────────────────────────────────────────────
 
@@ -118,6 +118,7 @@ export class GameRoom extends Room<GameState> {
   private objectData: Array<{ type: string; x: number; y: number }> = [];
   private npcData: Array<{ type: string; x: number; y: number }> = [];
   private mobData: Array<Record<string, unknown>> = [];
+  private neutralZones: Array<{ x: number; y: number; width: number; height: number }> = [];
   private lastPositions = new Map<string, LastPos>();
 
   // ── Enemy bookkeeping ──────────────────────────────────────────────────────
@@ -137,7 +138,7 @@ export class GameRoom extends Room<GameState> {
   /** playerId → Map<enemyId, lastHitTimestamp> */
   private playerHitCooldowns = new Map<string, Map<string, number>>();
 
-  /** playerId → attack start timestamp (present while the axe is orbiting) */
+  /** playerId → attack start timestamp (present while the sword is orbiting) */
   private playerAttacks = new Map<string, number>();
 
   /** Enemies waiting to respawn */
@@ -161,10 +162,11 @@ export class GameRoom extends Room<GameState> {
     // ── Load fixed objects positions from test.json ─────────────────────────
     const mapFile  = path.resolve(__dirname, "../../public/assets/maps/placement/test.json");
     const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
-      objects:  Array<{ type: string; x: number; y: number }>;
-      npcs?:    Array<{ type: string; x: number; y: number }>;
-      mobs?:    Array<Record<string, unknown>>;
-      enemies?: Array<{ type: string; x: number; y: number; respawnTime: number }>;
+      objects:       Array<{ type: string; x: number; y: number }>;
+      npcs?:         Array<{ type: string; x: number; y: number }>;
+      mobs?:         Array<Record<string, unknown>>;
+      enemies?:      Array<{ type: string; x: number; y: number; respawnTime: number }>;
+      neutralZones?: Array<{ x: number; y: number; width: number; height: number }>;
     };
     for (const obj of mapJson.objects) {
       if (OBJECT_REGISTRY[obj.type]) {
@@ -173,6 +175,7 @@ export class GameRoom extends Room<GameState> {
     }
     this.npcData = mapJson.npcs ?? [];
     this.mobData = mapJson.mobs ?? [];
+    this.neutralZones = mapJson.neutralZones ?? [];
 
     // ── Spawn enemies from map definition (or fall back to random placement) ──
     const rawEnemies = mapJson.enemies;
@@ -515,6 +518,15 @@ export class GameRoom extends Room<GameState> {
     this.enemyDefById.set(id, def);
   }
 
+  // ── Neutral zone helpers ──────────────────────────────────────────────────────
+
+  private isInNeutralZone(px: number, py: number): boolean {
+    return this.neutralZones.some(z =>
+      px >= z.x && px <= z.x + z.width &&
+      py >= z.y && py <= z.y + z.height
+    );
+  }
+
   // ── AI game loop ─────────────────────────────────────────────────────────────
 
   private tickEnemyAI(dt: number): void {
@@ -554,6 +566,7 @@ export class GameRoom extends Room<GameState> {
       let nearest: { id: string; state: PlayerState } | null = null;
 
       for (const p of players) {
+        if (this.isInNeutralZone(p.state.x, p.state.y)) continue; // invisible to enemies
         const dx = p.state.x - enemy.x;
         const dy = p.state.y - enemy.y;
         const d  = Math.sqrt(dx * dx + dy * dy);
@@ -586,8 +599,13 @@ export class GameRoom extends Room<GameState> {
           enemy.direction = dy > 0 ? 0 : 2;
         }
         const speed = regDef.speed * dtSec;
-        enemy.x = Math.max(32, Math.min(MAP_WIDTH  - 32, enemy.x + (dx / nearestDist) * speed));
-        enemy.y = Math.max(32, Math.min(MAP_HEIGHT - 32, enemy.y + (dy / nearestDist) * speed));
+        const newX = Math.max(32, Math.min(MAP_WIDTH  - 32, enemy.x + (dx / nearestDist) * speed));
+        const newY = Math.max(32, Math.min(MAP_HEIGHT - 32, enemy.y + (dy / nearestDist) * speed));
+        if (!this.isInNeutralZone(newX, newY)) {
+          enemy.x = newX;
+          enemy.y = newY;
+        }
+        // else: enemy stops at zone boundary
 
       } else {
         // ── Attack player ───────────────────────────────────────────────────
@@ -642,7 +660,7 @@ export class GameRoom extends Room<GameState> {
 
   // ── Player attack ────────────────────────────────────────────────────────────
 
-  /** Called every tick — checks the axe's current orbital position against all enemies. */
+  /** Called every tick — checks the sword's current orbital position against all enemies. */
   private tickPlayerWeapons(now: number): void {
     this.playerAttacks.forEach((startTime, sessionId) => {
       const player = this.state.players.get(sessionId);
@@ -657,7 +675,7 @@ export class GameRoom extends Room<GameState> {
       // Mirror client angle calculation: start at top (−π/2), sweep clockwise
       const progress  = elapsed / PLAYER_ATTACK_ANIM_MS;
       const angle     = -Math.PI / 2 + progress * 2 * Math.PI;
-      const weaponDef  = WEAPON_REGISTRY[player.weapon] ?? WEAPON_REGISTRY["axe"];
+      const weaponDef  = WEAPON_REGISTRY[player.weapon] ?? WEAPON_REGISTRY["sword"];
       const orbitR    = weaponDef?.orbitRadius ?? DEFAULT_ORBIT_RADIUS;
       const weaponX   = player.x + orbitR * Math.cos(angle);
       const weaponY   = player.y + orbitR * Math.sin(angle);

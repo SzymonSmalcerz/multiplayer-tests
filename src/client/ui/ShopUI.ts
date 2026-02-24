@@ -89,7 +89,7 @@ export class ShopUI {
 
     const playerState   = this.getPlayerState();
     const playerGold    = playerState?.gold   ?? 0;
-    const currentWeapon = playerState?.weapon ?? "axe";
+    const currentWeapon = playerState?.weapon ?? "sword";
 
     this.weapons.forEach((item, i) => {
       const rowY      = py + 38 + i * ITEM_H;

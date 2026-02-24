@@ -1,11 +1,11 @@
 export interface WeaponDef {
-  type:        string;   // unique key, e.g. "great_axe"
+  type:        string;   // unique key, e.g. "great_sword"
   label:       string;   // display name shown in shop
   damage:      number;   // base damage per hit
   cost:        number;   // gold price; 0 = not for sale (default weapon)
   hitRadius:   number;   // px — bounding-circle radius of the attacking sprite
   orbitRadius: number;   // px — distance from player centre to weapon sprite centre (= spriteHeight/2 + 10)
-  spritePath:  string;   // e.g. "/assets/weapons/great_axe.png"
+  spritePath:  string;   // e.g. "/assets/weapons/great_sword.png"
 }
 
 /**

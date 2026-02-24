@@ -28,8 +28,8 @@ const SEND_RATE_MS        = 50;    // send position @ 20 Hz
 const LERP_FACTOR         = 0.18;  // interpolation factor for remote players / enemies
 const RECONCILE_THRESHOLD = 120;   // px — snap if server disagrees by more than this
 const ANIM_FPS            = 10;
-const ATTACK_ANIM_MS      = 750;   // axe orbit animation duration (ms)
-const ATTACK_COOLDOWN_MS  = 2000;  // ms between attacks
+const ATTACK_ANIM_MS      = 750;   // sword orbit animation duration (ms)
+const ATTACK_COOLDOWN_MS  = 1000;  // ms between attacks
 
 // All selectable skins — preloaded so any player's chosen skin renders correctly
 const SKINS_TO_LOAD = ALL_SKINS;
@@ -80,7 +80,7 @@ export class GameScene extends Phaser.Scene {
   private localChatBubble?: Phaser.GameObjects.Text;
   private localDirection = 0;
   private localWeapon!: Phaser.GameObjects.Image;
-  private localWeaponKey = "axe";
+  private localWeaponKey = "sword";
   private weaponsRegistry: Record<string, WeaponDef> = {};
   private localLevel = 1;
 
@@ -1157,7 +1157,7 @@ export class GameScene extends Phaser.Scene {
     this.localSprite.setCollideWorldBounds(true);
     this.localSprite.setDepth(y + FRAME_SIZE / 2);
 
-    this.localWeapon = this.add.image(x, y, "axe");
+    this.localWeapon = this.add.image(x, y, "sword");
     this.localWeapon.setDepth(this.localSprite.depth + 1);
     this.localWeapon.setVisible(false);
 
@@ -1334,7 +1334,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Weapon change — swap sprite
-      const newWeapon = player.weapon ?? "axe";
+      const newWeapon = player.weapon ?? "sword";
       if (newWeapon !== this.localWeaponKey) {
         this.localWeaponKey = newWeapon;
         this.localWeapon.setTexture(newWeapon);
@@ -1369,7 +1369,7 @@ export class GameScene extends Phaser.Scene {
     sprite.stop();
     sprite.setFrame(DIR_TO_ROW[0] * 9);
 
-    const initWeapon = player.weapon ?? "axe";
+    const initWeapon = player.weapon ?? "sword";
     const weaponSprite = this.add.image(player.x, player.y, initWeapon);
     weaponSprite.setVisible(false);
     weaponSprite.setDepth(sprite.depth + 1);
@@ -1442,7 +1442,7 @@ export class GameScene extends Phaser.Scene {
       isAttacking: player.isAttacking || false,
       attackDirection: player.attackDirection ?? 0,
       attackOrbitTimer: 0,
-      weapon: player.weapon ?? "axe",
+      weapon: player.weapon ?? "sword",
       isDead: player.isDead || false,
       partyId: player.partyId ?? "",
     };
@@ -1472,7 +1472,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Swap sprite if weapon changed
-      const newWeapon = player.weapon ?? "axe";
+      const newWeapon = player.weapon ?? "sword";
       if (newWeapon !== e.weapon) {
         e.weapon = newWeapon;
         e.weaponSprite.setTexture(newWeapon);
@@ -1919,13 +1919,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     // ── Weapon texture sync (reads live server state every frame) ──────────
-    const serverWeapon = (myState?.weapon ?? "axe") as string;
+    const serverWeapon = (myState?.weapon ?? "sword") as string;
     if (serverWeapon !== this.localWeaponKey) {
       this.localWeaponKey = serverWeapon;
       this.localWeapon.setTexture(serverWeapon);
     }
 
-    // ── Weapon animation (axe orbits clockwise) ────────────────────────────
+    // ── Weapon animation (sword orbits clockwise) ────────────────────────────
     // Tick cooldown
     if (this.localAttackCooldownTimer > 0) {
       this.localAttackCooldownTimer -= delta;
@@ -2016,7 +2016,7 @@ export class GameScene extends Phaser.Scene {
       const dy = Math.abs(sprite.y - prevY);
       const moving = dx > 0.5 || dy > 0.5;
 
-      // ── Remote weapon (axe orbit) ─────────────────────────────────────────
+      // ── Remote weapon (sword orbit) ─────────────────────────────────────────
       // Tick orbit timer
       if (entity.attackOrbitTimer > 0) {
         entity.attackOrbitTimer = Math.max(0, entity.attackOrbitTimer - delta);
@@ -2306,7 +2306,7 @@ export class GameScene extends Phaser.Scene {
     const R = 32;
 
     this.weaponHudBg      = this.add.graphics().setScrollFactor(0).setDepth(D);
-    this.weaponHudIcon    = this.add.image(0, 0, "axe")
+    this.weaponHudIcon    = this.add.image(0, 0, "sword")
       .setScrollFactor(0).setDepth(D + 1);
     { // initial scale
       const MAX_H = 64;
