@@ -141,6 +141,12 @@ export class GameRoom extends Room<GameState> {
   /** playerId → attack start timestamp (present while the sword is orbiting) */
   private playerAttacks = new Map<string, number>();
 
+  /** playerId → timestamp of last damage received (for regen cooldown) */
+  private playerLastDamagedAt = new Map<string, number>();
+
+  /** playerId → timestamp of last regen tick */
+  private playerLastRegenAt = new Map<string, number>();
+
   /** Enemies waiting to respawn */
   private respawnQueue: Array<{ def: EnemySpawnDef | null; type: string; spawnAt: number }> = [];
 
@@ -468,6 +474,8 @@ export class GameRoom extends Room<GameState> {
     this.lastPositions.delete(client.sessionId);
     this.playerHitCooldowns.delete(client.sessionId);
     this.playerAttacks.delete(client.sessionId);
+    this.playerLastDamagedAt.delete(client.sessionId);
+    this.playerLastRegenAt.delete(client.sessionId);
     console.log(`[Room] ${name} left. Players: ${this.state.players.size}`);
   }
 
@@ -535,6 +543,7 @@ export class GameRoom extends Room<GameState> {
 
     this.tickCoins(now);
     this.tickPlayerWeapons(now);
+    this.tickPlayerRegen(now, dtSec);
 
     // Process respawn queue
     for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
@@ -624,6 +633,7 @@ export class GameRoom extends Room<GameState> {
           if (isInsideHitbox(enemy.x, enemy.y, atkDir, nearest.state.x, nearest.state.y, 20)) {
             nearest.state.hp = Math.max(0, nearest.state.hp - regDef.damage);
             cdMap.set(nearest.id, now);
+            this.playerLastDamagedAt.set(nearest.id, now);
 
             if (nearest.state.hp <= 0) {
               this.handlePlayerDeath(nearest.id, nearest.state);
@@ -631,6 +641,28 @@ export class GameRoom extends Room<GameState> {
           }
         }
       }
+    });
+  }
+
+  // ── Player health regeneration ────────────────────────────────────────────────
+
+  private static readonly REGEN_COOLDOWN_MS  = 5_000; // ms without damage before regen starts
+  private static readonly REGEN_INTERVAL_MS  = 2_000; // heal pulse every 2 s
+  private static readonly REGEN_PCT_PER_TICK = 0.05;  // 5% of maxHp per pulse
+
+  private tickPlayerRegen(now: number, _dtSec: number): void {
+    this.state.players.forEach((player, id) => {
+      if (player.isDead || player.hp <= 0 || player.hp >= player.maxHp) return;
+
+      const lastDamaged = this.playerLastDamagedAt.get(id) ?? 0;
+      if (now - lastDamaged < GameRoom.REGEN_COOLDOWN_MS) return;
+
+      const lastRegen = this.playerLastRegenAt.get(id) ?? 0;
+      if (now - lastRegen < GameRoom.REGEN_INTERVAL_MS) return;
+
+      const healAmount = Math.floor(player.maxHp * GameRoom.REGEN_PCT_PER_TICK);
+      player.hp = Math.min(player.maxHp, player.hp + healAmount);
+      this.playerLastRegenAt.set(id, now);
     });
   }
 
