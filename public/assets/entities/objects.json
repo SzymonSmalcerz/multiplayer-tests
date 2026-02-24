@@ -476,5 +476,17 @@
       "x1": 128,
       "y1": 23
     }
+  },
+  "fence_vertical": {
+    "type": "fence_vertical",
+    "imageWidth": 16,
+    "imageHeight": 64,
+    "spritePath": "/assets/entities/fence_vertical.png",
+    "collision": {
+      "x0": 7,
+      "y0": 0,
+      "x1": 8,
+      "y1": 64
+    }
   }
 }

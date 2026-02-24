@@ -330,7 +330,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Weapon registry (populated from preloaded weapons.json) ─────────────
     this.weaponsRegistry = (this.cache.json.get("weapons_registry") ?? {}) as Record<string, WeaponDef>;
-    const shopWeapons = Object.values(this.weaponsRegistry).filter(w => w.cost > 0);
+    const shopWeapons = Object.values(this.weaponsRegistry).filter(w => w.cost > 0).sort((a, b) => a.cost - b.cost);
 
     // ── Shop UI ──────────────────────────────────────────────────────────────
     this.shopUI = new ShopUI(
@@ -392,6 +392,8 @@ export class GameScene extends Phaser.Scene {
     // ── Click / tap to move ──────────────────────────────────────────────────
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.isTyping) return;
+      // Block map clicks while the trader shop is open
+      if (this.shopUI.isShopOpen) return;
       // Sprite click handlers set this flag first; scene fires after
       if (this.ignoreNextMapClick) {
         this.ignoreNextMapClick = false;
