@@ -1,12 +1,5 @@
 import Phaser from "phaser";
-
-// Weapons available in the shop — single source of truth (was duplicated in GameScene)
-export const SHOP_WEAPONS = [
-  { key: "great_axe", label: "Great Axe", damage: 100, cost: 200 },
-  { key: "solid_axe", label: "Solid Axe", damage: 75,  cost: 100 },
-] as const;
-
-export type ShopWeaponKey = (typeof SHOP_WEAPONS)[number]["key"];
+import { WeaponDef } from "../../shared/weapons";
 
 /**
  * Self-contained shop panel UI.
@@ -14,6 +7,7 @@ export type ShopWeaponKey = (typeof SHOP_WEAPONS)[number]["key"];
  */
 export class ShopUI {
   private scene: Phaser.Scene;
+  private weapons: WeaponDef[];
   private isOpen = false;
   private objects: Phaser.GameObjects.GameObject[] = [];
 
@@ -26,14 +20,16 @@ export class ShopUI {
 
   constructor(
     scene: Phaser.Scene,
+    weapons: WeaponDef[],
     getPlayerState: () => { gold: number; weapon: string } | null,
     onBuy: (weaponKey: string) => void,
     onInteract: () => void,
   ) {
-    this.scene        = scene;
+    this.scene          = scene;
+    this.weapons        = weapons;
     this.getPlayerState = getPlayerState;
-    this.onBuy        = onBuy;
-    this.onInteract   = onInteract;
+    this.onBuy          = onBuy;
+    this.onInteract     = onInteract;
   }
 
   get isShopOpen(): boolean { return this.isOpen; }
@@ -50,7 +46,7 @@ export class ShopUI {
     const { width, height } = s.scale;
     const ITEM_H   = 120;
     const PANEL_W  = 320;
-    const PANEL_H  = 50 + SHOP_WEAPONS.length * ITEM_H;
+    const PANEL_H  = 50 + this.weapons.length * ITEM_H;
     const px       = Math.round((width  - PANEL_W) / 2);
     const py       = Math.round((height - PANEL_H) / 2);
     const D        = 200000;
@@ -95,10 +91,10 @@ export class ShopUI {
     const playerGold    = playerState?.gold   ?? 0;
     const currentWeapon = playerState?.weapon ?? "axe";
 
-    SHOP_WEAPONS.forEach((item, i) => {
+    this.weapons.forEach((item, i) => {
       const rowY      = py + 38 + i * ITEM_H;
       const canAfford = playerGold >= item.cost;
-      const equipped  = currentWeapon === item.key;
+      const equipped  = currentWeapon === item.type;
 
       // Row background
       add(s.add.graphics())
@@ -106,9 +102,8 @@ export class ShopUI {
         .fillRect(px + 8, rowY + 2, PANEL_W - 16, ITEM_H - 8)
         .setScrollFactor(0).setDepth(D + 1);
 
-      // Weapon display image
-      add(s.add.image(px + 44, rowY + ITEM_H / 2 - 4, item.key)
-        .setDisplaySize(56, 56)
+      // Weapon display image (single texture, same key used everywhere — natural size)
+      add(s.add.image(px + 44, rowY + ITEM_H / 2 - 4, item.type)
         .setScrollFactor(0).setDepth(D + 2));
 
       // Weapon name
@@ -153,14 +148,14 @@ export class ShopUI {
           buyBtn.on("pointerout",  () => buyBtn.setBackgroundColor("#336633"));
           buyBtn.on("pointerdown", () => {
             this.onInteract();
-            this.onBuy(item.key);
+            this.onBuy(item.type);
             this.close();
           });
         }
       }
 
       // Row divider (between items)
-      if (i < SHOP_WEAPONS.length - 1) {
+      if (i < this.weapons.length - 1) {
         add(s.add.graphics())
           .lineStyle(1, 0x443322, 0.7)
           .lineBetween(px + 10, rowY + ITEM_H - 4, px + PANEL_W - 10, rowY + ITEM_H - 4)

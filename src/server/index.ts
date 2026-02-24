@@ -7,6 +7,7 @@ import path from "path";
 import { OBJECT_REGISTRY, loadObjectRegistry, StaticObjectDef } from "../shared/objects";
 import { MOB_REGISTRY } from "../shared/mobs";
 import { ENEMY_REGISTRY, loadEnemyRegistry, EnemyDef } from "../shared/enemies";
+import { WEAPON_REGISTRY, loadWeaponRegistry, WeaponDef } from "../shared/weapons";
 import { GameRoom } from "./GameRoom";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -27,6 +28,9 @@ loadObjectRegistry(objectsJsonPath);
 
 const enemiesJsonPath = path.join(publicDir, "assets/enemies/enemies.json");
 loadEnemyRegistry(enemiesJsonPath);
+
+const weaponsJsonPath = path.join(publicDir, "assets/weapons/weapons.json");
+loadWeaponRegistry(weaponsJsonPath);
 
 // ── Map designer endpoints (must come before the catch-all) ──────────────────
 
@@ -50,9 +54,24 @@ app.get("/design/enemy-editor", (_req, res) => {
   res.sendFile(path.join(publicDir, "designer/enemy-editor.html"));
 });
 
+// Serve the weapon builder page
+app.get("/design/weapon-builder", (_req, res) => {
+  res.sendFile(path.join(publicDir, "designer/weapon-builder.html"));
+});
+
+// Serve the weapon editor page
+app.get("/design/weapon-editor", (_req, res) => {
+  res.sendFile(path.join(publicDir, "designer/weapon-editor.html"));
+});
+
 // Expose the full object registry (built-ins + user-added)
 app.get("/design/objects", (_req, res) => {
   res.json(OBJECT_REGISTRY);
+});
+
+// Expose the weapon registry
+app.get("/design/weapons", (_req, res) => {
+  res.json(WEAPON_REGISTRY);
 });
 
 // Expose the mob registry for the designer
@@ -252,6 +271,148 @@ app.post("/design/save-object", (req, res) => {
       res.json({ ok: true, type: body.type, spritePath });
     });
   });
+});
+
+// Save a new weapon: write PNG + update weapons.json + hot-reload registry
+app.post("/design/save-weapon", (req, res) => {
+  const body = req.body as {
+    type:        string;
+    label:       string;
+    damage:      number;
+    cost:        number;
+    hitRadius:   number;
+    orbitRadius: number;
+    imageBase64: string;
+  };
+
+  if (!body.type || !/^[a-z0-9_]+$/.test(body.type)) {
+    res.status(400).json({ error: "Invalid type key (lowercase alphanumeric and _ only)" });
+    return;
+  }
+  if (WEAPON_REGISTRY[body.type]) {
+    res.status(409).json({ error: `Type '${body.type}' already exists` });
+    return;
+  }
+  if (!body.imageBase64) {
+    res.status(400).json({ error: "Missing imageBase64" });
+    return;
+  }
+
+  const base64      = body.imageBase64.replace(/^data:image\/png;base64,/, "");
+  const pngBuffer   = Buffer.from(base64, "base64");
+  const spritePath  = `/assets/weapons/${body.type}.png`;
+  const pngPath     = path.join(publicDir, spritePath);
+
+  fs.writeFile(pngPath, pngBuffer, (pngErr) => {
+    if (pngErr) {
+      res.status(500).json({ error: `Failed to save PNG: ${pngErr.message}` });
+      return;
+    }
+
+    const entry: WeaponDef = {
+      type:        body.type,
+      label:       body.label,
+      damage:      body.damage,
+      cost:        body.cost,
+      hitRadius:   body.hitRadius,
+      orbitRadius: body.orbitRadius,
+      spritePath,
+    };
+
+    const existing: Record<string, WeaponDef> = {};
+    try {
+      Object.assign(existing, JSON.parse(fs.readFileSync(weaponsJsonPath, "utf-8")));
+    } catch { /* file missing */ }
+    existing[body.type]       = entry;
+    WEAPON_REGISTRY[body.type] = entry;
+
+    fs.writeFile(weaponsJsonPath, JSON.stringify(existing, null, 2), (jsonErr) => {
+      if (jsonErr) {
+        res.status(500).json({ error: `Saved PNG but failed to update weapons.json: ${jsonErr.message}` });
+        return;
+      }
+      res.json({ ok: true, type: body.type, spritePath });
+    });
+  });
+});
+
+// Update an existing weapon: optional image, optional rename, update weapons.json
+app.post("/design/update-weapon", (req, res) => {
+  const body = req.body as {
+    originalType: string;
+    type:         string;
+    label:        string;
+    damage:       number;
+    cost:         number;
+    hitRadius:    number;
+    orbitRadius:  number;
+    imageBase64?: string;
+  };
+
+  const { originalType, type: newType } = body;
+
+  if (!originalType || !WEAPON_REGISTRY[originalType]) {
+    res.status(404).json({ error: `Weapon type '${originalType}' not found` });
+    return;
+  }
+  if (!newType || !/^[a-z0-9_]+$/.test(newType)) {
+    res.status(400).json({ error: "Invalid type key (lowercase alphanumeric and _ only)" });
+    return;
+  }
+  if (newType !== originalType && WEAPON_REGISTRY[newType]) {
+    res.status(409).json({ error: `Type '${newType}' already exists` });
+    return;
+  }
+
+  const existingDef = WEAPON_REGISTRY[originalType];
+
+  const finalize = (spritePath: string) => {
+    const entry: WeaponDef = {
+      type:        newType,
+      label:       body.label,
+      damage:      body.damage,
+      cost:        body.cost,
+      hitRadius:   body.hitRadius,
+      orbitRadius: body.orbitRadius,
+      spritePath,
+    };
+
+    const existing: Record<string, WeaponDef> = {};
+    try {
+      Object.assign(existing, JSON.parse(fs.readFileSync(weaponsJsonPath, "utf-8")));
+    } catch { /* file missing */ }
+
+    if (newType !== originalType) {
+      delete existing[originalType];
+      delete WEAPON_REGISTRY[originalType];
+    }
+    existing[newType]        = entry;
+    WEAPON_REGISTRY[newType] = entry;
+
+    fs.writeFile(weaponsJsonPath, JSON.stringify(existing, null, 2), (jsonErr) => {
+      if (jsonErr) {
+        res.status(500).json({ error: `Failed to update weapons.json: ${jsonErr.message}` });
+        return;
+      }
+      res.json({ ok: true, type: newType, spritePath });
+    });
+  };
+
+  if (body.imageBase64) {
+    const base64        = body.imageBase64.replace(/^data:image\/png;base64,/, "");
+    const pngBuffer     = Buffer.from(base64, "base64");
+    const newSpritePath = `/assets/weapons/${newType}.png`;
+    const pngPath       = path.join(publicDir, newSpritePath);
+    fs.writeFile(pngPath, pngBuffer, (pngErr) => {
+      if (pngErr) {
+        res.status(500).json({ error: `Failed to save PNG: ${pngErr.message}` });
+        return;
+      }
+      finalize(newSpritePath);
+    });
+  } else {
+    finalize(existingDef.spritePath);
+  }
 });
 
 // Update an existing static object: optional image, optional rename, update objects.json

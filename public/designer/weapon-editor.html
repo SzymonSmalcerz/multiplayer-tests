@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Weapon Editor</title>
+  <link rel="stylesheet" href="/designer/enemy-builder.css">
+  <style>
+    #we-layout {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+    #we-form-col {
+      width: 360px;
+      flex-shrink: 0;
+      padding: 20px;
+      overflow-y: auto;
+      border-right: 1px solid #333;
+    }
+    #we-canvas-col {
+      flex: 1;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow: auto;
+    }
+    #we-form {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 8px 12px;
+      align-items: center;
+    }
+    #we-form label {
+      font-size: 12px;
+      color: #bbb;
+      text-align: right;
+    }
+    #we-form input[type="text"],
+    #we-form input[type="number"] {
+      padding: 5px 8px;
+      background: #2a2a2a;
+      border: 1px solid #555;
+      color: #eee;
+      border-radius: 3px;
+      font-size: 13px;
+      width: 100%;
+    }
+    #we-form input:focus { outline: none; border-color: #7adf7a; }
+    .we-section-title {
+      grid-column: 1 / -1;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #666;
+      border-top: 1px solid #333;
+      padding-top: 10px;
+      margin-top: 4px;
+    }
+    #we-rename-warn {
+      display: none;
+      grid-column: 1 / -1;
+      font-size: 11px;
+      color: #dfaa7a;
+      padding: 4px 0;
+    }
+    #we-radius-canvas {
+      display: block;
+      border: 1px solid #666;
+      background: #111;
+      image-rendering: pixelated;
+    }
+    #we-upload-section {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid #333;
+    }
+    #we-upload-section > p {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+    #we-upload-drop {
+      border: 2px dashed #555;
+      border-radius: 6px;
+      padding: 14px 12px;
+      text-align: center;
+      color: #888;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    #we-upload-drop.drag-over { border-color: #7adf7a; background: #1e2e1e; }
+    #we-upload-drop input[type="file"] { display: none; }
+    #we-new-preview {
+      display: none;
+      max-width: 100%;
+      max-height: 140px;
+      border: 1px solid #444;
+      background: #111;
+      image-rendering: pixelated;
+      margin-top: 8px;
+    }
+    #we-bottom {
+      padding: 10px 20px;
+      background: #222;
+      border-top: 1px solid #333;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    #btn-save-weapon {
+      padding: 7px 24px;
+      background: #3a5a3a;
+      border: 1px solid #5a8a5a;
+      color: #ddd;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    #btn-save-weapon:hover { background: #4a6a4a; }
+    #btn-save-weapon:disabled { opacity: 0.4; cursor: default; }
+    #we-status { font-size: 12px; color: #888; }
+    #we-status.ok  { color: #7adf7a; }
+    #we-status.err { color: #df7a7a; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <strong id="page-title">Weapon Editor</strong>
+    <span class="sep"> | </span>
+    <a href="/design" style="color:#aaa;font-size:12px">← Back to Map Designer</a>
+  </div>
+
+  <div id="we-layout">
+    <!-- Left: form fields -->
+    <div id="we-form-col">
+      <div id="we-form">
+        <div class="we-section-title" style="border-top:none;padding-top:0;margin-top:0">Identity</div>
+        <label>Type key</label>
+        <input type="text" id="inp-type" placeholder="e.g. fire_sword">
+        <div id="we-rename-warn">⚠ Renaming will not update existing save files that reference this type.</div>
+        <label>Display label</label>
+        <input type="text" id="inp-label" placeholder="e.g. Fire Sword">
+
+        <div class="we-section-title">Combat</div>
+        <label>Damage</label>
+        <input type="number" id="inp-damage" min="0" value="50">
+        <label>Hit radius (px)</label>
+        <input type="number" id="inp-radius" min="1" max="200" value="33">
+
+        <div class="we-section-title">Shop</div>
+        <label>Cost (gold)</label>
+        <input type="number" id="inp-cost" min="0" value="0">
+        <label style="color:#666;grid-column:1/-1;font-size:11px;text-align:left">Set cost to 0 to make this the default weapon (not sold in shop)</label>
+      </div>
+
+      <!-- Optional asset re-upload -->
+      <div id="we-upload-section">
+        <p>Optional: upload a replacement image. Leave blank to keep the existing sprite.</p>
+        <div id="we-upload-drop">
+          <input type="file" id="we-file-input" accept="image/png">
+          <span id="we-upload-label">Click or drop a replacement PNG here</span>
+        </div>
+        <img id="we-new-preview" alt="new sprite preview">
+      </div>
+    </div>
+
+    <!-- Right: radius preview canvas -->
+    <div id="we-canvas-col">
+      <h2 style="font-size:15px;color:#ddd">Hit Radius Preview</h2>
+      <p style="font-size:12px;color:#888">The red circle shows the hit area around the weapon sprite during combat. Adjust the hit radius in the form to see it update here.</p>
+      <canvas id="we-radius-canvas"></canvas>
+    </div>
+  </div>
+
+  <div id="we-bottom">
+    <button id="btn-save-weapon" disabled>Save Changes</button>
+    <span id="we-status"></span>
+  </div>
+
+  <script src="/designer/weapon-editor.js"></script>
+</body>
+</html>

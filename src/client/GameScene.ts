@@ -4,6 +4,7 @@ import {
   StaticObjectData, EnemyData, EnemyEntity, NpcData,
 } from "./types";
 import { StaticObjectDef } from "../shared/staticObjects";
+import { WeaponDef } from "../shared/weapons";
 import { MOB_REGISTRY } from "../shared/mobs";
 import { MobSystem } from "./MobSystem";
 import { ShopUI } from "./ui/ShopUI";
@@ -27,9 +28,8 @@ const SEND_RATE_MS        = 50;    // send position @ 20 Hz
 const LERP_FACTOR         = 0.18;  // interpolation factor for remote players / enemies
 const RECONCILE_THRESHOLD = 120;   // px — snap if server disagrees by more than this
 const ANIM_FPS            = 10;
-const ATTACK_ANIM_MS      = 1000;  // axe orbit animation duration (ms)
+const ATTACK_ANIM_MS      = 750;   // axe orbit animation duration (ms)
 const ATTACK_COOLDOWN_MS  = 2000;  // ms between attacks
-const AXE_ORBIT_RADIUS    = 15;    // px from player sprite centre
 
 // All selectable skins — preloaded so any player's chosen skin renders correctly
 const SKINS_TO_LOAD = ALL_SKINS;
@@ -81,6 +81,7 @@ export class GameScene extends Phaser.Scene {
   private localDirection = 0;
   private localWeapon!: Phaser.GameObjects.Image;
   private localWeaponKey = "axe";
+  private weaponsRegistry: Record<string, WeaponDef> = {};
   private localLevel = 1;
 
   // Local attack state
@@ -258,14 +259,14 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Weapon attacking sprites (rotated procedurally during orbit animation)
-    this.load.image("axe_attacking",       "/assets/weapons/axe_attacking.png");
-    this.load.image("great_axe_attacking", "/assets/weapons/great_axe_attacking.png");
-    this.load.image("solid_axe_attacking", "/assets/weapons/solid_axe_attacking.png");
-
-    // Weapon display sprites (shown in trader shop)
-    this.load.image("great_axe", "/assets/weapons/great_axe.png");
-    this.load.image("solid_axe", "/assets/weapons/solid_axe.png");
+    // Weapon sprites — loaded dynamically from weapons.json (texture key = weapon.type)
+    this.load.json("weapons_registry", "/assets/weapons/weapons.json");
+    this.load.once("filecomplete-json-weapons_registry", () => {
+      const defs = (this.cache.json.get("weapons_registry") ?? {}) as Record<string, WeaponDef>;
+      for (const def of Object.values(defs)) {
+        this.load.image(def.type, def.spritePath);
+      }
+    });
 
     // Trader NPC
     this.load.image("trader", "/assets/npcs/trader.png");
@@ -327,9 +328,14 @@ export class GameScene extends Phaser.Scene {
 
     // NPCs are placed after map_data is received (see setupRoomListeners)
 
+    // ── Weapon registry (populated from preloaded weapons.json) ─────────────
+    this.weaponsRegistry = (this.cache.json.get("weapons_registry") ?? {}) as Record<string, WeaponDef>;
+    const shopWeapons = Object.values(this.weaponsRegistry).filter(w => w.cost > 0);
+
     // ── Shop UI ──────────────────────────────────────────────────────────────
     this.shopUI = new ShopUI(
       this,
+      shopWeapons,
       () => {
         const ps = this.room.state.players.get(this.mySessionId);
         return ps ? { gold: ps.gold as number, weapon: ps.weapon as string } : null;
@@ -1151,7 +1157,7 @@ export class GameScene extends Phaser.Scene {
     this.localSprite.setCollideWorldBounds(true);
     this.localSprite.setDepth(y + FRAME_SIZE / 2);
 
-    this.localWeapon = this.add.image(x, y, "axe_attacking");
+    this.localWeapon = this.add.image(x, y, "axe");
     this.localWeapon.setDepth(this.localSprite.depth + 1);
     this.localWeapon.setVisible(false);
 
@@ -1327,11 +1333,11 @@ export class GameScene extends Phaser.Scene {
         this.localSprite.setPosition(player.x, player.y);
       }
 
-      // Weapon change — swap attacking sprite
+      // Weapon change — swap sprite
       const newWeapon = player.weapon ?? "axe";
       if (newWeapon !== this.localWeaponKey) {
         this.localWeaponKey = newWeapon;
-        this.localWeapon.setTexture(`${newWeapon}_attacking`);
+        this.localWeapon.setTexture(newWeapon);
       }
 
       // Party state change — update label colors of all remote players
@@ -1364,7 +1370,7 @@ export class GameScene extends Phaser.Scene {
     sprite.setFrame(DIR_TO_ROW[0] * 9);
 
     const initWeapon = player.weapon ?? "axe";
-    const weaponSprite = this.add.image(player.x, player.y, `${initWeapon}_attacking`);
+    const weaponSprite = this.add.image(player.x, player.y, initWeapon);
     weaponSprite.setVisible(false);
     weaponSprite.setDepth(sprite.depth + 1);
 
@@ -1465,11 +1471,11 @@ export class GameScene extends Phaser.Scene {
         e.attackOrbitTimer = ATTACK_ANIM_MS;
       }
 
-      // Swap attacking sprite if weapon changed
+      // Swap sprite if weapon changed
       const newWeapon = player.weapon ?? "axe";
       if (newWeapon !== e.weapon) {
         e.weapon = newWeapon;
-        e.weaponSprite.setTexture(`${newWeapon}_attacking`);
+        e.weaponSprite.setTexture(newWeapon);
       }
 
       if (!wasDeadBefore && isDeadNow) {
@@ -1916,7 +1922,7 @@ export class GameScene extends Phaser.Scene {
     const serverWeapon = (myState?.weapon ?? "axe") as string;
     if (serverWeapon !== this.localWeaponKey) {
       this.localWeaponKey = serverWeapon;
-      this.localWeapon.setTexture(`${serverWeapon}_attacking`);
+      this.localWeapon.setTexture(serverWeapon);
     }
 
     // ── Weapon animation (axe orbits clockwise) ────────────────────────────
@@ -1938,8 +1944,9 @@ export class GameScene extends Phaser.Scene {
       const progress = 1 - this.localAttackTimer / ATTACK_ANIM_MS;
       // start at top (−π/2), sweep clockwise (increasing angle)
       const angle = -Math.PI / 2 + progress * 2 * Math.PI;
-      const wx = this.localSprite.x + AXE_ORBIT_RADIUS * Math.cos(angle);
-      const wy = this.localSprite.y + AXE_ORBIT_RADIUS * Math.sin(angle);
+      const localOrbitR = this.localWeapon.height / 2 + 10;
+      const wx = this.localSprite.x + localOrbitR * Math.cos(angle);
+      const wy = this.localSprite.y + localOrbitR * Math.sin(angle);
       this.localWeapon.setPosition(wx, wy);
       this.localWeapon.setRotation(angle + Math.PI / 2);
       this.localWeapon.setDepth(playerDepth + 1);
@@ -2018,8 +2025,9 @@ export class GameScene extends Phaser.Scene {
       if (entity.attackOrbitTimer > 0) {
         const progress = 1 - entity.attackOrbitTimer / ATTACK_ANIM_MS;
         const angle    = -Math.PI / 2 + progress * 2 * Math.PI;
-        const wx = sprite.x + AXE_ORBIT_RADIUS * Math.cos(angle);
-        const wy = sprite.y + AXE_ORBIT_RADIUS * Math.sin(angle);
+        const remoteOrbitR = weaponSprite.height / 2 + 10;
+        const wx = sprite.x + remoteOrbitR * Math.cos(angle);
+        const wy = sprite.y + remoteOrbitR * Math.sin(angle);
         weaponSprite.setPosition(wx, wy);
         weaponSprite.setRotation(angle + Math.PI / 2);
         weaponSprite.setDepth(playerDepth + 1);
@@ -2298,8 +2306,16 @@ export class GameScene extends Phaser.Scene {
     const R = 32;
 
     this.weaponHudBg      = this.add.graphics().setScrollFactor(0).setDepth(D);
-    this.weaponHudIcon    = this.add.image(0, 0, "axe_attacking")
-      .setScrollFactor(0).setDepth(D + 1).setDisplaySize(44, 44);
+    this.weaponHudIcon    = this.add.image(0, 0, "axe")
+      .setScrollFactor(0).setDepth(D + 1);
+    { // initial scale
+      const MAX_H = 64;
+      const natW  = this.weaponHudIcon.width;
+      const natH  = this.weaponHudIcon.height;
+      if (natH > MAX_H) {
+        this.weaponHudIcon.setDisplaySize(Math.round(natW * MAX_H / natH), MAX_H);
+      }
+    }
     this.weaponHudOverlay = this.add.graphics().setScrollFactor(0).setDepth(D + 2);
     this.weaponHudBorder  = this.add.graphics().setScrollFactor(0).setDepth(D + 3);
 
@@ -2332,10 +2348,18 @@ export class GameScene extends Phaser.Scene {
     // Keep hit area aligned (handles window resize)
     this.weaponHudHitArea.setPosition(cx, cy);
 
-    // Sync icon texture to current weapon (always use the attacking sprite)
-    const displayKey = `${this.localWeaponKey}_attacking`;
-    if (this.weaponHudIcon.texture.key !== displayKey) {
-      this.weaponHudIcon.setTexture(displayKey);
+    // Sync icon texture to current weapon
+    if (this.weaponHudIcon.texture.key !== this.localWeaponKey) {
+      this.weaponHudIcon.setTexture(this.localWeaponKey);
+      // Scale down to max 64 px tall, preserving aspect ratio
+      const MAX_H = 64;
+      const natW  = this.weaponHudIcon.width;
+      const natH  = this.weaponHudIcon.height;
+      if (natH > MAX_H) {
+        this.weaponHudIcon.setDisplaySize(Math.round(natW * MAX_H / natH), MAX_H);
+      } else {
+        this.weaponHudIcon.setDisplaySize(natW, natH);
+      }
     }
     this.weaponHudIcon.setPosition(cx, cy);
 

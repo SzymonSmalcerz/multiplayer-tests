@@ -7,6 +7,7 @@ import { getHitbox, isInsideHitbox }          from "../shared/combat";
 import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../shared/economy";
 import { OBJECT_REGISTRY }                    from "../shared/objects";
 import { ENEMY_REGISTRY }                     from "../shared/enemies";
+import { WEAPON_REGISTRY }                    from "../shared/weapons";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -63,17 +64,10 @@ const ENEMY_COUNT      = 10;
 const ENEMY_RESPAWN_MS = 10_000;
 
 // Player weapon
-const AXE_ORBIT_RADIUS      = 15;   // px — matches client orbit radius
-const WEAPON_SPRITE_RADIUS  = 33;   // px — bounding-circle radius of the attacking sprite
 const WEAPON_HIT_CD_MS      = 1_000; // prevent hitting the same enemy twice in one swing
-const PLAYER_ATTACK_ANIM_MS = 1_000; // 1-second orbit animation
-
-/** All purchasable weapons. Key matches schema player.weapon value. */
-const WEAPON_DATA: Record<string, { damage: number; cost: number }> = {
-  axe:       { damage: 50,  cost: 0   }, // default, not sold
-  great_axe: { damage: 100, cost: 200 },
-  solid_axe: { damage: 75,  cost: 100 },
-};
+const PLAYER_ATTACK_ANIM_MS = 750;  // 0.75-second orbit animation
+const DEFAULT_HIT_RADIUS    = 33;   // fallback if weapon not in registry
+const DEFAULT_ORBIT_RADIUS  = 47;   // fallback orbit radius (axe: 74/2+10)
 
 // ─── Shared interfaces ────────────────────────────────────────────────────────
 
@@ -416,7 +410,7 @@ export class GameRoom extends Room<GameState> {
       if (!player || player.isDead) return;
 
       const weaponKey = String(data.weapon ?? "");
-      const info = WEAPON_DATA[weaponKey];
+      const info = WEAPON_REGISTRY[weaponKey];
 
       // Must be a real purchasable weapon
       if (!info || info.cost === 0) return;
@@ -663,10 +657,12 @@ export class GameRoom extends Room<GameState> {
       // Mirror client angle calculation: start at top (−π/2), sweep clockwise
       const progress  = elapsed / PLAYER_ATTACK_ANIM_MS;
       const angle     = -Math.PI / 2 + progress * 2 * Math.PI;
-      const weaponX   = player.x + AXE_ORBIT_RADIUS * Math.cos(angle);
-      const weaponY   = player.y + AXE_ORBIT_RADIUS * Math.sin(angle);
-      const weaponInfo = WEAPON_DATA[player.weapon] ?? WEAPON_DATA["axe"];
-      const totalDmg   = weaponInfo.damage + player.attackBonus;
+      const weaponDef  = WEAPON_REGISTRY[player.weapon] ?? WEAPON_REGISTRY["axe"];
+      const orbitR    = weaponDef?.orbitRadius ?? DEFAULT_ORBIT_RADIUS;
+      const weaponX   = player.x + orbitR * Math.cos(angle);
+      const weaponY   = player.y + orbitR * Math.sin(angle);
+      const hitRadius  = weaponDef?.hitRadius ?? DEFAULT_HIT_RADIUS;
+      const totalDmg   = (weaponDef?.damage ?? 50) + player.attackBonus;
 
       this.state.enemies.forEach((enemy, enemyId) => {
         if (enemy.isDead) return;
@@ -675,7 +671,7 @@ export class GameRoom extends Room<GameState> {
         const dx   = enemy.x - weaponX;
         const dy   = enemy.y - weaponY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > WEAPON_SPRITE_RADIUS) return;
+        if (dist > hitRadius) return;
 
         const lastHit = cdMap.get(enemyId) ?? 0;
         if (now - lastHit < WEAPON_HIT_CD_MS) return;

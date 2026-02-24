@@ -9,9 +9,10 @@ const NPC_DISPLAY_W = 48;
 const NPC_DISPLAY_H = 64;
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let registry      = {};     // { [key]: { type, imageWidth, imageHeight, collision } }
-let mobRegistry   = {};     // { [key]: { type, frameWidth, frameHeight, … } }
-let enemyRegistry = {};     // { [key]: { type, label, defaultRespawnTime } }
+let registry       = {};     // { [key]: { type, imageWidth, imageHeight, collision } }
+let mobRegistry    = {};     // { [key]: { type, frameWidth, frameHeight, … } }
+let enemyRegistry  = {};     // { [key]: { type, label, defaultRespawnTime } }
+let weaponRegistry = {};     // { [key]: { type, label, damage, cost, hitRadius, spritePath } }
 const images      = {};     // { [key]: HTMLImageElement }
 
 let mapWidth  = 2000;
@@ -111,6 +112,7 @@ function buildSidebar() {
   addNpcSection();
   addMobSection();
   addEnemySection();
+  addWeaponSection();
 }
 
 function addSection(title, keys, category) {
@@ -274,6 +276,73 @@ function addEnemySection() {
   addBtn.href      = '/design/enemy-builder';
   addBtn.className = 'sidebar-add-btn';
   addBtn.textContent = '+ Add new enemy';
+  sidebar.appendChild(addBtn);
+}
+
+function addWeaponSection() {
+  const heading = document.createElement('div');
+  heading.className = 'sidebar-heading';
+  heading.textContent = 'Weapons (shop only)';
+  sidebar.appendChild(heading);
+
+  const keys = Object.keys(weaponRegistry).sort();
+  keys.forEach(key => {
+    const def  = weaponRegistry[key];
+    const item = document.createElement('div');
+    item.className = 'sidebar-item';
+    // Weapons are not placeable — no click-to-select, just display + edit
+
+    const thumbWrap = document.createElement('div');
+    thumbWrap.className = 'sidebar-thumb-wrap';
+    item.appendChild(thumbWrap);
+
+    const thumb = document.createElement('canvas');
+    thumb.width = thumb.height = 48;
+    thumb.className = 'sidebar-thumb';
+    thumbWrap.appendChild(thumb);
+
+    const editBtn = document.createElement('a');
+    editBtn.href      = `/design/weapon-editor?edit=${encodeURIComponent(key)}`;
+    editBtn.className = 'sidebar-edit-btn';
+    editBtn.title     = 'Edit weapon';
+    editBtn.textContent = '✏';
+    editBtn.addEventListener('click', e => e.stopPropagation());
+    thumbWrap.appendChild(editBtn);
+
+    const label = document.createElement('div');
+    label.className = 'sidebar-label';
+    label.textContent = `${def.label}\n${def.damage}dmg / ${def.cost}g`;
+    item.appendChild(label);
+
+    sidebar.appendChild(item);
+
+    const img = images['weapon_' + key];
+    function drawThumb() {
+      const tc = thumb.getContext('2d');
+      tc.clearRect(0, 0, 48, 48);
+      if (img && img.complete && img.naturalWidth > 0) {
+        const scale = Math.min(48 / img.naturalWidth, 48 / img.naturalHeight);
+        const dw = img.naturalWidth  * scale;
+        const dh = img.naturalHeight * scale;
+        try { tc.drawImage(img, (48 - dw) / 2, (48 - dh) / 2, dw, dh); } catch (_) {}
+      } else {
+        tc.fillStyle = '#3a3a5a';
+        tc.fillRect(4, 4, 40, 40);
+        tc.fillStyle = '#ccc';
+        tc.font = '9px sans-serif';
+        tc.textAlign = 'center';
+        tc.textBaseline = 'middle';
+        tc.fillText(key, 24, 24);
+      }
+    }
+    if (!img || img.complete) drawThumb();
+    else { img.addEventListener('load', drawThumb); img.addEventListener('error', drawThumb); }
+  });
+
+  const addBtn = document.createElement('a');
+  addBtn.href      = '/design/weapon-builder';
+  addBtn.className = 'sidebar-add-btn';
+  addBtn.textContent = '+ Add new weapon';
   sidebar.appendChild(addBtn);
 }
 
@@ -940,10 +1009,11 @@ async function init() {
   resizeCanvas();
 
   // Fetch all registries in parallel
-  const [objectsRes, mobsRes, enemiesRes] = await Promise.allSettled([
+  const [objectsRes, mobsRes, enemiesRes, weaponsRes] = await Promise.allSettled([
     fetch('/design/objects'),
     fetch('/design/mobs'),
     fetch('/design/enemies'),
+    fetch('/design/weapons'),
   ]);
 
   if (objectsRes.status === 'fulfilled' && objectsRes.value.ok) {
@@ -962,6 +1032,12 @@ async function init() {
     enemyRegistry = await enemiesRes.value.json();
   } else {
     statusBar.textContent = 'Failed to load enemy registry';
+  }
+
+  if (weaponsRes.status === 'fulfilled' && weaponsRes.value.ok) {
+    weaponRegistry = await weaponsRes.value.json();
+  } else {
+    statusBar.textContent = 'Failed to load weapon registry';
   }
 
   // Load images for all static objects (use spritePath from registry when available)
@@ -985,6 +1061,11 @@ async function init() {
   // Load enemy sprite sheets
   for (const key of Object.keys(enemyRegistry)) {
     loadImage('enemy_' + key, enemyRegistry[key].spritePath);
+  }
+
+  // Load weapon sprites
+  for (const key of Object.keys(weaponRegistry)) {
+    loadImage('weapon_' + key, weaponRegistry[key].spritePath);
   }
 
   // Fit map to viewport and start render loop

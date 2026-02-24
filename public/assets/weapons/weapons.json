@@ -1,0 +1,38 @@
+{
+  "axe": {
+    "type": "axe",
+    "label": "Axe",
+    "damage": 50,
+    "cost": 0,
+    "hitRadius": 39,
+    "orbitRadius": 47,
+    "spritePath": "/assets/weapons/axe_attacking.png"
+  },
+  "great_axe": {
+    "type": "great_axe",
+    "label": "Great Axe",
+    "damage": 100,
+    "cost": 200,
+    "hitRadius": 41,
+    "orbitRadius": 51,
+    "spritePath": "/assets/weapons/great_axe_attacking.png"
+  },
+  "solid_axe": {
+    "type": "solid_axe",
+    "label": "Solid Axe",
+    "damage": 75,
+    "cost": 100,
+    "hitRadius": 40,
+    "orbitRadius": 45,
+    "spritePath": "/assets/weapons/solid_axe_attacking.png"
+  },
+  "great_spear": {
+    "type": "great_spear",
+    "label": "Great spear",
+    "damage": 200,
+    "cost": 1000,
+    "hitRadius": 26,
+    "orbitRadius": 38,
+    "spritePath": "/assets/weapons/great_spear.png"
+  }
+}
