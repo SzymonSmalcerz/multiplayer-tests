@@ -740,12 +740,15 @@ export class GameRoom extends Room<GameState> {
       p.x      = this.spawnPoint.x;
       p.y      = this.spawnPoint.y;
       p.isDead = false;
+      // Reset lastPositions so the speed check anchors from the spawn point,
+      // not the death location (which could be 10+ seconds old).
+      this.lastPositions.set(sessionId, { x: this.spawnPoint.x, y: this.spawnPoint.y, time: Date.now() });
     }, 10_000);
   }
 
   // ── Player attack ────────────────────────────────────────────────────────────
 
-  /** Called every tick — checks the sword's current orbital position against all enemies. */
+  /** Called every tick — checks the sword's current orbital position against all enemies and players. */
   private tickPlayerWeapons(now: number): void {
     this.playerAttacks.forEach((startTime, sessionId) => {
       const player = this.state.players.get(sessionId);
@@ -753,6 +756,9 @@ export class GameRoom extends Room<GameState> {
 
       const elapsed = now - startTime;
       if (elapsed >= PLAYER_ATTACK_ANIM_MS) return; // guard (setTimeout handles cleanup)
+
+      // Neutral zone: attacker deals 0 damage to anyone (enemies or players)
+      if (this.isInNeutralZone(player.x, player.y)) return;
 
       const cdMap = this.playerHitCooldowns.get(sessionId);
       if (!cdMap) return;
@@ -767,8 +773,11 @@ export class GameRoom extends Room<GameState> {
       const hitRadius  = weaponDef?.hitRadius ?? DEFAULT_HIT_RADIUS;
       const totalDmg   = (weaponDef?.damage ?? 50) + player.attackBonus;
 
+      // ── vs enemies ────────────────────────────────────────────────────────
       this.state.enemies.forEach((enemy, enemyId) => {
         if (enemy.isDead) return;
+        // Neutral zone: target enemy is protected
+        if (this.isInNeutralZone(enemy.x, enemy.y)) return;
 
         // Hit if the enemy centre is within the weapon sprite's bounding circle
         const dx   = enemy.x - weaponX;
@@ -784,6 +793,32 @@ export class GameRoom extends Room<GameState> {
 
         if (enemy.hp <= 0) {
           this.killEnemy(enemyId, sessionId);
+        }
+      });
+
+      // ── vs players (PvP) ─────────────────────────────────────────────────
+      this.state.players.forEach((target, targetId) => {
+        if (targetId === sessionId) return; // can't hit self
+        if (target.isDead) return;
+        // Neutral zone: target player is protected
+        if (this.isInNeutralZone(target.x, target.y)) return;
+        // Same party: no friendly fire
+        if (player.partyId !== "" && player.partyId === target.partyId) return;
+
+        const dx   = target.x - weaponX;
+        const dy   = target.y - weaponY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > hitRadius) return;
+
+        const lastHit = cdMap.get(targetId) ?? 0;
+        if (now - lastHit < WEAPON_HIT_CD_MS) return;
+
+        cdMap.set(targetId, now);
+        target.hp = Math.max(0, target.hp - totalDmg);
+        this.playerLastDamagedAt.set(targetId, now);
+
+        if (target.hp <= 0) {
+          this.handlePlayerDeath(targetId, target);
         }
       });
     });
