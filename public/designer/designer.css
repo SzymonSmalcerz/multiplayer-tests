@@ -87,6 +87,17 @@ body {
   margin-left: 6px;
 }
 
+#toolbar .vis-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #aaa;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
 /* ── Main area ──────────────────────────────────────────────────────────────── */
 #main {
   display: flex;

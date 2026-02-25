@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tile Builder</title>
+  <link rel="stylesheet" href="/designer/enemy-builder.css">
+  <style>
+    .tb-form {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 8px 12px;
+      max-width: 400px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .tb-form label {
+      font-size: 12px;
+      color: #bbb;
+      text-align: right;
+    }
+    .tb-form input[type="text"],
+    .tb-form input[type="number"] {
+      padding: 5px 8px;
+      background: #2a2a2a;
+      border: 1px solid #555;
+      color: #eee;
+      border-radius: 3px;
+      font-size: 13px;
+      width: 100%;
+    }
+    .tb-form input:focus { outline: none; border-color: #7adf7a; }
+    .tb-form .tb-readonly {
+      padding: 5px 8px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #888;
+      border-radius: 3px;
+      font-size: 13px;
+    }
+    #upload-drop {
+      border: 2px dashed #555;
+      border-radius: 6px;
+      padding: 28px 20px;
+      text-align: center;
+      color: #888;
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      max-width: 400px;
+      margin-bottom: 18px;
+    }
+    #upload-drop.drag-over { border-color: #7adf7a; background: #1e2e1e; }
+    #upload-drop input[type="file"] { display: none; }
+    #upload-preview {
+      display: none;
+      max-width: 100%;
+      max-height: 200px;
+      border: 1px solid #444;
+      background: repeating-conic-gradient(#222 0% 25%, #333 0% 50%) 0 0 / 16px 16px;
+      image-rendering: pixelated;
+      margin-top: 10px;
+    }
+    #dim-error {
+      color: #f88;
+      font-size: 12px;
+      margin-top: 6px;
+      display: none;
+    }
+    #btn-save {
+      padding: 8px 22px;
+      background: #4a9;
+      border: none;
+      color: #fff;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #btn-save:disabled { background: #444; color: #888; cursor: default; }
+    #status { margin-top: 12px; font-size: 13px; }
+    .status-ok  { color: #7f7; }
+    .status-err { color: #f77; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <strong>Tile Builder</strong>
+    <span class="sep"> | </span>
+    <a href="/design" style="color:#aaa;font-size:12px">← Back to Map Designer</a>
+  </div>
+
+  <div id="eb-container">
+    <h3 style="margin-top:0;color:#ccc">Add a new tile type</h3>
+    <p style="color:#888;font-size:12px;margin-top:-8px">
+      Tiles must be PNG images whose width <em>and</em> height are multiples of 32 (e.g. 32×32, 64×64, 32×64).
+    </p>
+
+    <!-- Image upload -->
+    <div id="upload-drop">
+      <div>Drop a PNG here or <strong style="color:#7adf7a">click to browse</strong></div>
+      <input type="file" id="file-input" accept="image/png">
+      <img id="upload-preview" alt="preview">
+      <div id="dim-error">Dimensions must be multiples of 32.</div>
+    </div>
+
+    <!-- Form fields -->
+    <div class="tb-form">
+      <label>Type key</label>
+      <input type="text" id="inp-type" placeholder="e.g. water_tile" maxlength="40">
+
+      <label>Label</label>
+      <input type="text" id="inp-label" placeholder="e.g. Water" maxlength="60">
+
+      <label>Width (px)</label>
+      <div class="tb-readonly" id="disp-width">—</div>
+
+      <label>Height (px)</label>
+      <div class="tb-readonly" id="disp-height">—</div>
+    </div>
+
+    <button id="btn-save" disabled>Save Tile</button>
+    <div id="status"></div>
+  </div>
+
+  <script>
+    let imageBase64 = null;
+    let imageWidth  = 0;
+    let imageHeight = 0;
+    let dimensionsValid = false;
+
+    const drop      = document.getElementById('upload-drop');
+    const fileInput = document.getElementById('file-input');
+    const preview   = document.getElementById('upload-preview');
+    const dimError  = document.getElementById('dim-error');
+    const dispW     = document.getElementById('disp-width');
+    const dispH     = document.getElementById('disp-height');
+    const inpType   = document.getElementById('inp-type');
+    const inpLabel  = document.getElementById('inp-label');
+    const btnSave   = document.getElementById('btn-save');
+    const status    = document.getElementById('status');
+
+    drop.addEventListener('click', () => fileInput.click());
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      drop.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) loadFile(file);
+    });
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) loadFile(fileInput.files[0]);
+    });
+
+    function loadFile(file) {
+      if (file.type !== 'image/png') { alert('Only PNG files are supported.'); return; }
+      const reader = new FileReader();
+      reader.onload = e => {
+        imageBase64 = e.target.result;
+        const img = new Image();
+        img.onload = () => {
+          imageWidth  = img.naturalWidth;
+          imageHeight = img.naturalHeight;
+          dispW.textContent = imageWidth;
+          dispH.textContent = imageHeight;
+          dimensionsValid = (imageWidth % 32 === 0) && (imageHeight % 32 === 0);
+          dimError.style.display = dimensionsValid ? 'none' : 'block';
+          preview.src = imageBase64;
+          preview.style.display = 'block';
+          updateSaveBtn();
+        };
+        img.src = imageBase64;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    inpType.addEventListener('input', updateSaveBtn);
+    inpLabel.addEventListener('input', updateSaveBtn);
+
+    function updateSaveBtn() {
+      const typeOk  = /^[a-z0-9_]+$/.test(inpType.value.trim());
+      const labelOk = inpLabel.value.trim().length > 0;
+      btnSave.disabled = !(imageBase64 && dimensionsValid && typeOk && labelOk);
+    }
+
+    btnSave.addEventListener('click', async () => {
+      btnSave.disabled = true;
+      status.textContent = 'Saving…';
+      status.className = '';
+
+      const payload = {
+        type:        inpType.value.trim(),
+        label:       inpLabel.value.trim(),
+        imageWidth,
+        imageHeight,
+        imageBase64,
+      };
+
+      try {
+        const res  = await fetch('/design/save-tile', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? res.statusText);
+        status.textContent = `✓ Tile '${json.type}' saved successfully!`;
+        status.className = 'status-ok';
+        // Reset form
+        imageBase64 = null; imageWidth = 0; imageHeight = 0; dimensionsValid = false;
+        preview.style.display = 'none'; preview.src = '';
+        dispW.textContent = '—'; dispH.textContent = '—';
+        inpType.value = ''; inpLabel.value = '';
+        dimError.style.display = 'none';
+      } catch (err) {
+        status.textContent = `Error: ${err.message}`;
+        status.className = 'status-err';
+        btnSave.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

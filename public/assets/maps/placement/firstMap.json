@@ -1,4 +1,7 @@
 {
+  "defaultTile": "grass_basic",
+  "spawnPoint": { "x": 100, "y": 100 },
+  "tiles": [],
   "objects": [
     {
       "type": "tree1",
@@ -645,6 +648,11 @@
     {
       "type": "trader",
       "x": 1000,
+      "y": 1000
+    },
+    {
+      "type": "healer",
+      "x": 1060,
       "y": 1000
     }
   ],

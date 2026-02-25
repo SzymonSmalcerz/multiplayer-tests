@@ -1,0 +1,14 @@
+{
+  "grass_basic": {
+    "type": "grass_basic",
+    "label": "Grass Basic",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "dirt": {
+    "type": "dirt",
+    "label": "dirt",
+    "imageWidth": 32,
+    "imageHeight": 32
+  }
+}

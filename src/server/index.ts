@@ -8,6 +8,7 @@ import { OBJECT_REGISTRY, loadObjectRegistry, StaticObjectDef } from "../shared/
 import { MOB_REGISTRY } from "../shared/mobs";
 import { ENEMY_REGISTRY, loadEnemyRegistry, EnemyDef } from "../shared/enemies";
 import { WEAPON_REGISTRY, loadWeaponRegistry, WeaponDef } from "../shared/weapons";
+import { TILE_REGISTRY, loadTileRegistry, TileDef } from "../shared/tiles";
 import { GameRoom } from "./GameRoom";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -31,6 +32,16 @@ loadEnemyRegistry(enemiesJsonPath);
 
 const weaponsJsonPath = path.join(publicDir, "assets/weapons/weapons.json");
 loadWeaponRegistry(weaponsJsonPath);
+
+const tilesJsonPath = path.join(publicDir, "assets/tiles/tiles.json");
+loadTileRegistry(tilesJsonPath);
+
+// Ensure grass_basic.png exists in the tiles folder (copy from maps/ if needed)
+const tileGrassTarget = path.join(publicDir, "assets/tiles/grass_basic.png");
+const tileGrassSource = path.join(publicDir, "assets/maps/grass_basic.png");
+if (!fs.existsSync(tileGrassTarget) && fs.existsSync(tileGrassSource)) {
+  try { fs.copyFileSync(tileGrassSource, tileGrassTarget); } catch { /* ignore */ }
+}
 
 // ── Map designer endpoints (must come before the catch-all) ──────────────────
 
@@ -62,6 +73,82 @@ app.get("/design/weapon-builder", (_req, res) => {
 // Serve the weapon editor page
 app.get("/design/weapon-editor", (_req, res) => {
   res.sendFile(path.join(publicDir, "designer/weapon-editor.html"));
+});
+
+// Serve the tile builder page
+app.get("/design/tile-builder", (_req, res) => {
+  res.sendFile(path.join(publicDir, "designer/tile-builder.html"));
+});
+
+// Expose the tile registry
+app.get("/design/tiles", (_req, res) => {
+  res.json(TILE_REGISTRY);
+});
+
+// Save a new tile: write PNG + update tiles.json + hot-reload registry
+app.post("/design/save-tile", (req, res) => {
+  const body = req.body as {
+    type:        string;
+    label:       string;
+    imageWidth:  number;
+    imageHeight: number;
+    imageBase64: string;
+  };
+
+  if (!body.type || !/^[a-z0-9_]+$/.test(body.type)) {
+    res.status(400).json({ error: "Invalid type key (lowercase alphanumeric and _ only)" });
+    return;
+  }
+  if (TILE_REGISTRY[body.type]) {
+    res.status(409).json({ error: `Type '${body.type}' already exists` });
+    return;
+  }
+  if (typeof body.imageWidth !== "number" || typeof body.imageHeight !== "number") {
+    res.status(400).json({ error: "Missing or invalid imageWidth / imageHeight" });
+    return;
+  }
+  if (body.imageWidth % 32 !== 0 || body.imageHeight % 32 !== 0) {
+    res.status(400).json({ error: "Tile dimensions must be multiples of 32" });
+    return;
+  }
+  if (!body.imageBase64) {
+    res.status(400).json({ error: "Missing imageBase64" });
+    return;
+  }
+
+  const base64    = body.imageBase64.replace(/^data:image\/png;base64,/, "");
+  const pngBuffer = Buffer.from(base64, "base64");
+  const pngPath   = path.join(publicDir, "assets/tiles", `${body.type}.png`);
+
+  fs.writeFile(pngPath, pngBuffer, (pngErr) => {
+    if (pngErr) {
+      res.status(500).json({ error: `Failed to save PNG: ${pngErr.message}` });
+      return;
+    }
+
+    const entry: TileDef = {
+      type:        body.type,
+      label:       body.label,
+      imageWidth:  body.imageWidth,
+      imageHeight: body.imageHeight,
+    };
+
+    TILE_REGISTRY[body.type] = entry;
+
+    const existing: Record<string, TileDef> = {};
+    try {
+      Object.assign(existing, JSON.parse(fs.readFileSync(tilesJsonPath, "utf-8")));
+    } catch { /* file missing */ }
+    existing[body.type] = entry;
+
+    fs.writeFile(tilesJsonPath, JSON.stringify(existing, null, 2), (jsonErr) => {
+      if (jsonErr) {
+        res.status(500).json({ error: `Saved PNG but failed to update tiles.json: ${jsonErr.message}` });
+        return;
+      }
+      res.json({ ok: true, type: body.type });
+    });
+  });
 });
 
 // Expose the full object registry (built-ins + user-added)

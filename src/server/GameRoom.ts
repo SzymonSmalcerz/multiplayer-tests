@@ -31,6 +31,8 @@ export class PlayerState extends Schema {
   @type("string")  partyName: string = "";
   @type("number")  gold: number = 0;
   @type("string")  weapon: string = "sword";
+  @type("number")  potions: number = 0;
+  @type("number")  potionHealRemaining: number = 0;
 }
 
 export class EnemyState extends Schema {
@@ -119,6 +121,9 @@ export class GameRoom extends Room<GameState> {
   private npcData: Array<{ type: string; x: number; y: number }> = [];
   private mobData: Array<Record<string, unknown>> = [];
   private neutralZones: Array<{ x: number; y: number; width: number; height: number }> = [];
+  private tileData: Array<{ type: string; x: number; y: number }> = [];
+  private defaultTile: string = "grass_basic";
+  private spawnPoint: { x: number; y: number } = { x: 100, y: 100 };
   private lastPositions = new Map<string, LastPos>();
 
   // ── Enemy bookkeeping ──────────────────────────────────────────────────────
@@ -168,6 +173,9 @@ export class GameRoom extends Room<GameState> {
     // ── Load fixed objects positions from test.json ─────────────────────────
     const mapFile  = path.resolve(__dirname, "../../public/assets/maps/placement/test.json");
     const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
+      defaultTile?:  string;
+      spawnPoint?:   { x: number; y: number };
+      tiles?:        Array<{ type: string; x: number; y: number }>;
       objects:       Array<{ type: string; x: number; y: number }>;
       npcs?:         Array<{ type: string; x: number; y: number }>;
       mobs?:         Array<Record<string, unknown>>;
@@ -179,9 +187,12 @@ export class GameRoom extends Room<GameState> {
         this.objectData.push({ type: obj.type, x: obj.x, y: obj.y });
       }
     }
-    this.npcData = mapJson.npcs ?? [];
-    this.mobData = mapJson.mobs ?? [];
+    this.npcData      = mapJson.npcs  ?? [];
+    this.mobData      = mapJson.mobs  ?? [];
     this.neutralZones = mapJson.neutralZones ?? [];
+    this.tileData     = mapJson.tiles ?? [];
+    this.defaultTile  = mapJson.defaultTile ?? "grass_basic";
+    this.spawnPoint   = mapJson.spawnPoint   ?? { x: 100, y: 100 };
 
     // ── Spawn enemies from map definition (or fall back to random placement) ──
     const rawEnemies = mapJson.enemies;
@@ -210,7 +221,14 @@ export class GameRoom extends Room<GameState> {
     // ── Message handlers ──────────────────────────────────────────────────────
 
     this.onMessage("get_map", (client) => {
-      client.send("map_data", { objects: this.objectData, npcs: this.npcData, mobs: this.mobData });
+      client.send("map_data", {
+        defaultTile: this.defaultTile,
+        spawnPoint:  this.spawnPoint,
+        tiles:       this.tileData,
+        objects:     this.objectData,
+        npcs:        this.npcData,
+        mobs:        this.mobData,
+      });
     });
 
     this.onMessage("chat", (client, message: string) => {
@@ -429,12 +447,27 @@ export class GameRoom extends Room<GameState> {
       player.weapon  = weaponKey;
       player.showWeapon = true; // auto-equip on purchase
     });
+
+    this.onMessage("buy_potion", (client) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.isDead) return;
+      if (player.gold < 20) return;
+      player.gold   -= 20;
+      player.potions += 1;
+    });
+
+    this.onMessage("use_potion", (client) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.isDead || player.potions <= 0) return;
+      player.potions           -= 1;
+      player.potionHealRemaining += Math.round(player.maxHp * 0.30);
+    });
   }
 
   onJoin(client: Client, options: { nickname?: string; skin?: string }): void {
     const player = new PlayerState();
-    player.x         = 100 + Math.random() * (MAP_WIDTH  - 200);
-    player.y         = 100 + Math.random() * (MAP_HEIGHT - 200);
+    player.x         = this.spawnPoint.x;
+    player.y         = this.spawnPoint.y;
     player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
     player.skin      = String(options.skin ?? "male/1lvl");
     player.hp        = 100;
@@ -544,6 +577,7 @@ export class GameRoom extends Room<GameState> {
     this.tickCoins(now);
     this.tickPlayerWeapons(now);
     this.tickPlayerRegen(now, dtSec);
+    this.tickPotionHealing(dtSec);
 
     // Process respawn queue
     for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
@@ -666,6 +700,24 @@ export class GameRoom extends Room<GameState> {
     });
   }
 
+  // ── Potion healing ────────────────────────────────────────────────────────────
+
+  private tickPotionHealing(dtSec: number): void {
+    this.state.players.forEach((player) => {
+      if (player.potionHealRemaining <= 0) return;
+      // Once fully healed, discard the remaining pool immediately
+      if (player.hp >= player.maxHp) {
+        player.potionHealRemaining = 0;
+        return;
+      }
+      const healRate   = player.maxHp * 0.03 * dtSec;
+      const toApply    = Math.min(healRate, player.potionHealRemaining);
+      const actualHeal = Math.min(toApply, player.maxHp - player.hp);
+      player.hp                  += actualHeal;
+      player.potionHealRemaining  = Math.max(0, player.potionHealRemaining - actualHeal);
+    });
+  }
+
   // ── Player death & respawn ────────────────────────────────────────────────────
 
   private handlePlayerDeath(sessionId: string, player: PlayerState): void {
@@ -683,9 +735,10 @@ export class GameRoom extends Room<GameState> {
     setTimeout(() => {
       const p = this.state.players.get(sessionId);
       if (!p) return;
-      p.hp    = p.maxHp;
-      p.x     = 100 + Math.random() * (MAP_WIDTH  - 200);
-      p.y     = 100 + Math.random() * (MAP_HEIGHT - 200);
+      p.hp                   = p.maxHp;
+      p.potionHealRemaining  = 0;
+      p.x      = this.spawnPoint.x;
+      p.y      = this.spawnPoint.y;
       p.isDead = false;
     }, 10_000);
   }

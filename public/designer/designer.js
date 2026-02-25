@@ -2,7 +2,7 @@
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TREE_KEYS = new Set(['tree1', 'tree2', 'tree3']);
-const NPC_TYPES = ['trader'];
+const NPC_TYPES = ['trader', 'healer'];
 
 // Pixel size used to render NPC thumbnails / placements when no sprite found
 const NPC_DISPLAY_W = 48;
@@ -13,7 +13,10 @@ let registry       = {};     // { [key]: { type, imageWidth, imageHeight, collis
 let mobRegistry    = {};     // { [key]: { type, frameWidth, frameHeight, … } }
 let enemyRegistry  = {};     // { [key]: { type, label, defaultRespawnTime } }
 let weaponRegistry = {};     // { [key]: { type, label, damage, cost, hitRadius, spritePath } }
+let tileRegistry   = {};     // { [key]: { type, label, imageWidth, imageHeight } }
 const images      = {};     // { [key]: HTMLImageElement }
+
+const TILE_SNAP = 32;  // tiles always snap to 32 px grid
 
 let mapWidth  = 2000;
 let mapHeight = 2000;
@@ -23,9 +26,15 @@ let placedNpcs         = [];     // { type, x, y }[]
 let placedMobs         = [];     // { type, x, y, width, height, quantity }[]
 let placedEnemies      = [];     // { type, x, y, respawnTime }[]
 let placedNeutralZones = [];     // { x, y, width, height }[]
+let placedTiles        = [];     // { type, x, y }[]  — placed tiles (origin = top-left)
+let defaultTile        = 'grass_basic';  // key of the background tile for this map
+let spawnPoint         = { x: 100, y: 100 };  // player respawn location (one per map)
 
 let selectedType     = null;  // string | null
-let selectedCategory = null;  // 'object' | 'npc' | 'mob' | 'enemy' | 'neutralZone' | null
+let selectedCategory = null;  // 'object' | 'npc' | 'mob' | 'enemy' | 'neutralZone' | 'tile' | null
+
+// Tile painting state (click + drag to paint)
+let isPaintingTile = false;
 
 // Mob drag-to-draw state
 let isDraggingMob  = false;
@@ -36,6 +45,9 @@ let mobDragStartWY = 0;
 let isDraggingNeutralZone  = false;
 let neutralZoneDragStartWX = 0;
 let neutralZoneDragStartWY = 0;
+
+// Spawn point drag state
+let isDraggingSpawnPoint = false;
 
 // Canvas transform
 let zoom        = 0.3;
@@ -66,6 +78,10 @@ const mapHeightInput= document.getElementById('map-height');
 const saveBtn       = document.getElementById('save-btn');
 const loadBtn       = document.getElementById('load-btn');
 const clearBtn      = document.getElementById('clear-btn');
+const hideObjectsCb = document.getElementById('hide-objects');
+const hideNpcsCb    = document.getElementById('hide-npcs');
+const hideEnemiesCb = document.getElementById('hide-enemies');
+const hideMobsCb    = document.getElementById('hide-mobs');
 
 // ── Coordinate transforms ──────────────────────────────────────────────────────
 function worldToScreen(wx, wy) {
@@ -113,6 +129,7 @@ function buildSidebar() {
   const treeKeys = Object.keys(registry).filter(k => TREE_KEYS.has(k)).sort();
   const otherKeys = Object.keys(registry).filter(k => !TREE_KEYS.has(k)).sort();
 
+  addTileSection();
   addSection('Trees', treeKeys, 'object');
   addObjectSection(otherKeys);
   addNpcSection();
@@ -394,6 +411,124 @@ function addNeutralZoneSection() {
 
   item.addEventListener('click', () => selectType('neutral_zone', 'neutralZone'));
   sidebar.appendChild(item);
+
+  // Spawn point item
+  const spItem = document.createElement('div');
+  spItem.className = 'sidebar-item';
+  spItem.dataset.type     = 'spawn_point';
+  spItem.dataset.category = 'spawnPoint';
+
+  const spThumb = document.createElement('canvas');
+  spThumb.width  = 48;
+  spThumb.height = 48;
+  spThumb.className = 'sidebar-thumb';
+
+  // Draw a green circle thumbnail with "S"
+  const stc = spThumb.getContext('2d');
+  stc.beginPath();
+  stc.arc(24, 24, 18, 0, Math.PI * 2);
+  stc.fillStyle = 'rgba(40, 180, 60, 0.85)';
+  stc.fill();
+  stc.strokeStyle = '#fff';
+  stc.lineWidth = 2;
+  stc.stroke();
+  stc.fillStyle = '#fff';
+  stc.font = 'bold 16px sans-serif';
+  stc.textAlign = 'center';
+  stc.textBaseline = 'middle';
+  stc.fillText('S', 24, 24);
+
+  spItem.appendChild(spThumb);
+
+  const spLabel = document.createElement('div');
+  spLabel.className = 'sidebar-label';
+  spLabel.textContent = 'Spawn Point (click to place)';
+  spItem.appendChild(spLabel);
+
+  spItem.addEventListener('click', () => selectType('spawn_point', 'spawnPoint'));
+  sidebar.appendChild(spItem);
+}
+
+function addTileSection() {
+  const heading = document.createElement('div');
+  heading.className = 'sidebar-heading';
+  heading.textContent = 'Tiles (click/drag to paint)';
+  sidebar.appendChild(heading);
+
+  // Default tile indicator
+  const defRow = document.createElement('div');
+  defRow.id    = 'tile-default-row';
+  defRow.style.cssText = 'font-size:11px;color:#aaa;padding:2px 6px 6px 6px;';
+  defRow.textContent = `Background: ${defaultTile}`;
+  sidebar.appendChild(defRow);
+
+  const tileKeys = Object.keys(tileRegistry).sort();
+  tileKeys.forEach(key => {
+    const def  = tileRegistry[key];
+    const item = document.createElement('div');
+    item.className        = 'sidebar-item';
+    item.dataset.type     = key;
+    item.dataset.category = 'tile';
+
+    const thumbWrap = document.createElement('div');
+    thumbWrap.className = 'sidebar-thumb-wrap';
+    item.appendChild(thumbWrap);
+
+    const thumb = document.createElement('canvas');
+    thumb.width = thumb.height = 48;
+    thumb.className = 'sidebar-thumb';
+    thumbWrap.appendChild(thumb);
+
+    // "Set as default" button
+    const defBtn = document.createElement('button');
+    defBtn.textContent = '★';
+    defBtn.title = 'Set as map default tile';
+    defBtn.style.cssText = 'position:absolute;bottom:2px;right:2px;padding:0 3px;font-size:10px;background:#333;color:#fa3;border:1px solid #555;border-radius:2px;cursor:pointer;line-height:14px;';
+    defBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      defaultTile = key;
+      const row = document.getElementById('tile-default-row');
+      if (row) row.textContent = `Background: ${defaultTile}`;
+      updateStatus();
+    });
+    thumbWrap.appendChild(defBtn);
+
+    const label = document.createElement('div');
+    label.className = 'sidebar-label';
+    label.textContent = def.label || key;
+    item.appendChild(label);
+
+    item.addEventListener('click', () => selectType(key, 'tile'));
+    sidebar.appendChild(item);
+
+    const img = images['tile_' + key];
+    function drawThumb() {
+      const tc = thumb.getContext('2d');
+      tc.clearRect(0, 0, 48, 48);
+      if (img && img.complete && img.naturalWidth > 0) {
+        const scale = Math.min(48 / def.imageWidth, 48 / def.imageHeight);
+        const dw = def.imageWidth  * scale;
+        const dh = def.imageHeight * scale;
+        try { tc.drawImage(img, (48 - dw) / 2, (48 - dh) / 2, dw, dh); } catch (_) {}
+      } else {
+        tc.fillStyle = '#3a5a3a';
+        tc.fillRect(4, 4, 40, 40);
+        tc.fillStyle = '#ccc';
+        tc.font = '9px sans-serif';
+        tc.textAlign = 'center';
+        tc.textBaseline = 'middle';
+        tc.fillText(key.substring(0, 12), 24, 24);
+      }
+    }
+    if (!img || img.complete) drawThumb();
+    else { img.addEventListener('load', drawThumb); img.addEventListener('error', drawThumb); }
+  });
+
+  const addBtn = document.createElement('a');
+  addBtn.href      = '/design/tile-builder';
+  addBtn.className = 'sidebar-add-btn';
+  addBtn.textContent = '+ Add new tile';
+  sidebar.appendChild(addBtn);
 }
 
 /**
@@ -526,6 +661,21 @@ function createSidebarItem(imageKey, type, category) {
   return item;
 }
 
+function paintTileAt(wx, wy) {
+  if (!selectedType) return;
+  const snappedX = Math.floor(wx / TILE_SNAP) * TILE_SNAP;
+  const snappedY = Math.floor(wy / TILE_SNAP) * TILE_SNAP;
+  if (snappedX < 0 || snappedY < 0 || snappedX >= mapWidth || snappedY >= mapHeight) return;
+  // Replace any existing tile at the same snapped cell
+  const idx = placedTiles.findIndex(t => t.x === snappedX && t.y === snappedY);
+  if (idx !== -1) {
+    if (placedTiles[idx].type === selectedType) return; // already there
+    placedTiles.splice(idx, 1);
+  }
+  placedTiles.push({ type: selectedType, x: snappedX, y: snappedY });
+  updateStatus();
+}
+
 function selectType(type, category) {
   selectedType     = type;
   selectedCategory = category;
@@ -563,32 +713,84 @@ function render() {
   ctx.fillStyle = '#111';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Map background (grass)
+  // Map background — tile the defaultTile image or fall back to solid green
   const tl = worldToScreen(0, 0);
   const br = worldToScreen(mapWidth, mapHeight);
   const mw = br.x - tl.x;
   const mh = br.y - tl.y;
 
-  ctx.fillStyle = '#4a6a3a';
-  ctx.fillRect(tl.x, tl.y, mw, mh);
+  const bgTileDef = tileRegistry[defaultTile];
+  const bgTileImg = bgTileDef ? images['tile_' + defaultTile] : null;
+  if (bgTileImg && bgTileImg.complete && bgTileImg.naturalWidth > 0) {
+    const tileW = bgTileDef.imageWidth  * zoom;
+    const tileH = bgTileDef.imageHeight * zoom;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(tl.x, tl.y, mw, mh);
+    ctx.clip();
+    try {
+      const pattern = ctx.createPattern(bgTileImg, 'repeat');
+      if (pattern) {
+        const mat = new DOMMatrix();
+        mat.a = tileW / bgTileImg.naturalWidth;
+        mat.d = tileH / bgTileImg.naturalHeight;
+        mat.e = tl.x;
+        mat.f = tl.y;
+        pattern.setTransform(mat);
+        ctx.fillStyle = pattern;
+        ctx.fillRect(tl.x, tl.y, mw, mh);
+      } else {
+        ctx.fillStyle = '#4a6a3a';
+        ctx.fillRect(tl.x, tl.y, mw, mh);
+      }
+    } catch (_) {
+      ctx.fillStyle = '#4a6a3a';
+      ctx.fillRect(tl.x, tl.y, mw, mh);
+    }
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#4a6a3a';
+    ctx.fillRect(tl.x, tl.y, mw, mh);
+  }
 
   // Grid
   drawGrid(tl, br);
 
+  // Placed non-default tiles
+  placedTiles.forEach(tile => renderTile(tile, 1.0));
+
+  // Tile cursor preview (snapped)
+  if (selectedCategory === 'tile' && selectedType && cursorOnCanvas) {
+    const def = tileRegistry[selectedType];
+    if (def) {
+      const snappedX = Math.floor(cursorWX / TILE_SNAP) * TILE_SNAP;
+      const snappedY = Math.floor(cursorWY / TILE_SNAP) * TILE_SNAP;
+      renderTile({ type: selectedType, x: snappedX, y: snappedY }, 0.5);
+    }
+  }
+
   // Placed static objects
-  placedObjects.forEach(obj => renderObject(obj.type, obj.x, obj.y, 'object', 1.0));
+  if (!hideObjectsCb.checked) {
+    placedObjects.forEach(obj => renderObject(obj.type, obj.x, obj.y, 'object', 1.0));
+  }
 
   // Placed NPCs
-  placedNpcs.forEach(obj => renderObject(obj.type, obj.x, obj.y, 'npc', 1.0));
+  if (!hideNpcsCb.checked) {
+    placedNpcs.forEach(obj => renderObject(obj.type, obj.x, obj.y, 'npc', 1.0));
+  }
 
   // Placed mob zones
-  placedMobs.forEach(mob => renderMobZone(mob, 1.0));
+  if (!hideMobsCb.checked) {
+    placedMobs.forEach(mob => renderMobZone(mob, 1.0));
+  }
 
   // Placed neutral zones
   placedNeutralZones.forEach(zone => renderNeutralZone(zone, 1.0));
 
   // Placed enemies
-  placedEnemies.forEach(e => renderEnemyMarker(e, 1.0));
+  if (!hideEnemiesCb.checked) {
+    placedEnemies.forEach(e => renderEnemyMarker(e, 1.0));
+  }
 
   // Mob drag preview
   if (isDraggingMob && selectedType && cursorOnCanvas) {
@@ -619,8 +821,57 @@ function render() {
   }
 
   // Object/NPC placement preview under cursor (only when not dragging a mob, enemy, or neutral zone)
-  if (selectedType && cursorOnCanvas && selectedCategory !== 'mob' && selectedCategory !== 'enemy' && selectedCategory !== 'neutralZone') {
+  if (selectedType && cursorOnCanvas && selectedCategory !== 'mob' && selectedCategory !== 'enemy' && selectedCategory !== 'neutralZone' && selectedCategory !== 'tile') {
     renderObject(selectedType, cursorWX, cursorWY, selectedCategory, 0.45);
+  }
+
+  // Spawn point marker (always visible, draggable)
+  {
+    const sp  = worldToScreen(spawnPoint.x, spawnPoint.y);
+    const r   = Math.max(10, 14 * zoom);
+    ctx.save();
+    ctx.globalAlpha = 1.0;
+    // Outer circle
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = isDraggingSpawnPoint ? 'rgba(80, 220, 80, 0.9)' : 'rgba(40, 180, 60, 0.85)';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // "S" label
+    const fontSize = Math.max(10, Math.round(13 * zoom));
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('S', sp.x, sp.y);
+    // "Spawn" text below
+    ctx.font = `${Math.max(8, Math.round(10 * zoom))}px sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillText('Spawn', sp.x, sp.y + r + Math.max(6, 8 * zoom));
+    ctx.restore();
+  }
+
+  // Spawn point cursor preview (when placing via sidebar)
+  if (selectedCategory === 'spawnPoint' && cursorOnCanvas) {
+    const cp = worldToScreen(cursorWX, cursorWY);
+    const r  = Math.max(10, 14 * zoom);
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath();
+    ctx.arc(cp.x, cp.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(40, 180, 60, 0.85)';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.max(10, Math.round(13 * zoom))}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('S', cp.x, cp.y);
+    ctx.restore();
   }
 
   // Map border
@@ -772,6 +1023,28 @@ function renderNeutralZone(zone, alpha) {
   ctx.globalAlpha = 1;
 }
 
+function renderTile(tile, alpha) {
+  const def = tileRegistry[tile.type];
+  if (!def) return;
+  const { x: sx, y: sy } = worldToScreen(tile.x, tile.y);
+  const dw = def.imageWidth  * zoom;
+  const dh = def.imageHeight * zoom;
+  ctx.globalAlpha = alpha;
+  const img = images['tile_' + tile.type];
+  if (img && img.complete && img.naturalWidth > 0) {
+    try { ctx.drawImage(img, sx, sy, dw, dh); } catch (_) {}
+  } else {
+    ctx.fillStyle = 'rgba(80,150,80,0.7)';
+    ctx.fillRect(sx, sy, dw, dh);
+    ctx.fillStyle = '#fff';
+    ctx.font = `${Math.max(8, 9 * zoom)}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(tile.type, sx + 2, sy + 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
 // ── Coordinate helpers ─────────────────────────────────────────────────────────
 function objectDisplaySize(type, category) {
   if (category === 'npc') return { w: NPC_DISPLAY_W, h: NPC_DISPLAY_H };
@@ -806,6 +1079,14 @@ canvas.addEventListener('mousemove', e => {
     panY = panStartPanY + (panStartMY - sy) / zoom;
   }
 
+  if (isDraggingSpawnPoint) {
+    spawnPoint = { x: Math.round(world.x), y: Math.round(world.y) };
+  }
+
+  if (isPaintingTile && selectedCategory === 'tile' && selectedType) {
+    paintTileAt(Math.round(world.x), Math.round(world.y));
+  }
+
   updateStatus();
 });
 
@@ -835,7 +1116,21 @@ canvas.addEventListener('mousedown', e => {
     return;
   }
 
-  // Left click: start mob drag OR place object/NPC
+  // Left click on spawn point marker: start dragging it
+  if (e.button === 0 && !spaceDown) {
+    const spScreen = worldToScreen(spawnPoint.x, spawnPoint.y);
+    const hitR = Math.max(10, 14 * zoom) + 4;
+    const dx = sx - spScreen.x;
+    const dy = sy - spScreen.y;
+    if (dx * dx + dy * dy <= hitR * hitR) {
+      isDraggingSpawnPoint = true;
+      canvas.style.cursor = 'move';
+      e.preventDefault();
+      return;
+    }
+  }
+
+  // Left click: start mob drag OR tile painting OR place object/NPC
   if (e.button === 0 && selectedType) {
     const world = screenToWorld(sx, sy);
     const wx = Math.round(world.x);
@@ -856,6 +1151,20 @@ canvas.addEventListener('mousedown', e => {
       neutralZoneDragStartWX = wx;
       neutralZoneDragStartWY = wy;
       canvas.style.cursor = 'crosshair';
+      e.preventDefault();
+      return;
+    }
+
+    if (selectedCategory === 'tile') {
+      isPaintingTile = true;
+      paintTileAt(wx, wy);
+      e.preventDefault();
+      return;
+    }
+
+    if (selectedCategory === 'spawnPoint') {
+      spawnPoint = { x: wx, y: wy };
+      updateStatus();
       e.preventDefault();
       return;
     }
@@ -885,6 +1194,11 @@ canvas.addEventListener('mousedown', e => {
 
 // Stop panning / finalise mob rect / finalise neutral zone on mouseup anywhere in the document
 document.addEventListener('mouseup', e => {
+  if (isDraggingSpawnPoint) {
+    isDraggingSpawnPoint = false;
+    canvas.style.cursor = 'crosshair';
+    return;
+  }
   if (isDraggingMob) {
     isDraggingMob = false;
     if (selectedType) {
@@ -922,6 +1236,9 @@ document.addEventListener('mouseup', e => {
     isPanning = false;
     canvas.style.cursor = spaceDown ? 'grab' : 'crosshair';
   }
+  if (isPaintingTile) {
+    isPaintingTile = false;
+  }
 });
 
 canvas.addEventListener('contextmenu', e => {
@@ -930,6 +1247,18 @@ canvas.addEventListener('contextmenu', e => {
   const world = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
   const wx    = world.x;
   const wy    = world.y;
+
+  // Tiles: erase at the snapped grid cell
+  if (selectedCategory === 'tile') {
+    const snappedX = Math.floor(wx / TILE_SNAP) * TILE_SNAP;
+    const snappedY = Math.floor(wy / TILE_SNAP) * TILE_SNAP;
+    const idx = placedTiles.findIndex(t => t.x === snappedX && t.y === snappedY);
+    if (idx !== -1) {
+      placedTiles.splice(idx, 1);
+      updateStatus();
+      return;
+    }
+  }
 
   // Try enemies first (point markers, ±12 px square hit area)
   for (let i = placedEnemies.length - 1; i >= 0; i--) {
@@ -1004,7 +1333,9 @@ document.addEventListener('keydown', e => {
   }
   // Delete/Backspace: remove the last placed item in the active category
   if ((e.code === 'Delete' || e.code === 'Backspace') && document.activeElement === document.body) {
-    if (selectedCategory === 'enemy' && placedEnemies.length > 0) {
+    if (selectedCategory === 'tile' && placedTiles.length > 0) {
+      placedTiles.pop();
+    } else if (selectedCategory === 'enemy' && placedEnemies.length > 0) {
       placedEnemies.pop();
     } else if (selectedCategory === 'mob' && placedMobs.length > 0) {
       placedMobs.pop();
@@ -1063,7 +1394,7 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  const data = { objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies, neutralZones: placedNeutralZones };
+  const data = { defaultTile, spawnPoint, tiles: placedTiles, objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies, neutralZones: placedNeutralZones };
 
   statusBar.textContent = `Saving ${name}.json…`;
   try {
@@ -1074,7 +1405,7 @@ saveBtn.addEventListener('click', async () => {
     });
     const json = await res.json();
     if (json.ok) {
-      statusBar.textContent = `Saved → public/assets/maps/placement/${name}.json  (${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies, ${placedNeutralZones.length} neutral zones)`;
+      statusBar.textContent = `Saved → ${name}.json  (${placedTiles.length} tiles, ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies, ${placedNeutralZones.length} neutral zones)`;
     } else {
       statusBar.textContent = `Save failed: ${json.error}`;
     }
@@ -1099,12 +1430,18 @@ loadBtn.addEventListener('click', async () => {
       return;
     }
     const data = await res.json();
+    defaultTile        = data.defaultTile || 'grass_basic';
+    spawnPoint         = (data.spawnPoint && typeof data.spawnPoint.x === 'number') ? data.spawnPoint : { x: 100, y: 100 };
+    placedTiles        = Array.isArray(data.tiles)        ? data.tiles        : [];
     placedObjects      = Array.isArray(data.objects)      ? data.objects      : [];
     placedNpcs         = Array.isArray(data.npcs)         ? data.npcs         : [];
     placedMobs         = Array.isArray(data.mobs)         ? data.mobs         : [];
     placedEnemies      = Array.isArray(data.enemies)      ? data.enemies      : [];
     placedNeutralZones = Array.isArray(data.neutralZones) ? data.neutralZones : [];
-    statusBar.textContent = `Loaded ${name}.json — ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies, ${placedNeutralZones.length} neutral zones`;
+    // Refresh the default tile indicator in sidebar
+    const defRow = document.getElementById('tile-default-row');
+    if (defRow) defRow.textContent = `Background: ${defaultTile}`;
+    statusBar.textContent = `Loaded ${name}.json — ${placedTiles.length} tiles, ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies, ${placedNeutralZones.length} neutral zones`;
   } catch (err) {
     statusBar.textContent = `Load error: ${err.message}`;
   }
@@ -1112,9 +1449,10 @@ loadBtn.addEventListener('click', async () => {
 
 // ── Clear ──────────────────────────────────────────────────────────────────────
 clearBtn.addEventListener('click', () => {
-  const total = placedObjects.length + placedNpcs.length + placedMobs.length + placedEnemies.length + placedNeutralZones.length;
+  const total = placedTiles.length + placedObjects.length + placedNpcs.length + placedMobs.length + placedEnemies.length + placedNeutralZones.length;
   if (total === 0) return;
   if (confirm(`Clear all ${total} placed items?`)) {
+    placedTiles        = [];
     placedObjects      = [];
     placedNpcs         = [];
     placedMobs         = [];
@@ -1126,11 +1464,12 @@ clearBtn.addEventListener('click', () => {
 
 // ── Status helper ──────────────────────────────────────────────────────────────
 function updateStatus() {
-  const sel    = selectedType ? `Selected: ${selectedType}` : 'No selection';
+  const sel    = isDraggingSpawnPoint ? `Dragging spawn point` : (selectedType ? `Selected: ${selectedType}` : 'No selection');
   const coords = cursorOnCanvas ? `  Cursor: (${cursorWX}, ${cursorWY})` : '';
-  const count  = `  Objects: ${placedObjects.length}  NPCs: ${placedNpcs.length}  Mob zones: ${placedMobs.length}  Enemies: ${placedEnemies.length}  Neutral zones: ${placedNeutralZones.length}`;
-  const hint   = (selectedCategory === 'mob' || selectedCategory === 'neutralZone') ? '  — drag to draw rect' : '';
-  statusBar.textContent = sel + hint + coords + count;
+  const spawn  = `  Spawn: (${spawnPoint.x}, ${spawnPoint.y})`;
+  const count  = `  Tiles: ${placedTiles.length}  Objects: ${placedObjects.length}  NPCs: ${placedNpcs.length}  Mob zones: ${placedMobs.length}  Enemies: ${placedEnemies.length}  Neutral zones: ${placedNeutralZones.length}`;
+  const hint   = (selectedCategory === 'mob' || selectedCategory === 'neutralZone') ? '  — drag to draw rect' : (selectedCategory === 'tile' ? '  — click/drag to paint, right-click to erase' : '');
+  statusBar.textContent = sel + hint + coords + spawn + count;
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────────
@@ -1138,11 +1477,12 @@ async function init() {
   resizeCanvas();
 
   // Fetch all registries in parallel
-  const [objectsRes, mobsRes, enemiesRes, weaponsRes] = await Promise.allSettled([
+  const [objectsRes, mobsRes, enemiesRes, weaponsRes, tilesRes] = await Promise.allSettled([
     fetch('/design/objects'),
     fetch('/design/mobs'),
     fetch('/design/enemies'),
     fetch('/design/weapons'),
+    fetch('/design/tiles'),
   ]);
 
   if (objectsRes.status === 'fulfilled' && objectsRes.value.ok) {
@@ -1167,6 +1507,12 @@ async function init() {
     weaponRegistry = await weaponsRes.value.json();
   } else {
     statusBar.textContent = 'Failed to load weapon registry';
+  }
+
+  if (tilesRes.status === 'fulfilled' && tilesRes.value.ok) {
+    tileRegistry = await tilesRes.value.json();
+  } else {
+    statusBar.textContent = 'Failed to load tile registry';
   }
 
   // Load images for all static objects (use spritePath from registry when available)
@@ -1195,6 +1541,11 @@ async function init() {
   // Load weapon sprites
   for (const key of Object.keys(weaponRegistry)) {
     loadImage('weapon_' + key, weaponRegistry[key].spritePath);
+  }
+
+  // Load tile images
+  for (const key of Object.keys(tileRegistry)) {
+    loadImage('tile_' + key, `/assets/tiles/${key}.png`);
   }
 
   // Fit map to viewport and start render loop

@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import {
   GameSceneData, MapDataMessage, RemotePlayer, RemotePlayerEntity,
-  StaticObjectData, EnemyData, EnemyEntity, NpcData,
+  StaticObjectData, EnemyData, EnemyEntity, NpcData, TilePlacement,
 } from "./types";
 import { StaticObjectDef } from "../shared/staticObjects";
 import { WeaponDef } from "../shared/weapons";
@@ -9,6 +9,8 @@ import { MOB_REGISTRY } from "../shared/mobs";
 import { MobSystem } from "./MobSystem";
 import { ShopUI } from "./ui/ShopUI";
 import { EquipmentUI } from "./ui/EquipmentUI";
+import { HealerShopUI } from "./ui/HealerShopUI";
+import { ActionBarUI } from "./ui/ActionBarUI";
 import { ALL_SKINS, FRAME_W as FRAME_SIZE } from "./skins";
 import {
   xpForNextLevel,
@@ -126,13 +128,16 @@ export class GameScene extends Phaser.Scene {
   private staticObjectsGroup!: Phaser.Physics.Arcade.StaticGroup;
   private animatedObjectsGroup!: Phaser.Physics.Arcade.StaticGroup;
   private objectsRegistry: Record<string, StaticObjectDef> = {};
+  private bgTileSprite!: Phaser.GameObjects.TileSprite;
+  private tilesRegistry: Record<string, { type: string; imageWidth: number; imageHeight: number }> = {};
 
   // HUD
-  private hudHpBar!: Phaser.GameObjects.Graphics;
-  private hudXpBar!: Phaser.GameObjects.Graphics;
-  private hudHpText!: Phaser.GameObjects.Text;
-  private hudXpText!: Phaser.GameObjects.Text;
-  private hudGoldText!: Phaser.GameObjects.Text;
+  private hudHpBar!:     Phaser.GameObjects.Graphics;
+  private hudPotionBar!: Phaser.GameObjects.Graphics; // green incoming-heal overlay on HP bar
+  private hudXpBar!:     Phaser.GameObjects.Graphics;
+  private hudHpText!:    Phaser.GameObjects.Text;
+  private hudXpText!:    Phaser.GameObjects.Text;
+  private hudGoldText!:  Phaser.GameObjects.Text;
 
   // Party state
   private myPartyId      = "";
@@ -195,6 +200,10 @@ export class GameScene extends Phaser.Scene {
   private shopUI!: ShopUI;
   // Equipment panel
   private equipmentUI!: EquipmentUI;
+  // Healer shop
+  private healerShopUI!: HealerShopUI;
+  // Action bar
+  private actionBarUI!: ActionBarUI;
   private npcPositions: Array<{ type: string; x: number; y: number }> = [];
 
   // Mobs (client-side only, purely decorative)
@@ -231,8 +240,14 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Background tile
-    this.load.image("grass", "/assets/maps/grass.png");
+    // Background tiles — loaded dynamically from tiles registry
+    this.load.json("tiles_registry", "/design/tiles");
+    this.load.once("filecomplete-json-tiles_registry", () => {
+      const defs = (this.cache.json.get("tiles_registry") ?? {}) as Record<string, { type: string; imageWidth: number; imageHeight: number }>;
+      for (const def of Object.values(defs)) {
+        this.load.image(def.type, `/assets/tiles/${def.type}.png`);
+      }
+    });
     this.load.image("minimap_icon", "/assets/maps/minimap_icon.png");
 
     // Click-to-move markers
@@ -274,8 +289,12 @@ export class GameScene extends Phaser.Scene {
     // Equipment panel background
     this.load.image("eq_background", "/assets/design/eq_background.png");
 
-    // Trader NPC
+    // Consumables
+    this.load.image("health_potion", "/assets/consumable/health_potion.png");
+
+    // NPC sprites
     this.load.image("trader", "/assets/npcs/trader.png");
+    this.load.image("healer", "/assets/npcs/healer.png");
 
     // Enemy spritesheets — loaded dynamically from enemies.json
     this.load.json("enemies_registry", "/assets/enemies/enemies.json");
@@ -302,7 +321,10 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     // ── Background ─────────────────────────────────────────────────────────
-    this.add.tileSprite(0, 0, MAP_W, MAP_H, "grass").setOrigin(0, 0).setDepth(0);
+    // Start with grass_basic; updated to the map's defaultTile when map_data arrives
+    this.tilesRegistry = (this.cache.json.get("tiles_registry") ?? {}) as Record<string, { type: string; imageWidth: number; imageHeight: number }>;
+    const firstTile = Object.keys(this.tilesRegistry)[0] ?? "grass_basic";
+    this.bgTileSprite = this.add.tileSprite(0, 0, MAP_W, MAP_H, firstTile).setOrigin(0, 0).setDepth(0);
 
     // ── Physics world bounds ────────────────────────────────────────────────
     this.physics.world.setBounds(0, 0, MAP_W, MAP_H);
@@ -350,14 +372,53 @@ export class GameScene extends Phaser.Scene {
       () => { this.ignoreNextMapClick = true; },
     );
 
+    // ── Action Bar UI ─────────────────────────────────────────────────────────
+    this.actionBarUI = new ActionBarUI(
+      this,
+      () => {
+        const ps = this.room.state.players.get(this.mySessionId);
+        if (!ps) return null;
+        return {
+          potions:             ps.potions             as number,
+          potionHealRemaining: ps.potionHealRemaining as number,
+          hp:    ps.hp    as number,
+          maxHp: ps.maxHp as number,
+        };
+      },
+      (itemType) => {
+        if (itemType === "health_potion") this.room.send("use_potion");
+      },
+    );
+    this.actionBarUI.build();
+
     // ── Equipment UI ─────────────────────────────────────────────────────────
     this.equipmentUI = new EquipmentUI(
       this,
       this.weaponsRegistry,
       () => {
         const ps = this.room.state.players.get(this.mySessionId);
-        return ps ? { weapon: ps.weapon as string } : null;
+        if (!ps) return null;
+        return {
+          weapon:              ps.weapon              as string,
+          potions:             ps.potions             as number,
+          potionHealRemaining: ps.potionHealRemaining as number,
+          hp:    ps.hp    as number,
+          maxHp: ps.maxHp as number,
+        };
       },
+      () => { this.room.send("use_potion"); },
+      () => { this.ignoreNextMapClick = true; },
+      this.actionBarUI,
+    );
+
+    // ── Healer Shop UI ────────────────────────────────────────────────────────
+    this.healerShopUI = new HealerShopUI(
+      this,
+      () => {
+        const ps = this.room.state.players.get(this.mySessionId);
+        return ps ? { gold: ps.gold as number, potions: ps.potions as number } : null;
+      },
+      () => { this.room.send("buy_potion"); },
       () => { this.ignoreNextMapClick = true; },
     );
 
@@ -380,12 +441,23 @@ export class GameScene extends Phaser.Scene {
     this.keySpace = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyEnter = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
+    // ── Disable right-click context menu on canvas ───────────────────────────
+    this.input.mouse?.disableContextMenu();
+
     // ── Chat UI ──────────────────────────────────────────────────────────────
     this.setupChatUI();
+
+    // ── Keys 1–4 → action bar ────────────────────────────────────────────────
+    this.input.keyboard!.on("keydown-ONE",   () => { if (!this.isTyping) this.actionBarUI.activateSlot(0); });
+    this.input.keyboard!.on("keydown-TWO",   () => { if (!this.isTyping) this.actionBarUI.activateSlot(1); });
+    this.input.keyboard!.on("keydown-THREE", () => { if (!this.isTyping) this.actionBarUI.activateSlot(2); });
+    this.input.keyboard!.on("keydown-FOUR",  () => { if (!this.isTyping) this.actionBarUI.activateSlot(3); });
 
     // ── I key → equipment panel ───────────────────────────────────────────────
     this.keyI.on("down", () => {
       if (this.isTyping) return;
+      this.shopUI.close();
+      this.healerShopUI.close();
       this.equipmentUI.toggle();
     });
 
@@ -410,8 +482,8 @@ export class GameScene extends Phaser.Scene {
     // ── Click / tap to move ──────────────────────────────────────────────────
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.isTyping) return;
-      // Block map clicks while the trader shop or equipment panel is open
-      if (this.shopUI.isShopOpen || this.equipmentUI.isEquipmentOpen) return;
+      // Block map clicks while any UI panel is open
+      if (this.shopUI.isShopOpen || this.healerShopUI.isHealerShopOpen || this.equipmentUI.isEquipmentOpen) return;
       // Sprite click handlers set this flag first; scene fires after
       if (this.ignoreNextMapClick) {
         this.ignoreNextMapClick = false;
@@ -532,6 +604,16 @@ export class GameScene extends Phaser.Scene {
 
     this.tickDeathTimer(delta);
     this.updateWeaponHUD();
+
+    // ── Consumable UI live updates ────────────────────────────────────────────
+    const potions     = (myState?.potions             as number) ?? 0;
+    const healPool    = (myState?.potionHealRemaining as number) ?? 0;
+    const hp          = (myState?.hp    as number) ?? 0;
+    const maxHp       = (myState?.maxHp as number) ?? 100;
+    this.actionBarUI.update(potions, healPool, hp, maxHp);
+    if (this.equipmentUI.isEquipmentOpen) {
+      this.equipmentUI.updateItems(potions, healPool, hp, maxHp);
+    }
     this.sendPositionIfNeeded(time);
   }
 
@@ -563,6 +645,11 @@ export class GameScene extends Phaser.Scene {
 
     // HP fill bar (redrawn each frame)
     this.hudHpBar = this.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(D + 2);
+
+    // Potion incoming-heal overlay on HP bar (green segment, redrawn each frame)
+    this.hudPotionBar = this.add.graphics()
       .setScrollFactor(0)
       .setDepth(D + 2);
 
@@ -623,11 +710,25 @@ export class GameScene extends Phaser.Scene {
     const maxBarW = 192;
 
     // HP bar
-    const hpRatio = Math.max(0, Math.min(1, p.hp / p.maxHp));
+    const hpRatio  = Math.max(0, Math.min(1, p.hp / p.maxHp));
+    const hpFillW  = Math.floor(maxBarW * hpRatio);
     this.hudHpBar.clear();
     this.hudHpBar.fillStyle(0xff3333, 1);
-    this.hudHpBar.fillRect(12, 14, Math.floor(maxBarW * hpRatio), 13);
+    this.hudHpBar.fillRect(12, 14, hpFillW, 13);
     this.hudHpText.setText(`HP: ${Math.floor(p.hp)}/${p.maxHp}`);
+
+    // Potion incoming-heal overlay (green segment continuing from current HP)
+    const potionRemaining = (p.potionHealRemaining as number) ?? 0;
+    this.hudPotionBar.clear();
+    if (potionRemaining > 0 && p.maxHp > 0) {
+      const poolCapped  = Math.min(potionRemaining, p.maxHp - p.hp);
+      const poolRatio   = Math.max(0, poolCapped / p.maxHp);
+      const poolW       = Math.floor(maxBarW * poolRatio);
+      if (poolW > 0) {
+        this.hudPotionBar.fillStyle(0x44ff88, 0.8);
+        this.hudPotionBar.fillRect(12 + hpFillW, 14, poolW, 13);
+      }
+    }
 
     // XP bar
     const xpNeeded = xpForNextLevel(p.level);
@@ -1151,6 +1252,12 @@ export class GameScene extends Phaser.Scene {
     this.localGrave?.destroy();
     this.localGrave = undefined;
 
+    // Teleport sprite to server-authoritative respawn position
+    const p = this.room.state.players.get(this.mySessionId);
+    if (p) {
+      this.localSprite.setPosition(p.x, p.y);
+    }
+
     // Restore player visuals
     this.localSprite.setVisible(true);
 
@@ -1286,6 +1393,12 @@ export class GameScene extends Phaser.Scene {
 
   private setupRoomListeners(): void {
     this.room.onMessage("map_data", (data: MapDataMessage) => {
+      // Apply map default tile to the background
+      if (data.defaultTile && this.textures.exists(data.defaultTile)) {
+        this.bgTileSprite.setTexture(data.defaultTile);
+      }
+      // Render individually placed tiles (depth 0.5 = above background, below objects)
+      this.placeTiles(data.tiles ?? []);
       this.placeStaticObjects(data.objects);
       this.buildNavGrid(data.objects);
       this.physics.add.collider(this.localSprite, this.staticObjectsGroup);
@@ -2084,6 +2197,15 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // ── Tile placement ──────────────────────────────────────────────────────────
+
+  private placeTiles(tiles: TilePlacement[]): void {
+    for (const tile of tiles) {
+      if (!this.textures.exists(tile.type)) continue;
+      this.add.image(tile.x, tile.y, tile.type).setOrigin(0, 0).setDepth(0.5);
+    }
+  }
+
   // ── Static object placement ─────────────────────────────────────────────────
 
   private placeStaticObjects(objects: StaticObjectData[]): void {
@@ -2097,33 +2219,37 @@ export class GameScene extends Phaser.Scene {
         if (def.collision) {
           // Animated with collision — physics sprite
           const sprite = this.animatedObjectsGroup.create(obj.x, obj.y, obj.type, 0) as Phaser.Physics.Arcade.Sprite;
+          sprite.setOrigin(0, 0);
           sprite.setDisplaySize(def.imageWidth, def.imageHeight);
           const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
           body.setSize(def.collision.x1 - def.collision.x0, def.collision.y1 - def.collision.y0);
           body.setOffset(def.collision.x0, def.collision.y0);
-          sprite.setDepth(obj.y + def.imageHeight / 2);
+          sprite.setDepth(obj.y + def.imageHeight);
           sprite.play(`anim_${obj.type}`);
         } else {
           // Animated, no collision — visual-only sprite
           const sprite = this.add.sprite(obj.x, obj.y, obj.type, 0);
+          sprite.setOrigin(0, 0);
           sprite.setDisplaySize(def.imageWidth, def.imageHeight);
-          sprite.setDepth(obj.y + def.imageHeight / 2);
+          sprite.setDepth(obj.y + def.imageHeight);
           sprite.play(`anim_${obj.type}`);
         }
       } else {
         if (def.collision) {
           // Static with collision — physics image
           const img = this.staticObjectsGroup.create(obj.x, obj.y, obj.type) as Phaser.Physics.Arcade.Image;
+          img.setOrigin(0, 0);
           img.setDisplaySize(def.imageWidth, def.imageHeight);
           const body = img.body as Phaser.Physics.Arcade.StaticBody;
           body.setSize(def.collision.x1 - def.collision.x0, def.collision.y1 - def.collision.y0);
           body.setOffset(def.collision.x0, def.collision.y0);
-          img.setDepth(obj.y + def.imageHeight / 2);
+          img.setDepth(obj.y + def.imageHeight);
         } else {
           // Static, no collision — visual-only image
           const img = this.add.image(obj.x, obj.y, obj.type);
+          img.setOrigin(0, 0);
           img.setDisplaySize(def.imageWidth, def.imageHeight);
-          img.setDepth(obj.y + def.imageHeight / 2);
+          img.setDepth(obj.y + def.imageHeight);
         }
       }
     }
@@ -2415,30 +2541,43 @@ export class GameScene extends Phaser.Scene {
       .strokeCircle(cx, cy, R);
   }
 
-  // ── Trader NPC & Shop ──────────────────────────────────────────────────────
+  // ── NPCs & Shop ────────────────────────────────────────────────────────────
+
+  /** Scale a freshly-created NPC sprite down so it is at most 64 px tall. */
+  private fitNpcSprite(sprite: Phaser.GameObjects.Image): void {
+    const MAX_H = 48;
+    if (sprite.height > MAX_H) {
+      sprite.setDisplaySize(Math.round(sprite.width * MAX_H / sprite.height), MAX_H);
+    }
+  }
 
   private placeNpcs(npcs: NpcData[]): void {
     this.npcPositions = npcs.map(n => ({ type: n.type, x: n.x, y: n.y }));
     for (const npc of npcs) {
       if (npc.type === "trader") {
         this.createTrader(npc.x, npc.y);
+      } else if (npc.type === "healer") {
+        this.createHealer(npc.x, npc.y);
       }
     }
   }
 
   private createTrader(traderX: number, traderY: number): void {
-    const depth   = traderY + 40;
+    const depth  = traderY + 40;
 
     const sprite = this.add.image(traderX, traderY, "trader")
+      .setOrigin(0, 0)
       .setDepth(depth)
       .setInteractive({ useHandCursor: true });
+    this.fitNpcSprite(sprite);
+    const labelX = traderX + sprite.displayWidth / 2;
 
-    this.add.text(traderX, traderY - 40, "Trader", {
+    this.add.text(labelX, traderY - 40, "Trader", {
       fontSize: "13px", color: "#ffd700",
       stroke: "#000000", strokeThickness: 3, resolution: 2,
     }).setOrigin(0.5, 1).setDepth(depth + 1);
 
-    this.add.text(traderX, traderY - 54, "[click to trade]", {
+    this.add.text(labelX, traderY - 54, "[click to trade]", {
       fontSize: "10px", color: "#aaaaaa",
       stroke: "#000000", strokeThickness: 2, resolution: 2,
     }).setOrigin(0.5, 1).setDepth(depth + 1);
@@ -2448,6 +2587,34 @@ export class GameScene extends Phaser.Scene {
     sprite.on("pointerdown", () => {
       this.ignoreNextMapClick = true;
       this.shopUI.toggle();
+    });
+  }
+
+  private createHealer(healerX: number, healerY: number): void {
+    const depth  = healerY + 40;
+
+    const sprite = this.add.image(healerX, healerY, "healer")
+      .setOrigin(0, 0)
+      .setDepth(depth)
+      .setInteractive({ useHandCursor: true });
+    this.fitNpcSprite(sprite);
+    const labelX = healerX + sprite.displayWidth / 2;
+
+    this.add.text(labelX, healerY - 40, "Healer", {
+      fontSize: "13px", color: "#88ffcc",
+      stroke: "#000000", strokeThickness: 3, resolution: 2,
+    }).setOrigin(0.5, 1).setDepth(depth + 1);
+
+    this.add.text(labelX, healerY - 54, "[click to trade]", {
+      fontSize: "10px", color: "#aaaaaa",
+      stroke: "#000000", strokeThickness: 2, resolution: 2,
+    }).setOrigin(0.5, 1).setDepth(depth + 1);
+
+    sprite.on("pointerover", () => sprite.setTint(0xddffee));
+    sprite.on("pointerout",  () => sprite.clearTint());
+    sprite.on("pointerdown", () => {
+      this.ignoreNextMapClick = true;
+      this.healerShopUI.toggle();
     });
   }
 

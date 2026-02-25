@@ -47,11 +47,21 @@ export interface EnemyPlacement {
   respawnTime: number;  // seconds
 }
 
+/** A tile placed at a specific grid-snapped position on the map */
+export interface TilePlacement {
+  type: string;
+  x:    number;
+  y:    number;
+}
+
 /** Map initialisation message payload */
 export interface MapDataMessage {
-  objects: StaticObjectData[];
-  npcs:    NpcData[];
-  mobs:    MobPlacement[];
+  defaultTile?: string;
+  spawnPoint?:  { x: number; y: number };
+  tiles?:       TilePlacement[];
+  objects:      StaticObjectData[];
+  npcs:         NpcData[];
+  mobs:         MobPlacement[];
 }
 
 /** Chat message payload */
@@ -82,6 +92,8 @@ export interface RemotePlayer {
   partyName: string;
   gold: number;
   weapon: string;
+  potions: number;
+  potionHealRemaining: number;
   onChange: (cb: () => void) => void;
 }
 
