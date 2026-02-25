@@ -2147,12 +2147,12 @@ export class GameScene extends Phaser.Scene {
       const playerDepth = sprite.y + FRAME_SIZE / 2;
       sprite.setDepth(playerDepth);
 
-      // ── Party member world HP bar ─────────────────────────────────────────
+      // ── World HP bar ──────────────────────────────────────────────────────
       if (entity.hpBar) {
         entity.hpBar.clear();
         // Use live state — never rely on cached partyId
         const rp = this.room.state.players.get(sessionId);
-        if (rp && this.myPartyId !== "" && rp.partyId === this.myPartyId && rp.maxHp > 0) {
+        if (rp && rp.maxHp > 0) {
           const hpRatio = Math.max(0, Math.min(1, rp.hp / rp.maxHp));
           const bw = 40;
           const bx = sprite.x - bw / 2;
