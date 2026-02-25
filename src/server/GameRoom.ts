@@ -33,6 +33,7 @@ export class PlayerState extends Schema {
   @type("string")  weapon: string = "sword";
   @type("number")  potions: number = 0;
   @type("number")  potionHealRemaining: number = 0;
+  @type("boolean") disconnected: boolean = false;
 }
 
 export class EnemyState extends Schema {
@@ -125,6 +126,12 @@ export class GameRoom extends Room<GameState> {
   private defaultTile: string = "grass_basic";
   private spawnPoint: { x: number; y: number } = { x: 100, y: 100 };
   private lastPositions = new Map<string, LastPos>();
+
+  // ── Session persistence (reconnection) ────────────────────────────────────
+  /** persistentId (localStorage UUID) → active sessionId */
+  private persistentIdToSession = new Map<string, string>();
+  /** sessionId → persistentId */
+  private sessionToPersistentId = new Map<string, string>();
 
   // ── Enemy bookkeeping ──────────────────────────────────────────────────────
   private enemyCounter    = 0;
@@ -464,7 +471,23 @@ export class GameRoom extends Room<GameState> {
     });
   }
 
-  onJoin(client: Client, options: { nickname?: string; skin?: string }): void {
+  onJoin(client: Client, options: { nickname?: string; skin?: string; persistentId?: string }): void {
+    // ── Multi-window prevention ──────────────────────────────────────────────
+    const pid = typeof options.persistentId === "string" ? options.persistentId.slice(0, 64) : "";
+    if (pid) {
+      const existingSessionId = this.persistentIdToSession.get(pid);
+      if (existingSessionId && existingSessionId !== client.sessionId) {
+        const existingPlayer = this.state.players.get(existingSessionId);
+        // Only kick if the old session is currently active (not already in grace period)
+        if (existingPlayer && !existingPlayer.disconnected) {
+          const oldClient = this.clients.find((c: Client) => c.sessionId === existingSessionId);
+          oldClient?.leave(4001); // 4001 = replaced by new window
+        }
+      }
+      this.persistentIdToSession.set(pid, client.sessionId);
+      this.sessionToPersistentId.set(client.sessionId, pid);
+    }
+
     const player = new PlayerState();
     player.x         = this.spawnPoint.x;
     player.y         = this.spawnPoint.y;
@@ -490,26 +513,47 @@ export class GameRoom extends Room<GameState> {
     console.log(`[Room] ${player.nickname} (${client.sessionId}) joined. Players: ${this.state.players.size}`);
   }
 
-  onLeave(client: Client): void {
+  async onLeave(client: Client, _consented: boolean): Promise<void> {
     const player = this.state.players.get(client.sessionId);
     const name   = player?.nickname ?? client.sessionId;
 
-    // Clean up party state before removing from schema
-    this.disbandOrLeaveParty(client.sessionId);
+    // Mark as disconnected — ghost stays in world, still killable
+    if (player) player.disconnected = true;
 
-    // Remove any pending invites FROM this client
+    // Clean up ephemeral social state that shouldn't linger during disconnect
+    this.disbandOrLeaveParty(client.sessionId);
     this.pendingInvites.forEach((_inviterId, targetId) => {
       if (_inviterId === client.sessionId) this.pendingInvites.delete(targetId);
     });
     this.pendingInvites.delete(client.sessionId);
 
-    this.state.players.delete(client.sessionId);
-    this.lastPositions.delete(client.sessionId);
-    this.playerHitCooldowns.delete(client.sessionId);
-    this.playerAttacks.delete(client.sessionId);
-    this.playerLastDamagedAt.delete(client.sessionId);
-    this.playerLastRegenAt.delete(client.sessionId);
-    console.log(`[Room] ${name} left. Players: ${this.state.players.size}`);
+    console.log(`[Room] ${name} disconnected — holding slot for 60 s`);
+
+    try {
+      await this.allowReconnection(client, 60);
+      // Player reconnected within the grace period
+      if (player) player.disconnected = false;
+      console.log(`[Room] ${name} reconnected`);
+    } catch {
+      // Grace period expired — clean up for real
+      this.state.players.delete(client.sessionId);
+      this.lastPositions.delete(client.sessionId);
+      this.playerHitCooldowns.delete(client.sessionId);
+      this.playerAttacks.delete(client.sessionId);
+      this.playerLastDamagedAt.delete(client.sessionId);
+      this.playerLastRegenAt.delete(client.sessionId);
+
+      // Remove persistent ID mapping, guarding against a newer session having taken over
+      const pid = this.sessionToPersistentId.get(client.sessionId);
+      if (pid) {
+        if (this.persistentIdToSession.get(pid) === client.sessionId) {
+          this.persistentIdToSession.delete(pid);
+        }
+        this.sessionToPersistentId.delete(client.sessionId);
+      }
+
+      console.log(`[Room] ${name} removed (grace period expired). Players: ${this.state.players.size}`);
+    }
   }
 
   onDispose(): void {

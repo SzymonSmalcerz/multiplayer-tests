@@ -266,6 +266,38 @@
       from { opacity: 1; }
       to { opacity: 0; }
     }
+
+    /* ── Reconnecting overlay ─────────────────────────────────────── */
+    #reconnecting-banner {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.82);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 300;
+    }
+
+    .reconnecting-card {
+      background: rgba(20, 40, 20, 0.95);
+      border: 2px solid rgba(100, 200, 100, 0.35);
+      border-radius: 14px;
+      padding: 40px 48px;
+      color: #8fff8f;
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    }
+
+    .reconnecting-card .sub {
+      margin-top: 8px;
+      font-size: 0.78rem;
+      font-weight: 400;
+      color: #6a9a6a;
+      letter-spacing: 0;
+    }
   </style>
 </head>
 <body>
@@ -276,6 +308,14 @@
     <div id="chat-display"></div>
     <div id="chat-input-wrap">
       <input id="chat-input" type="text" placeholder="Press Enter to send..." maxlength="100" />
+    </div>
+  </div>
+
+  <!-- Reconnecting overlay (shown while attempting session recovery) -->
+  <div id="reconnecting-banner">
+    <div class="reconnecting-card">
+      Reconnecting…
+      <p class="sub">Restoring your session</p>
     </div>
   </div>
 

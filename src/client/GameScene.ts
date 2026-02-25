@@ -230,6 +230,11 @@ export class GameScene extends Phaser.Scene {
     this.localNickname = data.nickname;
     this.localSkin     = data.skin;
     this.mySessionId   = data.room.sessionId as string;
+
+    // Keep reconnection token fresh — it may change after a reconnect
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const token = (data.room as any).reconnectionToken as string | undefined;
+    if (token) localStorage.setItem("reconnToken", token);
   }
 
   preload(): void {
@@ -1559,6 +1564,13 @@ export class GameScene extends Phaser.Scene {
       this.showPlayerActionMenu(sessionId, pointer.x, pointer.y);
     });
 
+    // Apply disconnected appearance immediately if player is already a ghost
+    if (player.disconnected) {
+      sprite.setAlpha(0.45);
+      weaponSprite.setAlpha(0.45);
+      label.setAlpha(0.45);
+    }
+
     const entity: RemotePlayerEntity = {
       sprite,
       weaponSprite,
@@ -1598,6 +1610,12 @@ export class GameScene extends Phaser.Scene {
       e.isAttacking     = player.isAttacking || false;
       e.attackDirection = player.attackDirection ?? 0;
       e.isDead          = isDeadNow;
+
+      // Grey out disconnected (ghost) players; restore on reconnect
+      const ghostAlpha = player.disconnected ? 0.45 : 1;
+      e.sprite.setAlpha(ghostAlpha);
+      e.weaponSprite.setAlpha(ghostAlpha);
+      e.label.setAlpha(ghostAlpha);
 
       // Start orbit timer when attack begins
       if (!wasAttacking && e.isAttacking) {
@@ -2618,20 +2636,10 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // ── Disconnect banner ──────────────────────────────────────────────────────
+  // ── Disconnect / reconnect ─────────────────────────────────────────────────
 
   private showDisconnectBanner(): void {
-    const { width, height } = this.scale;
-    this.add
-      .text(width / 2, height / 2, "Disconnected from server\n(refresh to reconnect)", {
-        fontSize: "24px",
-        color: "#ff4444",
-        stroke: "#000",
-        strokeThickness: 4,
-        align: "center",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(99999);
+    // Transition back to HomeScene — it will auto-reconnect using the saved token
+    this.scene.start("HomeScene");
   }
 }

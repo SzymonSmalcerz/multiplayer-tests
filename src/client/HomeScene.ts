@@ -27,6 +27,25 @@ const BG_SIZE = `${SHEET_COLS * THUMB_PX}px ${SHEET_ROWS * THUMB_PX}px`;
 /** Background-position Y for the preview row (row 2 = walk-down) */
 const BG_POS_Y = -(PREVIEW_ROW * THUMB_PX);
 
+// ── LocalStorage keys ────────────────────────────────────────────────────────
+
+const LS_PLAYER_ID   = "playerId";
+const LS_RECON_TOKEN = "reconnToken";
+const LS_NICKNAME    = "playerNickname";
+const LS_SKIN        = "playerSkin";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Returns a persistent random UUID for this browser, creating one if absent. */
+function getPersistentId(): string {
+  let id = localStorage.getItem(LS_PLAYER_ID);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(LS_PLAYER_ID, id);
+  }
+  return id;
+}
+
 // ── HomeScene ────────────────────────────────────────────────────────────────
 
 export class HomeScene extends Phaser.Scene {
@@ -38,7 +57,51 @@ export class HomeScene extends Phaser.Scene {
   }
 
   create(): void {
+    void this.tryReconnect();
+  }
+
+  // ── Reconnection ─────────────────────────────────────────────────────────
+
+  private async tryReconnect(): Promise<void> {
+    const token = localStorage.getItem(LS_RECON_TOKEN);
+
+    if (token) {
+      this.setReconnecting(true);
+      try {
+        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+        const client   = new Client(`${protocol}://${window.location.host}`);
+        // reconnectionToken encodes the roomId — pass it alone
+        const room     = await client.reconnect(token);
+
+        // Update token with the fresh one returned after reconnect
+        localStorage.setItem(LS_RECON_TOKEN, room.reconnectionToken);
+
+        this.setReconnecting(false);
+        const overlay = document.getElementById("overlay");
+        if (overlay) overlay.style.display = "none";
+
+        const data: GameSceneData = {
+          room,
+          nickname: localStorage.getItem(LS_NICKNAME) ?? "Player",
+          skin:     localStorage.getItem(LS_SKIN)     ?? MALE_SKINS[0],
+        };
+        this.scene.start("GameScene", data);
+        return;
+      } catch {
+        // Token expired or room gone — fall through to normal login
+        localStorage.removeItem(LS_RECON_TOKEN);
+        this.setReconnecting(false);
+      }
+    }
+
     this.showOverlay();
+  }
+
+  private setReconnecting(active: boolean): void {
+    const banner  = document.getElementById("reconnecting-banner");
+    const overlay = document.getElementById("overlay");
+    if (banner)  banner.style.display  = active ? "flex" : "none";
+    if (overlay) overlay.style.display = active ? "none" : "flex";
   }
 
   // ── Overlay ──────────────────────────────────────────────────────────────
@@ -47,13 +110,27 @@ export class HomeScene extends Phaser.Scene {
     const overlay = document.getElementById("overlay");
     if (overlay) overlay.style.display = "flex";
 
-    this.buildAvatarGrid("male");
+    // Pre-fill skin from last session
+    const savedSkin = localStorage.getItem(LS_SKIN);
+    if (savedSkin) {
+      const gender = savedSkin.startsWith("female/") ? "female" : "male";
+      this.activeGender = gender;
+      this.selectedSkin = savedSkin;
+      // Sync the tab button highlight
+      document.querySelectorAll<HTMLButtonElement>(".tab-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.gender === gender);
+      });
+    }
+
+    this.buildAvatarGrid(this.activeGender);
     this.wireTabButtons();
     this.wireJoinButton();
 
     const input = document.getElementById("nickname") as HTMLInputElement | null;
     if (input) {
-      input.value = "";
+      // Pre-fill nickname from last session
+      const savedNick = localStorage.getItem(LS_NICKNAME);
+      input.value = savedNick ?? "";
       input.focus();
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") void this.joinGame();
@@ -132,7 +209,7 @@ export class HomeScene extends Phaser.Scene {
   }
 
   private async joinGame(): Promise<void> {
-    const input  = document.getElementById("nickname") as HTMLInputElement | null;
+    const input   = document.getElementById("nickname") as HTMLInputElement | null;
     const joinBtn = document.getElementById("join-btn") as HTMLButtonElement | null;
     const errorEl = document.getElementById("error-msg");
 
@@ -149,8 +226,14 @@ export class HomeScene extends Phaser.Scene {
 
       const room = await client.joinOrCreate("game", {
         nickname,
-        skin: this.selectedSkin,
+        skin:        this.selectedSkin,
+        persistentId: getPersistentId(),
       });
+
+      // Persist session info for reconnection
+      localStorage.setItem(LS_RECON_TOKEN, room.reconnectionToken);
+      localStorage.setItem(LS_NICKNAME,    nickname);
+      localStorage.setItem(LS_SKIN,        this.selectedSkin);
 
       const overlay = document.getElementById("overlay");
       if (overlay) overlay.style.display = "none";
