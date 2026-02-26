@@ -26,6 +26,15 @@ export class EquipmentUI {
   private objects: Phaser.GameObjects.GameObject[]        = [];
   private tooltipObjects: Phaser.GameObjects.GameObject[] = [];
 
+  // Inventory state: 3x3 grid (9 slots). null means empty.
+  private inventory: Array<string | null> = [
+    "health_potion", null, null,
+    null, null, null,
+    null, null, null
+  ];
+  // Screen-space bounds for each inventory cell (for drag-drop)
+  private gridBounds: Array<{ x: number; y: number; w: number; h: number }> = [];
+
   // Live-updatable potion display (null when panel is closed or no potions)
   private potionCountText:   Phaser.GameObjects.Text  | null = null;
   private potionIconObj:     Phaser.GameObjects.Image | null = null;
@@ -34,6 +43,7 @@ export class EquipmentUI {
 
   // Drag state
   private dragGhost:        Phaser.GameObjects.Image | null = null;
+  private dragSourceIdx:    number | null = null;
   private dragMoveHandler:  ((ptr: Phaser.Input.Pointer) => void) | null = null;
   private dragUpHandler:    ((ptr: Phaser.Input.Pointer) => void) | null = null;
 
@@ -66,7 +76,7 @@ export class EquipmentUI {
     if (!this.isOpen) return;
 
     if (potions === 0 && this.potionCellObjects.length > 0) {
-      // Player just used their last potion — tear down the cell
+      // Player just used their last potion — tear down all potion cells
       for (const obj of this.potionCellObjects) obj.destroy();
       this.potionCellObjects = [];
       this.potionCountText   = null;
@@ -74,9 +84,10 @@ export class EquipmentUI {
       return;
     }
 
+    // Update count text and tint for whatever potion cell is currently rendered
     if (this.potionCountText) this.potionCountText.setText(String(potions));
     if (this.potionIconObj) {
-      const canUse = hp < maxHp && potionHealRemaining < (maxHp - hp);
+      const canUse = potions > 0 && hp < maxHp && potionHealRemaining < (maxHp - hp);
       this.potionIconObj.setTint(canUse ? 0xffffff : 0xaaaaaa);
     }
   }
@@ -229,10 +240,15 @@ export class EquipmentUI {
     const totalW   = GRID_COLS * CELL + (GRID_COLS - 1) * CELL_GAP;
     const gridLeft = px + Math.round((PANEL_W - totalW) / 2);
 
+    this.gridBounds = [];
+
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
         const cx = gridLeft + col * (CELL + CELL_GAP);
         const cy = gridTop  + row * (CELL + CELL_GAP);
+        const idx = row * GRID_COLS + col;
+
+        this.gridBounds.push({ x: cx, y: cy, w: CELL, h: CELL });
 
         // Cell background — always rendered for every cell
         add(s.add.graphics()
@@ -247,9 +263,10 @@ export class EquipmentUI {
           .fillRect(cx + CELL - 3, cy + CELL - 3, 3, 3)
           .setScrollFactor(0).setDepth(D + 2));
 
-        // Cell (0,0) potion contents — icon + count only when player owns at least one
-        if (row === 0 && col === 0 && (ps?.potions ?? 0) > 0) {
-          this.buildPotionCell(s, cx, cy, CELL, ps!.potions, ps!.potionHealRemaining ?? 0, ps!.hp ?? 0, ps!.maxHp ?? 100, D);
+        // Render item if slot is not empty
+        const itemType = this.inventory[idx];
+        if (itemType === "health_potion" && (ps?.potions ?? 0) > 0) {
+          this.buildPotionCell(s, cx, cy, CELL, ps!.potions, ps!.potionHealRemaining ?? 0, ps!.hp ?? 0, ps!.maxHp ?? 100, D, idx);
         }
       }
     }
@@ -260,6 +277,7 @@ export class EquipmentUI {
     cx: number, cy: number, CELL: number,
     potions: number, potionHealRemaining: number, hp: number, maxHp: number,
     D: number,
+    slotIdx: number,
   ): void {
     // All objects tracked in potionCellObjects so they can be destroyed independently
     const add = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
@@ -295,7 +313,7 @@ export class EquipmentUI {
 
     // Hit area — right-click to consume, left-drag to action bar
     const hit = s.add.rectangle(cx + CELL / 2, cy + CELL / 2, CELL, CELL, 0, 0)
-      .setScrollFactor(0).setDepth(D + 5).setInteractive({ useHandCursor: true,  draggable: true });
+      .setScrollFactor(0).setDepth(D + 5).setInteractive({ useHandCursor: true });
     add(hit);
 
     hit.on("pointerover", () => {
@@ -314,41 +332,53 @@ export class EquipmentUI {
         if (live.potionHealRemaining >= live.maxHp - live.hp) return;
         this.onUsePotion();
       } else {
-        // Left-click: begin drag to action bar
-        this.beginDrag(ptr, cx, cy, CELL, D);
+        // Left-click: begin drag
+        this.beginDrag(ptr, cx, cy, CELL, D, slotIdx);
       }
     });
   }
 
-  private beginDrag(ptr: Phaser.Input.Pointer, cellX: number, cellY: number, CELL: number, D: number): void {
-    const live = this.getPlayerState();
-    if (!live || live.potions <= 0) return;
+  private beginDrag(ptr: Phaser.Input.Pointer, cellX: number, cellY: number, CELL: number, D: number, sourceIdx: number): void {
+    const itemType = this.inventory[sourceIdx];
+    if (!itemType) return;
+
+    // For potions, check if player has any
+    if (itemType === "health_potion") {
+      const live = this.getPlayerState();
+      if (!live || live.potions <= 0) return;
+    }
 
     const s = this.scene;
+    this.dragSourceIdx = sourceIdx;
 
     // Ghost image following pointer
-    const ghost = s.add.image(ptr.x, ptr.y, "health_potion")
+    const ghost = s.add.image(ptr.x, ptr.y, itemType === "health_potion" ? "health_potion" : itemType)
       .setScrollFactor(0).setDepth(D + 10).setAlpha(0.75);
     ghost.setDisplaySize(36, 36);
     this.dragGhost = ghost;
     this.objects.push(ghost);
 
-    // Highlight valid action bar slots
-    const slotBounds = this.actionBarUI.getSlotBounds();
+    // Get target bounds
+    const actionBarBounds = this.actionBarUI.getSlotBounds();
+    const invBounds       = this.gridBounds;
 
     this.dragMoveHandler = (p: Phaser.Input.Pointer) => {
       if (this.dragGhost) this.dragGhost.setPosition(p.x, p.y);
     };
 
     this.dragUpHandler = (p: Phaser.Input.Pointer) => {
-      this.endDrag(p, slotBounds);
+      this.endDrag(p, actionBarBounds, invBounds);
     };
 
     s.input.on("pointermove", this.dragMoveHandler);
     s.input.on("pointerup",   this.dragUpHandler);
   }
 
-  private endDrag(ptr: Phaser.Input.Pointer, slotBounds: Array<{ x: number; y: number; w: number; h: number }>): void {
+  private endDrag(
+    ptr: Phaser.Input.Pointer,
+    actionBarBounds: Array<{ x: number; y: number; w: number; h: number }>,
+    invBounds: Array<{ x: number; y: number; w: number; h: number }>,
+  ): void {
     const s = this.scene;
 
     if (this.dragMoveHandler) { s.input.off("pointermove", this.dragMoveHandler); this.dragMoveHandler = null; }
@@ -356,18 +386,44 @@ export class EquipmentUI {
 
     if (this.dragGhost) {
       this.dragGhost.destroy();
-      // Remove from objects array so close() doesn't double-destroy
       const idx = this.objects.indexOf(this.dragGhost);
       if (idx !== -1) this.objects.splice(idx, 1);
       this.dragGhost = null;
     }
 
-    // Check which action bar slot the pointer landed in
-    for (let i = 0; i < slotBounds.length; i++) {
-      const b = slotBounds[i];
+    const sourceIdx = this.dragSourceIdx;
+    this.dragSourceIdx = null;
+    if (sourceIdx === null) return;
+
+    const itemType = this.inventory[sourceIdx];
+    if (!itemType) return;
+
+    // 1. Check action bar drop
+    for (let i = 0; i < actionBarBounds.length; i++) {
+      const b = actionBarBounds[i];
       if (ptr.x >= b.x && ptr.x <= b.x + b.w && ptr.y >= b.y && ptr.y <= b.y + b.h) {
-        this.actionBarUI.assignSlot(i, "health_potion");
-        break;
+        if (itemType === "health_potion") {
+          this.actionBarUI.assignSlot(i, "health_potion");
+        }
+        return; // drop handled
+      }
+    }
+
+    // 2. Check inventory grid drop (reordering)
+    for (let i = 0; i < invBounds.length; i++) {
+      const b = invBounds[i];
+      if (ptr.x >= b.x && ptr.x <= b.x + b.w && ptr.y >= b.y && ptr.y <= b.y + b.h) {
+        if (i === sourceIdx) return; // dropped on same slot
+
+        // Swap items between sourceIdx and i
+        const targetItem = this.inventory[i];
+        this.inventory[i] = itemType;
+        this.inventory[sourceIdx] = targetItem;
+
+        // Redraw panel to reflect new order
+        this.close();
+        this.open();
+        return;
       }
     }
   }

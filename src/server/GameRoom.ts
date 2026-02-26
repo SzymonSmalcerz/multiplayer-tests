@@ -8,7 +8,7 @@ import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../sha
 import { OBJECT_REGISTRY }                    from "../shared/objects";
 import { ENEMY_REGISTRY }                     from "../shared/enemies";
 import { WEAPON_REGISTRY }                    from "../shared/weapons";
-import { globalBus }                          from "./GlobalBus";
+import { globalBus, PlayerProfile }           from "./GlobalBus";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -168,10 +168,6 @@ export class GameRoom extends Room<GameState> {
   // ── Party bookkeeping ──────────────────────────────────────────────────────
   /** targetSessionId → inviterSessionId */
   private pendingInvites = new Map<string, string>();
-  /** partyId (= owner sessionId) → Set of member sessionIds */
-  private partyMembers   = new Map<string, Set<string>>();
-  /** partyId → party display name */
-  private partyNames     = new Map<string, string>();
 
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -380,8 +376,8 @@ export class GameRoom extends Room<GameState> {
 
       // If sender already has a party, check it isn't full
       if (sender.partyId !== "") {
-        const members = this.partyMembers.get(sender.partyId);
-        if (!members || members.size >= 5) return;
+        const party = globalBus.getParty(sender.partyId);
+        if (!party || party.members.size >= 5) return;
       }
 
       // Do NOT create the party yet — wait for acceptance
@@ -411,26 +407,26 @@ export class GameRoom extends Room<GameState> {
       // Joiner must still be solo
       if (joiner.partyId !== "") return;
 
-      // Create the party now if inviter is still solo
-      if (inviter.partyId === "") {
-        inviter.partyId      = data.fromId; // owner sessionId as partyId
+      const inviterPid = this.sessionToPersistentId.get(data.fromId);
+      const joinerPid  = this.sessionToPersistentId.get(client.sessionId);
+      if (!inviterPid || !joinerPid) return;
+
+      let partyId = inviter.partyId;
+      if (partyId === "") {
+        partyId = globalBus.createParty(inviterPid, inviter.nickname);
+        inviter.partyId      = partyId;
         inviter.isPartyOwner = true;
-        this.partyMembers.set(data.fromId, new Set([data.fromId]));
-        const defaultName = `${inviter.nickname.slice(0, 10)}'s party`;
-        this.partyNames.set(data.fromId, defaultName);
-        inviter.partyName = defaultName;
       }
 
-      const members = this.partyMembers.get(inviter.partyId);
-      if (!members || members.size >= 5) return;
-
-      members.add(client.sessionId);
-      joiner.partyId      = inviter.partyId;
-      joiner.isPartyOwner = false;
-      joiner.partyName    = this.partyNames.get(inviter.partyId) ?? "";
-
-      // Notify party members (including the new joiner) about the join
-      this.sendPartyChat([...members], `${joiner.nickname} joined the party`);
+      const success = globalBus.joinParty(partyId, joinerPid);
+      if (success) {
+        joiner.partyId      = partyId;
+        joiner.isPartyOwner = false;
+        this.updatePartyMemberStates(partyId);
+        
+        const party = globalBus.getParty(partyId);
+        this.sendPartyChat(partyId, `${joiner.nickname} joined the party`);
+      }
     });
 
     this.onMessage("party_leave", (client) => {
@@ -442,13 +438,9 @@ export class GameRoom extends Room<GameState> {
       if (!sender || !sender.isPartyOwner) return;
       const name = String(data.name ?? "").trim().slice(0, 20);
       if (name.length === 0) return;
-      const members = this.partyMembers.get(sender.partyId);
-      if (!members) return;
-      this.partyNames.set(sender.partyId, name);
-      members.forEach(memberId => {
-        const member = this.state.players.get(memberId);
-        if (member) member.partyName = name;
-      });
+      
+      globalBus.renameParty(sender.partyId, name);
+      this.updatePartyMemberStates(sender.partyId);
     });
 
     this.onMessage("party_kick", (client, data: { targetId: string }) => {
@@ -458,12 +450,13 @@ export class GameRoom extends Room<GameState> {
       const target = this.state.players.get(data.targetId);
       if (!target || target.partyId !== sender.partyId) return;
 
-      const partyId = sender.partyId;
-      const members = this.partyMembers.get(partyId);
-      if (!members) return;
+      const targetPid = this.sessionToPersistentId.get(data.targetId);
+      if (!targetPid) return;
 
+      const partyId = sender.partyId;
       const kickedNickname = target.nickname;
-      members.delete(data.targetId);
+      
+      globalBus.leaveParty(partyId, targetPid);
       target.partyId      = "";
       target.isPartyOwner = false;
       target.partyName    = "";
@@ -473,18 +466,14 @@ export class GameRoom extends Room<GameState> {
       kickedClient?.send("chat", { sessionId: "server", nickname: "Server",
         message: "You were kicked out of the party" });
 
-      const remaining = [...members];
-      if (remaining.length <= 1) {
-        // Auto-disband — only owner left
-        remaining.forEach(memberId => {
-          const member = this.state.players.get(memberId);
-          if (member) { member.partyId = ""; member.isPartyOwner = false; member.partyName = ""; }
-        });
-        this.partyMembers.delete(partyId);
-        this.partyNames.delete(partyId);
-        this.sendPartyChat(remaining, "Party was disbanded");
+      const party = globalBus.getParty(partyId);
+      if (!party) {
+        // Disbanded automatically if only owner left
+        this.updatePartyMemberStates(partyId); // Clear for any remaining (owner)
+        // Note: globalBus.leaveParty handles disbanding if members <= 1
       } else {
-        this.sendPartyChat(remaining, `${kickedNickname} was kicked from the party`);
+        this.sendPartyChat(partyId, `${kickedNickname} was kicked from the party`);
+        this.updatePartyMemberStates(partyId);
       }
     });
 
@@ -571,14 +560,34 @@ export class GameRoom extends Room<GameState> {
     const player = new PlayerState();
     player.x         = Math.max(32, Math.min(MAP_WIDTH  - 32, rawSpawnX));
     player.y         = Math.max(32, Math.min(MAP_HEIGHT - 32, rawSpawnY));
-    player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
-    player.skin      = String(options.skin ?? "male/grey");
-    player.hp        = 100;
-    player.maxHp     = 100;
-    player.level     = 1;
-    player.xp        = 0;
-    player.attackBonus = 0;
-    player.gold      = 1000;
+    
+    // ── Load Profile or Init Defaults ────────────────────────────────────────
+    const profile = pid ? globalBus.getProfile(pid) : undefined;
+    if (profile) {
+      player.nickname            = profile.nickname;
+      player.skin                = profile.skin;
+      player.hp                  = profile.hp;
+      player.maxHp               = profile.maxHp;
+      player.level               = profile.level;
+      player.xp                  = profile.xp;
+      player.gold                = profile.gold;
+      player.weapon              = profile.weapon;
+      player.potions             = profile.potions;
+      player.potionHealRemaining = profile.potionHealRemaining;
+      player.partyId             = profile.partyId;
+      player.isPartyOwner        = profile.isPartyOwner;
+      player.partyName           = profile.partyName;
+      player.attackBonus         = (player.level - 1) * 0.5; // recalculate bonus
+    } else {
+      player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
+      player.skin      = String(options.skin ?? "male/grey");
+      player.hp        = 100;
+      player.maxHp     = 100;
+      player.level     = 1;
+      player.xp        = 0;
+      player.attackBonus = 0;
+      player.gold      = 1000;
+    }
 
     this.state.players.set(client.sessionId, player);
     this.lastPositions.set(client.sessionId, { x: player.x, y: player.y, time: Date.now() });
@@ -597,18 +606,21 @@ export class GameRoom extends Room<GameState> {
     const player = this.state.players.get(client.sessionId);
     const name   = player?.nickname ?? client.sessionId;
 
-    // Clean up ephemeral social state immediately
-    this.disbandOrLeaveParty(client.sessionId);
+    // Clean up pending invites in all cases
     this.pendingInvites.forEach((_inviterId, targetId) => {
       if (_inviterId === client.sessionId) this.pendingInvites.delete(targetId);
     });
     this.pendingInvites.delete(client.sessionId);
 
     if (consented) {
+      // Intentional leave (map teleport) — save profile with party info intact, then clean up
       console.log(`[Room] ${name} left intentionally (consented).`);
       this.cleanupPlayer(client.sessionId);
       return;
     }
+
+    // Unintentional disconnect — leave/disband party immediately
+    this.disbandOrLeaveParty(client.sessionId);
 
     // Mark as disconnected — ghost stays in world, still killable
     if (player) player.disconnected = true;
@@ -632,21 +644,38 @@ export class GameRoom extends Room<GameState> {
     const player = this.state.players.get(sessionId);
     if (!player) return;
 
+    // ── Save Profile before deleting ────────────────────────────────────────
+    const pid = this.sessionToPersistentId.get(sessionId);
+    if (pid) {
+      const profile: PlayerProfile = {
+        nickname:            player.nickname,
+        skin:                player.skin,
+        level:               player.level,
+        xp:                  player.xp,
+        gold:                player.gold,
+        hp:                  player.hp,
+        maxHp:               player.maxHp,
+        weapon:              player.weapon,
+        potions:             player.potions,
+        potionHealRemaining: player.potionHealRemaining,
+        partyId:             player.partyId,
+        isPartyOwner:        player.isPartyOwner,
+        partyName:           player.partyName,
+      };
+      globalBus.saveProfile(pid, profile);
+
+      if (this.persistentIdToSession.get(pid) === sessionId) {
+        this.persistentIdToSession.delete(pid);
+      }
+      this.sessionToPersistentId.delete(sessionId);
+    }
+
     this.state.players.delete(sessionId);
     this.lastPositions.delete(sessionId);
     this.playerHitCooldowns.delete(sessionId);
     this.playerAttacks.delete(sessionId);
     this.playerLastDamagedAt.delete(sessionId);
     this.playerLastRegenAt.delete(sessionId);
-
-    // Remove persistent ID mapping, guarding against a newer session having taken over
-    const pid = this.sessionToPersistentId.get(sessionId);
-    if (pid) {
-      if (this.persistentIdToSession.get(pid) === sessionId) {
-        this.persistentIdToSession.delete(pid);
-      }
-      this.sessionToPersistentId.delete(sessionId);
-    }
   }
 
   onDispose(): void {
@@ -962,63 +991,51 @@ export class GameRoom extends Room<GameState> {
     });
   }
 
-  /** Send a server chat message to a specific set of connected clients. */
-  private sendPartyChat(memberIds: string[], message: string): void {
-    for (const memberId of memberIds) {
-      const client = this.clients.find(c => c.sessionId === memberId);
-      client?.send("chat", { sessionId: "server", nickname: "Server", message });
-    }
+  /** Send a server chat message to a specific set of connected clients across all rooms. */
+  private sendPartyChat(partyId: string, message: string): void {
+    const payload = { sessionId: "server", nickname: "Server", message };
+    this.broadcast("chat", payload); // local room
+    globalBus.publishChat(payload, this.roomId); // other rooms
+  }
+
+  /** Update PlayerState for all local members of a global party. */
+  private updatePartyMemberStates(partyId: string): void {
+    const party = globalBus.getParty(partyId);
+    this.state.players.forEach((player, sessionId) => {
+      const pid = this.sessionToPersistentId.get(sessionId);
+      if (pid && party && party.members.has(pid)) {
+        player.partyId      = partyId;
+        player.isPartyOwner = (party.id === pid);
+        player.partyName    = party.name;
+      } else if (player.partyId === partyId) {
+        // No longer in this party
+        player.partyId      = "";
+        player.isPartyOwner = false;
+        player.partyName    = "";
+      }
+    });
   }
 
   private disbandOrLeaveParty(sessionId: string): void {
     const player = this.state.players.get(sessionId);
     if (!player || player.partyId === "") return;
 
+    const pid = this.sessionToPersistentId.get(sessionId);
+    if (!pid) return;
+
     const partyId = player.partyId;
-    const members = this.partyMembers.get(partyId);
+    const isOwner = player.isPartyOwner;
+    const nickname = player.nickname;
 
-    if (player.isPartyOwner) {
-      // Disband the whole party — notify all non-owner members
-      const nonOwnerIds: string[] = [];
-      if (members) {
-        members.forEach(memberId => {
-          if (memberId !== sessionId) nonOwnerIds.push(memberId);
-          const member = this.state.players.get(memberId);
-          if (member) { member.partyId = ""; member.isPartyOwner = false; member.partyName = ""; }
-        });
-        this.partyMembers.delete(partyId);
-        this.partyNames.delete(partyId);
-      } else {
-        player.partyId = "";
-        player.isPartyOwner = false;
-        player.partyName = "";
-      }
-      this.sendPartyChat(nonOwnerIds, "Party was disbanded");
+    if (isOwner) {
+      this.sendPartyChat(partyId, "Party was disbanded");
+      globalBus.disbandParty(partyId);
     } else {
-      // Non-owner leaves
-      const nickname = player.nickname;
-      player.partyId      = "";
-      player.isPartyOwner = false;
-      player.partyName    = "";
-
-      if (members) {
-        members.delete(sessionId);
-        const remaining = [...members];
-
-        if (remaining.length <= 1) {
-          // Only owner left — auto-disband
-          remaining.forEach(memberId => {
-            const member = this.state.players.get(memberId);
-            if (member) { member.partyId = ""; member.isPartyOwner = false; member.partyName = ""; }
-          });
-          this.partyMembers.delete(partyId);
-          this.partyNames.delete(partyId);
-          this.sendPartyChat(remaining, "Party was disbanded");
-        } else {
-          this.sendPartyChat(remaining, `${nickname} has left the party`);
-        }
-      }
+      globalBus.leaveParty(partyId, pid);
+      this.sendPartyChat(partyId, `${nickname} has left the party`);
     }
+    
+    this.updatePartyMemberStates(partyId);
   }
 
   private killEnemy(enemyId: string, killerSessionId: string): void {
@@ -1070,23 +1087,30 @@ export class GameRoom extends Room<GameState> {
       return;
     }
 
-    // Party XP: split among members within 10 tiles (640 px) of the kill
+    const party = globalBus.getParty(killer.partyId);
+    if (!party) { killer.xp += xpAmount; this.checkLevelUp(killerSessionId); return; }
+
+    // Collect ALL members of this party who are currently in THIS room and nearby
     const SHARE_RANGE = 640;
-    const members = this.partyMembers.get(killer.partyId);
-    if (!members) { killer.xp += xpAmount; this.checkLevelUp(killerSessionId); return; }
-
-    const memberPositions = [...members].flatMap(memberId => {
-      const m = this.state.players.get(memberId);
-      return m ? [{ id: memberId, x: m.x, y: m.y, isDead: m.isDead }] : [];
+    const eligibleMembers: string[] = [];
+    
+    this.state.players.forEach((p, sid) => {
+      const pid = this.sessionToPersistentId.get(sid);
+      if (pid && party.members.has(pid) && !p.isDead) {
+        const dx = p.x - enemyX;
+        const dy = p.y - enemyY;
+        if (Math.sqrt(dx * dx + dy * dy) <= SHARE_RANGE) {
+          eligibleMembers.push(sid);
+        }
+      }
     });
-    const eligible = getShareRecipients(enemyX, enemyY, memberPositions, SHARE_RANGE);
 
-    if (eligible.length === 0) { killer.xp += xpAmount; this.checkLevelUp(killerSessionId); return; }
+    if (eligibleMembers.length === 0) { killer.xp += xpAmount; this.checkLevelUp(killerSessionId); return; }
 
-    const share = Math.floor(xpAmount / eligible.length);
-    eligible.forEach(memberId => {
-      const member = this.state.players.get(memberId);
-      if (member) { member.xp += share; this.checkLevelUp(memberId); }
+    const share = Math.floor(xpAmount / eligibleMembers.length);
+    eligibleMembers.forEach(sid => {
+      const member = this.state.players.get(sid);
+      if (member) { member.xp += share; this.checkLevelUp(sid); }
     });
   }
 
@@ -1166,9 +1190,7 @@ export class GameRoom extends Room<GameState> {
   }
 
   /**
-   * Award gold to `recipientId`. If they are in a party, split with nearby
-   * party members (≤640 px from coin) — same radius as XP sharing.
-   * Each recipient receives ceil(amount / eligibleCount).
+   * Award gold to `recipientId`. If they are in a party, split with nearby members IN THIS ROOM.
    */
   private distributeGoldToParty(recipientId: string, amount: number, coinX: number, coinY: number): void {
     const recipient = this.state.players.get(recipientId);
@@ -1180,32 +1202,36 @@ export class GameRoom extends Room<GameState> {
       return;
     }
 
+    const party = globalBus.getParty(recipient.partyId);
+    if (!party) {
+      recipient.gold += amount;
+      this.sendGoldNotification(recipientId, amount);
+      return;
+    }
+
     const SHARE_RANGE = 640;
-    const members = this.partyMembers.get(recipient.partyId);
-    if (!members) {
-      recipient.gold += amount;
-      this.sendGoldNotification(recipientId, amount);
-      return;
-    }
-
-    const memberPositions = [...members].flatMap(memberId => {
-      const m = this.state.players.get(memberId);
-      return m ? [{ id: memberId, x: m.x, y: m.y, isDead: m.isDead }] : [];
+    const eligibleMembers: string[] = [];
+    this.state.players.forEach((p, sid) => {
+      const pid = this.sessionToPersistentId.get(sid);
+      if (pid && party.members.has(pid) && !p.isDead) {
+        const dx = p.x - coinX;
+        const dy = p.y - coinY;
+        if (Math.sqrt(dx * dx + dy * dy) <= SHARE_RANGE) eligibleMembers.push(sid);
+      }
     });
-    const eligible = getShareRecipients(coinX, coinY, memberPositions, SHARE_RANGE);
 
-    if (eligible.length === 0) {
+    if (eligibleMembers.length === 0) {
       recipient.gold += amount;
       this.sendGoldNotification(recipientId, amount);
       return;
     }
 
-    const share = Math.ceil(amount / eligible.length);
-    for (const memberId of eligible) {
-      const member = this.state.players.get(memberId);
+    const share = Math.ceil(amount / eligibleMembers.length);
+    for (const sid of eligibleMembers) {
+      const member = this.state.players.get(sid);
       if (member) {
         member.gold += share;
-        this.sendGoldNotification(memberId, share);
+        this.sendGoldNotification(sid, share);
       }
     }
   }

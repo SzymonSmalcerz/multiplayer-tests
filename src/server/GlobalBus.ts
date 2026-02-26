@@ -1,11 +1,28 @@
 /**
  * GlobalBus — process-wide singleton that bridges all active GameRoom instances.
- *
- * Responsibilities:
- *  - Cross-room chat relay: a message sent in room A is broadcast to every other room.
- *  - Global leaderboard: every 3 s collect all players from every room, sort, and
- *    broadcast the top-5 list to every room so clients can render a global ranking.
  */
+
+export interface PlayerProfile {
+  nickname: string;
+  skin: string;
+  level: number;
+  xp: number;
+  gold: number;
+  hp: number;
+  maxHp: number;
+  weapon: string;
+  potions: number;
+  potionHealRemaining: number;
+  partyId: string;
+  isPartyOwner: boolean;
+  partyName: string;
+}
+
+export interface GlobalParty {
+  id: string; // owner's persistentId
+  name: string;
+  members: Set<string>; // set of persistentIds
+}
 
 type BroadcastFn  = (type: string, message: unknown) => void;
 type GetPlayersFn = () => Array<{
@@ -25,6 +42,12 @@ class GlobalBus {
   private rooms             = new Map<string, RoomHandle>();
   private leaderboardTimer: ReturnType<typeof setInterval> | null = null;
 
+  // ── Global State ─────────────────────────────────────────────────────────────
+  /** persistentId -> PlayerProfile */
+  private profiles = new Map<string, PlayerProfile>();
+  /** partyId (owner persistentId) -> GlobalParty */
+  private parties  = new Map<string, GlobalParty>();
+
   // ── Room registration ────────────────────────────────────────────────────────
 
   registerRoom(roomId: string, handle: RoomHandle): void {
@@ -42,11 +65,67 @@ class GlobalBus {
     }
   }
 
+  // ── Profile Management ───────────────────────────────────────────────────────
+
+  getProfile(persistentId: string): PlayerProfile | undefined {
+    return this.profiles.get(persistentId);
+  }
+
+  saveProfile(persistentId: string, profile: PlayerProfile): void {
+    this.profiles.set(persistentId, profile);
+  }
+
+  // ── Party Management ─────────────────────────────────────────────────────────
+
+  getParty(partyId: string): GlobalParty | undefined {
+    return this.parties.get(partyId);
+  }
+
+  createParty(ownerPid: string, ownerNickname: string): string {
+    const partyId = ownerPid;
+    const name = `${ownerNickname.slice(0, 10)}'s party`;
+    this.parties.set(partyId, {
+      id: partyId,
+      name: name,
+      members: new Set([ownerPid]),
+    });
+    return partyId;
+  }
+
+  disbandParty(partyId: string): void {
+    this.parties.delete(partyId);
+  }
+
+  joinParty(partyId: string, memberPid: string): boolean {
+    const party = this.parties.get(partyId);
+    if (party && party.members.size < 5) {
+      party.members.add(memberPid);
+      return true;
+    }
+    return false;
+  }
+
+  leaveParty(partyId: string, memberPid: string): void {
+    const party = this.parties.get(partyId);
+    if (party) {
+      party.members.delete(memberPid);
+      if (party.members.size <= 1) {
+        this.disbandParty(partyId);
+      }
+    }
+  }
+
+  renameParty(partyId: string, newName: string): void {
+    const party = this.parties.get(partyId);
+    if (party) {
+      party.name = newName;
+    }
+  }
+
   // ── Cross-room chat ──────────────────────────────────────────────────────────
 
   /**
    * Relay a chat payload to every room except the one that originally sent it.
-   * The source room already broadcast to its own clients.
    */
   publishChat(
     payload: { sessionId: string; nickname: string; message: string },

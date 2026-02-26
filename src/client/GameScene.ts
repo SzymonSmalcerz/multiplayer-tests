@@ -2817,6 +2817,8 @@ export class GameScene extends Phaser.Scene {
     sprite.on("pointerout",  () => sprite.clearTint());
     sprite.on("pointerdown", () => {
       this.ignoreNextMapClick = true;
+      this.healerShopUI.close();
+      this.equipmentUI.close();
       this.shopUI.toggle();
     });
   }
@@ -2845,6 +2847,8 @@ export class GameScene extends Phaser.Scene {
     sprite.on("pointerout",  () => sprite.clearTint());
     sprite.on("pointerdown", () => {
       this.ignoreNextMapClick = true;
+      this.shopUI.close();
+      this.equipmentUI.close();
       this.healerShopUI.toggle();
     });
   }
