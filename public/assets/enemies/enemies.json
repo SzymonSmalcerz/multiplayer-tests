@@ -48,5 +48,55 @@
       "width": 54,
       "height": 55
     }
+  },
+  "beetle": {
+    "type": "beetle",
+    "label": "beetle",
+    "level": 1,
+    "hp": 100,
+    "damage": 2,
+    "xpReward": 50,
+    "goldAmount": 5,
+    "goldChance": 0.2,
+    "defaultRespawnTime": 10,
+    "speed": 120,
+    "aggroRange": 320,
+    "attackRange": 48,
+    "attackCooldownMs": 300,
+    "frameWidth": 32,
+    "frameHeight": 32,
+    "framesPerState": 4,
+    "spritePath": "/assets/enemies/beetle.png",
+    "hitbox": {
+      "x": 4,
+      "y": 4,
+      "width": 24,
+      "height": 24
+    }
+  },
+  "mantis": {
+    "type": "mantis",
+    "label": "mantis",
+    "level": 2,
+    "hp": 110,
+    "damage": 3,
+    "xpReward": 80,
+    "goldAmount": 10,
+    "goldChance": 0.2,
+    "defaultRespawnTime": 10,
+    "speed": 100,
+    "aggroRange": 320,
+    "attackRange": 48,
+    "attackCooldownMs": 300,
+    "frameWidth": 32,
+    "frameHeight": 32,
+    "framesPerState": 4,
+    "spritePath": "/assets/enemies/mantis.png",
+    "hitbox": {
+      "x": 2,
+      "y": 2,
+      "width": 27,
+      "height": 28
+    }
   }
 }
