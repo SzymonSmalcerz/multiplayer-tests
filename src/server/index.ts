@@ -171,6 +171,18 @@ app.get("/design/enemies", (_req, res) => {
   res.json(ENEMY_REGISTRY);
 });
 
+// List available map files for the designer door-linking dropdown
+app.get("/design/maps", (_req, res) => {
+  const mapsDir = path.join(publicDir, "assets/maps/placement");
+  fs.readdir(mapsDir, (err, files) => {
+    if (err) { res.json([]); return; }
+    const names = files
+      .filter(f => f.endsWith(".json"))
+      .map(f => f.slice(0, -5));
+    res.json(names);
+  });
+});
+
 // Save a map JSON file
 app.post("/design/save", (req, res) => {
   const { name, data } = req.body as { name: string; data: unknown };
@@ -693,7 +705,8 @@ const gameServer = new Server({
   transport: new WebSocketTransport({ server: httpServer }),
 });
 
-gameServer.define("game", GameRoom);
+// filterBy ensures each mapName gets its own room instance
+gameServer.define("game", GameRoom).filterBy(["mapName"]);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 gameServer

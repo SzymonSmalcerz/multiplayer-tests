@@ -8,6 +8,7 @@ import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../sha
 import { OBJECT_REGISTRY }                    from "../shared/objects";
 import { ENEMY_REGISTRY }                     from "../shared/enemies";
 import { WEAPON_REGISTRY }                    from "../shared/weapons";
+import { globalBus }                          from "./GlobalBus";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -118,11 +119,13 @@ interface PendingCoin {
 export class GameRoom extends Room<GameState> {
   maxClients = 50;
 
+  private mapName: string = "m1";
   private objectData: Array<{ type: string; x: number; y: number }> = [];
   private npcData: Array<{ type: string; x: number; y: number }> = [];
   private mobData: Array<Record<string, unknown>> = [];
   private neutralZones: Array<{ x: number; y: number; width: number; height: number }> = [];
   private tileData: Array<{ type: string; x: number; y: number }> = [];
+  private doorData: Array<{ id: string; x: number; y: number; targetMap: string; targetDoorId: string }> = [];
   private defaultTile: string = "grass_basic";
   private spawnPoint: { x: number; y: number } = { x: 100, y: 100 };
   private lastPositions = new Map<string, LastPos>();
@@ -173,12 +176,15 @@ export class GameRoom extends Room<GameState> {
 
   // ──────────────────────────────────────────────────────────────────────────
 
-  onCreate(): void {
+  onCreate(options: Record<string, unknown> = {}): void {
     this.setState(new GameState());
     this.setPatchRate(1000 / 20); // 20 Hz state broadcast
 
-    // ── Load fixed objects positions from map json file ─────────────────────────
-    const mapFile  = path.resolve(__dirname, "../../public/assets/maps/placement/m1.json");
+    // ── Resolve map name from join options ────────────────────────────────────
+    this.mapName = String(options.mapName ?? "m1").replace(/[^a-zA-Z0-9_-]/g, "") || "m1";
+
+    // ── Load map JSON ─────────────────────────────────────────────────────────
+    const mapFile  = path.resolve(__dirname, `../../public/assets/maps/placement/${this.mapName}.json`);
     const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
       defaultTile?:  string;
       spawnPoint?:   { x: number; y: number };
@@ -188,6 +194,7 @@ export class GameRoom extends Room<GameState> {
       mobs?:         Array<Record<string, unknown>>;
       enemies?:      Array<{ type: string; x: number; y: number; respawnTime: number }>;
       neutralZones?: Array<{ x: number; y: number; width: number; height: number }>;
+      doors?:        Array<{ id: string; x: number; y: number; targetMap: string; targetDoorId: string }>;
     };
     for (const obj of mapJson.objects) {
       if (OBJECT_REGISTRY[obj.type]) {
@@ -198,6 +205,7 @@ export class GameRoom extends Room<GameState> {
     this.mobData      = mapJson.mobs  ?? [];
     this.neutralZones = mapJson.neutralZones ?? [];
     this.tileData     = mapJson.tiles ?? [];
+    this.doorData     = mapJson.doors ?? [];
     this.defaultTile  = mapJson.defaultTile ?? "grass_basic";
     this.spawnPoint   = mapJson.spawnPoint   ?? { x: 100, y: 100 };
 
@@ -227,6 +235,18 @@ export class GameRoom extends Room<GameState> {
 
     // ── Message handlers ──────────────────────────────────────────────────────
 
+    // ── Register with GlobalBus for cross-room chat and leaderboard ─────────────
+    globalBus.registerRoom(this.roomId, {
+      broadcastFn:  (type, msg) => this.broadcast(type, msg),
+      getPlayersFn: () => {
+        const out: Array<{ nickname: string; level: number; xp: number; partyName: string; isDead: boolean }> = [];
+        this.state.players.forEach(p => {
+          out.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName, isDead: p.isDead });
+        });
+        return out;
+      },
+    });
+
     this.onMessage("get_map", (client) => {
       client.send("map_data", {
         defaultTile: this.defaultTile,
@@ -235,17 +255,73 @@ export class GameRoom extends Room<GameState> {
         objects:     this.objectData,
         npcs:        this.npcData,
         mobs:        this.mobData,
+        doors:       this.doorData,
       });
+    });
+
+    this.onMessage("use_door", (client, data: { doorId: string }) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.isDead) return;
+
+      const door = this.doorData.find(d => d.id === data.doorId);
+      if (!door) {
+        console.warn(`[Room] Door not found: ${data.doorId} in map ${this.mapName}`);
+        return;
+      }
+
+      // Sanitize and resolve target map
+      const targetMapName = door.targetMap.replace(/[^a-zA-Z0-9_-]/g, "");
+      if (!targetMapName) {
+        console.warn(`[Room] Invalid target map: ${door.targetMap}`);
+        return;
+      }
+
+      try {
+        const targetFile = path.resolve(
+          __dirname, `../../public/assets/maps/placement/${targetMapName}.json`
+        );
+        if (!fs.existsSync(targetFile)) {
+          console.warn(`[Room] Target map file not found: ${targetFile}`);
+          return;
+        }
+
+        const targetJson = JSON.parse(fs.readFileSync(targetFile, "utf-8")) as {
+          doors?: Array<{ id: string; x: number; y: number }>;
+        };
+        const targetDoor = (targetJson.doors ?? []).find(d => d.id === door.targetDoorId);
+        if (!targetDoor) {
+          console.warn(`[Room] Target door ${door.targetDoorId} not found in map ${targetMapName}`);
+          return;
+        }
+
+        // Calculate arrival offset: if door is on the left, spawn to the right (+80); if on the right, spawn to the left (-80)
+        // This ensures the player doesn't arrive exactly on top of the door or outside map bounds (MAP_WIDTH=2000).
+        const offsetX = targetDoor.x < 1000 ? 80 : -80;
+        const offsetY = 60;
+
+        console.log(`[Room] Player ${player.nickname} traveling from ${this.mapName}:${door.id} to ${targetMapName}:${targetDoor.id}`);
+
+        client.send("door_travel", {
+          targetMap: targetMapName,
+          spawnX:    targetDoor.x + offsetX,
+          spawnY:    targetDoor.y + offsetY,
+        });
+      } catch (err) {
+        console.error(`[Room] Door travel failed:`, err);
+      }
     });
 
     this.onMessage("chat", (client, message: string) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || !message || message.trim().length === 0) return;
-      this.broadcast("chat", {
+      const payload = {
         sessionId: client.sessionId,
-        nickname: player.nickname,
-        message: message.slice(0, 100),
-      });
+        nickname:  player.nickname,
+        message:   message.slice(0, 100),
+      };
+      this.broadcast("chat", payload);
+      // Relay to players on other maps
+      globalBus.publishChat(payload, this.roomId);
     });
 
     this.onMessage("toggle_weapon", (client) => {
@@ -471,7 +547,7 @@ export class GameRoom extends Room<GameState> {
     });
   }
 
-  onJoin(client: Client, options: { nickname?: string; skin?: string; persistentId?: string }): void {
+  onJoin(client: Client, options: { nickname?: string; skin?: string; persistentId?: string; mapName?: string; spawnX?: number; spawnY?: number }): void {
     // ── Multi-window prevention ──────────────────────────────────────────────
     const pid = typeof options.persistentId === "string" ? options.persistentId.slice(0, 64) : "";
     if (pid) {
@@ -488,9 +564,13 @@ export class GameRoom extends Room<GameState> {
       this.sessionToPersistentId.set(client.sessionId, pid);
     }
 
+    // Use override spawn if provided (e.g. from door teleport), else map default
+    const rawSpawnX = typeof options.spawnX === "number" && isFinite(options.spawnX) ? options.spawnX : this.spawnPoint.x;
+    const rawSpawnY = typeof options.spawnY === "number" && isFinite(options.spawnY) ? options.spawnY : this.spawnPoint.y;
+
     const player = new PlayerState();
-    player.x         = this.spawnPoint.x;
-    player.y         = this.spawnPoint.y;
+    player.x         = Math.max(32, Math.min(MAP_WIDTH  - 32, rawSpawnX));
+    player.y         = Math.max(32, Math.min(MAP_HEIGHT - 32, rawSpawnY));
     player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
     player.skin      = String(options.skin ?? "male/grey");
     player.hp        = 100;
@@ -513,19 +593,25 @@ export class GameRoom extends Room<GameState> {
     console.log(`[Room] ${player.nickname} (${client.sessionId}) joined. Players: ${this.state.players.size}`);
   }
 
-  async onLeave(client: Client, _consented: boolean): Promise<void> {
+  async onLeave(client: Client, consented: boolean): Promise<void> {
     const player = this.state.players.get(client.sessionId);
     const name   = player?.nickname ?? client.sessionId;
 
-    // Mark as disconnected — ghost stays in world, still killable
-    if (player) player.disconnected = true;
-
-    // Clean up ephemeral social state that shouldn't linger during disconnect
+    // Clean up ephemeral social state immediately
     this.disbandOrLeaveParty(client.sessionId);
     this.pendingInvites.forEach((_inviterId, targetId) => {
       if (_inviterId === client.sessionId) this.pendingInvites.delete(targetId);
     });
     this.pendingInvites.delete(client.sessionId);
+
+    if (consented) {
+      console.log(`[Room] ${name} left intentionally (consented).`);
+      this.cleanupPlayer(client.sessionId);
+      return;
+    }
+
+    // Mark as disconnected — ghost stays in world, still killable
+    if (player) player.disconnected = true;
 
     console.log(`[Room] ${name} disconnected — holding slot for 60 s`);
 
@@ -536,27 +622,35 @@ export class GameRoom extends Room<GameState> {
       console.log(`[Room] ${name} reconnected`);
     } catch {
       // Grace period expired — clean up for real
-      this.state.players.delete(client.sessionId);
-      this.lastPositions.delete(client.sessionId);
-      this.playerHitCooldowns.delete(client.sessionId);
-      this.playerAttacks.delete(client.sessionId);
-      this.playerLastDamagedAt.delete(client.sessionId);
-      this.playerLastRegenAt.delete(client.sessionId);
-
-      // Remove persistent ID mapping, guarding against a newer session having taken over
-      const pid = this.sessionToPersistentId.get(client.sessionId);
-      if (pid) {
-        if (this.persistentIdToSession.get(pid) === client.sessionId) {
-          this.persistentIdToSession.delete(pid);
-        }
-        this.sessionToPersistentId.delete(client.sessionId);
-      }
-
+      this.cleanupPlayer(client.sessionId);
       console.log(`[Room] ${name} removed (grace period expired). Players: ${this.state.players.size}`);
     }
   }
 
+  /** Centralized cleanup logic for player removal */
+  private cleanupPlayer(sessionId: string): void {
+    const player = this.state.players.get(sessionId);
+    if (!player) return;
+
+    this.state.players.delete(sessionId);
+    this.lastPositions.delete(sessionId);
+    this.playerHitCooldowns.delete(sessionId);
+    this.playerAttacks.delete(sessionId);
+    this.playerLastDamagedAt.delete(sessionId);
+    this.playerLastRegenAt.delete(sessionId);
+
+    // Remove persistent ID mapping, guarding against a newer session having taken over
+    const pid = this.sessionToPersistentId.get(sessionId);
+    if (pid) {
+      if (this.persistentIdToSession.get(pid) === sessionId) {
+        this.persistentIdToSession.delete(pid);
+      }
+      this.sessionToPersistentId.delete(sessionId);
+    }
+  }
+
   onDispose(): void {
+    globalBus.unregisterRoom(this.roomId);
     console.log("[Room] Disposed.");
   }
 

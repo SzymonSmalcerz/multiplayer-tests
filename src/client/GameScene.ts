@@ -1,7 +1,8 @@
 import Phaser from "phaser";
+import { Client } from "colyseus.js";
 import {
   GameSceneData, MapDataMessage, RemotePlayer, RemotePlayerEntity,
-  StaticObjectData, EnemyData, EnemyEntity, NpcData, TilePlacement,
+  StaticObjectData, EnemyData, EnemyEntity, NpcData, TilePlacement, DoorData,
 } from "./types";
 import { StaticObjectDef } from "../shared/staticObjects";
 import { WeaponDef } from "../shared/weapons";
@@ -86,6 +87,15 @@ export class GameScene extends Phaser.Scene {
   private weaponsRegistry: Record<string, WeaponDef> = {};
   private localLevel = 1;
 
+  // Map / doors
+  private currentMapName = "m1";
+  private doors: DoorData[] = [];
+  private doorSprites = new Map<string, Phaser.GameObjects.Image>();
+  private isTeleporting = false;
+
+  // Global leaderboard (updated by server every 3 s)
+  private globalLeaderboardData: Array<{ nickname: string; level: number; xp: number; partyName: string }> | null = null;
+
   // Local attack state
   private localIsAttacking = false;
   private localAttackDir   = 0;
@@ -99,6 +109,9 @@ export class GameScene extends Phaser.Scene {
   private countdownText?: Phaser.GameObjects.Text;
   private localIsDead    = false;
   private localDeathTimer = 0;
+
+  private loadingOverlay?: Phaser.GameObjects.Graphics;
+  private loadingText?:    Phaser.GameObjects.Text;
 
   // Input
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -225,10 +238,15 @@ export class GameScene extends Phaser.Scene {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   init(data: GameSceneData): void {
-    this.room          = data.room;
-    this.localNickname = data.nickname;
-    this.localSkin     = data.skin;
-    this.mySessionId   = data.room.sessionId as string;
+    this.room             = data.room;
+    this.localNickname    = data.nickname;
+    this.localSkin        = data.skin;
+    this.mySessionId      = data.room.sessionId as string;
+    this.currentMapName   = data.mapName ?? "m1";
+    this.isTeleporting    = false;
+    this.globalLeaderboardData = null;
+    this.doors            = [];
+    this.doorSprites      = new Map();
 
     // Keep reconnection token fresh — it may change after a reconnect
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -252,7 +270,8 @@ export class GameScene extends Phaser.Scene {
         this.load.image(def.type, `/assets/tiles/${def.type}.png`);
       }
     });
-    this.load.image("minimap_icon", "/assets/maps/minimap_icon.png");
+    this.load.image("minimap_icon",  "/assets/maps/minimap_icon.png");
+    this.load.image("door_to_map",   "/assets/maps/door_to_map.png");
 
     // Click-to-move markers
     this.load.image("x_green", "/assets/shortestPath/xGreen.png");
@@ -434,6 +453,22 @@ export class GameScene extends Phaser.Scene {
     this.events.once("shutdown", () => this.mobSystem.destroy());
 
     // ── Input ────────────────────────────────────────────────────────────────
+    this.input.enabled = true;
+    if (this.input.keyboard) {
+      this.input.keyboard.enabled = true;
+      this.input.keyboard.addCapture([
+        Phaser.Input.Keyboard.KeyCodes.W,
+        Phaser.Input.Keyboard.KeyCodes.A,
+        Phaser.Input.Keyboard.KeyCodes.S,
+        Phaser.Input.Keyboard.KeyCodes.D,
+        Phaser.Input.Keyboard.KeyCodes.SPACE,
+        Phaser.Input.Keyboard.KeyCodes.UP,
+        Phaser.Input.Keyboard.KeyCodes.DOWN,
+        Phaser.Input.Keyboard.KeyCodes.LEFT,
+        Phaser.Input.Keyboard.KeyCodes.RIGHT,
+      ]);
+    }
+
     this.cursors  = this.input.keyboard!.createCursorKeys();
     this.keyW     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W);
     this.keyA     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
@@ -589,8 +624,13 @@ export class GameScene extends Phaser.Scene {
   // ── Main loop ──────────────────────────────────────────────────────────────
 
   update(time: number, delta: number): void {
+    // Safety check: if scene is shutting down or room is disposed, stop updates immediately
+    if (!this.scene.isActive() || !this.room || !this.room.state) return;
+
     // Always read party state from live server state — never rely on cached value alone
     const myState = this.room.state.players.get(this.mySessionId);
+    if (!myState) return;
+
     this.myPartyId      = myState?.partyId      ?? "";
     this.myIsPartyOwner = myState?.isPartyOwner ?? false;
 
@@ -1037,6 +1077,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateMinimap(): void {
+    if (!this.scene.isActive() || !this.minimapBg || !this.minimapBg.active) return;
     this.minimapDots.clear();
     const camW = this.cameras.main.width;
     const mmX = camW - 208;
@@ -1142,6 +1183,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateLeaderboard(): void {
+    // Safety check: skip if scene is shutting down or UI is destroyed
+    if (!this.scene.isActive() || !this.leaderboardBg || !this.leaderboardBg.active) return;
+
     const camW = this.cameras.main.width;
     const lbX = camW - 208;
     const lbY = this.minimapOpen ? 216 : 64;
@@ -1149,22 +1193,24 @@ export class GameScene extends Phaser.Scene {
     this.leaderboardBg.setPosition(lbX, lbY);
     this.leaderboardHeader.setPosition(lbX + MINIMAP_SIZE / 2, lbY + 8);
 
-    const allPlayers: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
-    this.room.state.players.forEach((p: RemotePlayer) => {
-      allPlayers.push({
-        nickname: p.nickname,
-        level: p.level,
-        xp: p.xp,
-        partyName: p.partyName,
+    // Prefer cross-map global data; fall back to local room players until first broadcast
+    let top5: Array<{ nickname: string; level: number; xp: number; partyName: string }>;
+    if (this.globalLeaderboardData) {
+      top5 = this.globalLeaderboardData.slice(0, 5);
+    } else {
+      const allPlayers: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
+      this.room.state.players.forEach((p: RemotePlayer) => {
+        allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName });
       });
-    });
-
-    const top5 = sortLeaderboard(allPlayers).slice(0, 5);
+      top5 = sortLeaderboard(allPlayers).slice(0, 5);
+    }
 
     let currentY = lbY + 32;
 
     for (let i = 0; i < 5; i++) {
       const row = this.leaderboardRows[i];
+      if (!row || !row.active) continue;
+
       if (i < top5.length) {
         row.setPosition(lbX + 8, currentY);
         const p = top5[i];
@@ -1190,11 +1236,13 @@ export class GameScene extends Phaser.Scene {
 
     // Dynamic background height
     const totalHeight = Math.max(120, (currentY - lbY) + 4);
-    this.leaderboardBg.clear();
-    this.leaderboardBg.fillStyle(0x111111, 0.85);
-    this.leaderboardBg.fillRect(0, 0, MINIMAP_SIZE, totalHeight);
-    this.leaderboardBg.lineStyle(1, 0x334433, 1);
-    this.leaderboardBg.strokeRect(0, 0, MINIMAP_SIZE, totalHeight);
+    if (this.leaderboardBg && this.leaderboardBg.active) {
+      this.leaderboardBg.clear();
+      this.leaderboardBg.fillStyle(0x111111, 0.85);
+      this.leaderboardBg.fillRect(0, 0, MINIMAP_SIZE, totalHeight);
+      this.leaderboardBg.lineStyle(1, 0x334433, 1);
+      this.leaderboardBg.strokeRect(0, 0, MINIMAP_SIZE, totalHeight);
+    }
   }
 
   // ── Death UI ───────────────────────────────────────────────────────────────
@@ -1416,7 +1464,21 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(this.localSprite, this.animatedObjectsGroup);
       this.placeNpcs(data.npcs ?? []);
       this.mobSystem.createMobs(data.mobs ?? []);
+      this.placeDoors(data.doors ?? []);
     });
+
+    // Server confirmed travel — leave current room and join target
+    this.room.onMessage("door_travel", (data: { targetMap: string; spawnX: number; spawnY: number }) => {
+      void this.travelToMap(data.targetMap, data.spawnX, data.spawnY);
+    });
+
+    // Global leaderboard from server (aggregated across all maps)
+    this.room.onMessage("global_leaderboard",
+      (data: Array<{ nickname: string; level: number; xp: number; partyName: string }>) => {
+        this.globalLeaderboardData = data;
+      }
+    );
+
     this.room.send("get_map");
 
     // Player added
@@ -1443,8 +1505,8 @@ export class GameScene extends Phaser.Scene {
       this.removeEnemy(id);
     });
 
-    // Connection dropped
-    this.room.onLeave(() => { this.showDisconnectBanner(); });
+    // Connection dropped (skip if we intentionally left to teleport)
+    this.room.onLeave(() => { if (!this.isTeleporting) this.showDisconnectBanner(); });
 
     // Chat messages
     this.room.onMessage("chat", (data: { sessionId: string; nickname: string; message: string }) => {
@@ -1907,7 +1969,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateEnemies(): void {
     this.enemyMap.forEach((entity) => {
-      if (entity.isDead) return;
+      if (entity.isDead || !entity.sprite || !entity.sprite.active) return;
 
       const { sprite, hpBar } = entity;
       const prevX = sprite.x;
@@ -2125,6 +2187,9 @@ export class GameScene extends Phaser.Scene {
 
   private interpolateRemotePlayers(delta: number): void {
     this.remoteMap.forEach((entity, sessionId) => {
+      // Safety check: skip if sprite is gone or scene is cleaning up
+      if (!entity.sprite || !entity.sprite.active) return;
+
       // Dead players: freeze at death position, keep label above grave
       if (entity.isDead) {
         entity.label.setPosition(entity.sprite.x, entity.sprite.y - 42);
@@ -2287,6 +2352,140 @@ export class GameScene extends Phaser.Scene {
     }
     this.staticObjectsGroup.refresh();
     this.animatedObjectsGroup.refresh();
+  }
+
+  // ── Doors ───────────────────────────────────────────────────────────────────
+
+  private placeDoors(doors: DoorData[]): void {
+    this.doors = doors;
+    for (const door of doors) {
+      if (!this.textures.exists("door_to_map")) continue;
+
+      const img = this.add.image(door.x, door.y, "door_to_map")
+        .setOrigin(0, 0)
+        .setDepth(door.y + this.textures.get("door_to_map").getSourceImage().height);
+
+      img.setInteractive({ useHandCursor: true });
+      img.on("pointerover", () => img.setTint(0xddffdd));
+      img.on("pointerout",  () => img.clearTint());
+      img.on("pointerdown", () => {
+        this.ignoreNextMapClick = true;
+        this.showDoorDialog(door);
+      });
+
+      this.doorSprites.set(door.id, img);
+    }
+  }
+
+  private showDoorDialog(door: DoorData): void {
+    if (this.isTeleporting) return;
+
+    // Remove any existing dialog
+    document.getElementById("door-dialog")?.remove();
+
+    const dlg = document.createElement("div");
+    dlg.id = "door-dialog";
+    dlg.style.cssText = [
+      "position:fixed", "top:50%", "left:50%",
+      "transform:translate(-50%,-50%)",
+      "background:#1a1a2e", "border:2px solid #44aa88",
+      "border-radius:8px", "padding:24px 32px",
+      "color:#eee", "font-family:sans-serif",
+      "text-align:center", "z-index:9999",
+      "box-shadow:0 4px 24px rgba(0,0,0,0.8)",
+      "min-width:260px",
+    ].join(";");
+
+    dlg.innerHTML = `
+      <div style="font-size:18px;font-weight:bold;margin-bottom:12px">
+        Travel to <span style="color:#44ffaa">${door.targetMap}</span>?
+      </div>
+      <div style="font-size:13px;color:#aaa;margin-bottom:20px">
+        You will be teleported to another map.
+      </div>
+      <button id="door-yes" style="
+        background:#2a7a4a;color:#fff;border:none;border-radius:4px;
+        padding:8px 24px;font-size:14px;cursor:pointer;margin-right:8px">
+        Travel
+      </button>
+      <button id="door-no" style="
+        background:#4a2a2a;color:#fff;border:none;border-radius:4px;
+        padding:8px 24px;font-size:14px;cursor:pointer">
+        Cancel
+      </button>
+    `;
+
+    document.body.appendChild(dlg);
+
+    document.getElementById("door-no")?.addEventListener("click", () => dlg.remove());
+    document.getElementById("door-yes")?.addEventListener("click", () => {
+      dlg.remove();
+      this.room.send("use_door", { doorId: door.id });
+    });
+  }
+
+  private async travelToMap(targetMap: string, spawnX: number, spawnY: number): Promise<void> {
+    if (this.isTeleporting) return;
+    this.isTeleporting = true;
+
+    // Show loading overlay
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    this.loadingOverlay = this.add.graphics()
+      .fillStyle(0x000000, 1)
+      .fillRect(0, 0, w, h)
+      .setScrollFactor(0)
+      .setDepth(2000000);
+    this.loadingText = this.add.text(w / 2, h / 2, "Loading Map...", {
+      fontSize: "24px",
+      color: "#ffffff",
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2000001);
+
+    // Disable all input to prevent double-clicks or movement during transition
+    if (this.input.keyboard) this.input.keyboard.enabled = false;
+    this.input.enabled = false;
+
+    document.getElementById("door-dialog")?.remove();
+
+    try {
+      // Leave current room (consented — no reconnect grace period needed)
+      localStorage.removeItem("reconnToken");
+      await this.room.leave(true);
+
+      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+      const client   = new Client(`${protocol}://${window.location.host}`);
+      const newRoom  = await client.joinOrCreate("game", {
+        mapName:     targetMap,
+        nickname:    this.localNickname,
+        skin:        this.localSkin,
+        persistentId: localStorage.getItem("playerId") ?? undefined,
+        spawnX,
+        spawnY,
+      });
+
+      localStorage.setItem("reconnToken", newRoom.reconnectionToken);
+
+      const data: GameSceneData = {
+        room:     newRoom,
+        nickname: this.localNickname,
+        skin:     this.localSkin,
+        mapName:  targetMap,
+      };
+      
+      // Clean up UI before switching
+      this.shopUI.close();
+      this.healerShopUI.close();
+      this.equipmentUI.close();
+      
+      this.scene.start("GameScene", data);
+    } catch (err) {
+      console.error("[Door] Travel failed:", err);
+      if (this.loadingOverlay) this.loadingOverlay.destroy();
+      if (this.loadingText) this.loadingText.destroy();
+      if (this.input.keyboard) this.input.keyboard.enabled = true;
+      this.input.enabled = true;
+      this.isTeleporting = false;
+    }
   }
 
   // ── Chat display ────────────────────────────────────────────────────────────

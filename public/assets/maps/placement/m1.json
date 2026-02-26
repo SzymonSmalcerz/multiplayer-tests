@@ -3769,5 +3769,14 @@
       "width": 509,
       "height": 422
     }
+  ],
+  "doors": [
+    {
+      "id": "m1_east",
+      "x": 1950,
+      "y": 1040,
+      "targetMap": "firstMap",
+      "targetDoorId": "firstMap_west"
+    }
   ]
 }

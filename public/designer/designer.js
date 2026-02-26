@@ -27,8 +27,11 @@ let placedMobs         = [];     // { type, x, y, width, height, quantity }[]
 let placedEnemies      = [];     // { type, x, y, respawnTime }[]
 let placedNeutralZones = [];     // { x, y, width, height }[]
 let placedTiles        = [];     // { type, x, y }[]  — placed tiles (origin = top-left)
+let placedDoors        = [];     // { id, x, y, targetMap, targetDoorId }[]
 let defaultTile        = 'grass_basic';  // key of the background tile for this map
 let spawnPoint         = { x: 100, y: 100 };  // player respawn location (one per map)
+
+let availableMaps      = [];     // fetched from /design/maps for door target dropdown
 
 let selectedType     = null;  // string | null
 let selectedCategory = null;  // 'object' | 'npc' | 'mob' | 'enemy' | 'neutralZone' | 'tile' | null
@@ -137,6 +140,7 @@ function buildSidebar() {
   addEnemySection();
   addWeaponSection();
   addNeutralZoneSection();
+  addDoorSection();
 }
 
 function addSection(title, keys, category) {
@@ -447,6 +451,59 @@ function addNeutralZoneSection() {
 
   spItem.addEventListener('click', () => selectType('spawn_point', 'spawnPoint'));
   sidebar.appendChild(spItem);
+}
+
+function addDoorSection() {
+  const heading = document.createElement('div');
+  heading.className = 'sidebar-heading';
+  heading.textContent = 'Doors';
+  sidebar.appendChild(heading);
+
+  const item = document.createElement('div');
+  item.className = 'sidebar-item';
+  item.dataset.type     = 'door';
+  item.dataset.category = 'door';
+
+  const thumb = document.createElement('canvas');
+  thumb.width  = 48;
+  thumb.height = 48;
+  thumb.className = 'sidebar-thumb';
+
+  function drawDoorThumb() {
+    const tc = thumb.getContext('2d');
+    tc.clearRect(0, 0, 48, 48);
+    const img = images['door'];
+    if (img && img.complete && img.naturalWidth > 0) {
+      const scale = Math.min(48 / img.naturalWidth, 48 / img.naturalHeight);
+      const dw = img.naturalWidth  * scale;
+      const dh = img.naturalHeight * scale;
+      try { tc.drawImage(img, (48 - dw) / 2, (48 - dh) / 2, dw, dh); } catch (_) {}
+    } else {
+      tc.fillStyle = '#6a4a2a';
+      tc.fillRect(10, 4, 28, 40);
+      tc.strokeStyle = '#ccc';
+      tc.lineWidth = 1.5;
+      tc.strokeRect(10, 4, 28, 40);
+      tc.fillStyle = '#ffcc88';
+      tc.beginPath();
+      tc.arc(33, 24, 3, 0, Math.PI * 2);
+      tc.fill();
+    }
+  }
+
+  const img = images['door'];
+  if (!img || img.complete) drawDoorThumb();
+  else { img.addEventListener('load', drawDoorThumb); img.addEventListener('error', drawDoorThumb); }
+
+  item.appendChild(thumb);
+
+  const label = document.createElement('div');
+  label.className = 'sidebar-label';
+  label.textContent = 'Door (click to place)';
+  item.appendChild(label);
+
+  item.addEventListener('click', () => selectType('door', 'door'));
+  sidebar.appendChild(item);
 }
 
 function addTileSection() {
@@ -792,6 +849,9 @@ function render() {
     placedEnemies.forEach(e => renderEnemyMarker(e, 1.0));
   }
 
+  // Placed doors
+  placedDoors.forEach(door => renderDoor(door, 1.0));
+
   // Mob drag preview
   if (isDraggingMob && selectedType && cursorOnCanvas) {
     const x  = Math.min(mobDragStartWX, cursorWX);
@@ -820,8 +880,13 @@ function render() {
     );
   }
 
+  // Door placement preview
+  if (selectedCategory === 'door' && cursorOnCanvas) {
+    renderDoor({ id: '', x: cursorWX, y: cursorWY, targetMap: '', targetDoorId: '' }, 0.45);
+  }
+
   // Object/NPC placement preview under cursor (only when not dragging a mob, enemy, or neutral zone)
-  if (selectedType && cursorOnCanvas && selectedCategory !== 'mob' && selectedCategory !== 'enemy' && selectedCategory !== 'neutralZone' && selectedCategory !== 'tile') {
+  if (selectedType && cursorOnCanvas && selectedCategory !== 'mob' && selectedCategory !== 'enemy' && selectedCategory !== 'neutralZone' && selectedCategory !== 'tile' && selectedCategory !== 'door') {
     renderObject(selectedType, cursorWX, cursorWY, selectedCategory, 0.45);
   }
 
@@ -1023,6 +1088,130 @@ function renderNeutralZone(zone, alpha) {
   ctx.globalAlpha = 1;
 }
 
+function renderDoor(door, alpha) {
+  const { x: sx, y: sy } = worldToScreen(door.x, door.y);
+  const img = images['door'];
+  const DOOR_W = 32;  // world px
+  const DOOR_H = 64;  // world px
+  const dw = DOOR_W * zoom;
+  const dh = DOOR_H * zoom;
+
+  ctx.globalAlpha = alpha;
+  if (img && img.complete && img.naturalWidth > 0) {
+    try { ctx.drawImage(img, sx - dw / 2, sy - dh / 2, dw, dh); } catch (_) {}
+  } else {
+    ctx.fillStyle = '#6a4a2a';
+    ctx.fillRect(sx - dw / 2, sy - dh / 2, dw, dh);
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sx - dw / 2, sy - dh / 2, dw, dh);
+  }
+
+  if (door.id || door.targetMap) {
+    ctx.fillStyle = '#ffcc88';
+    const fontSize = Math.max(8, Math.min(12, 10 * zoom));
+    ctx.font = `${fontSize}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const text = door.id ? `[${door.id}]→${door.targetMap}` : 'door';
+    ctx.fillText(text, sx, sy + dh / 2 + 2);
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+function showDoorModal(wx, wy) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#222;border:1px solid #555;border-radius:6px;padding:20px;min-width:340px;color:#eee;font-family:sans-serif;';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Place Door';
+    title.style.cssText = 'margin:0 0 16px 0;font-size:15px;color:#fff;';
+    box.appendChild(title);
+
+    const fieldStyle = 'display:block;margin-bottom:12px;font-size:13px;';
+    const inputStyle = 'display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:5px 8px;background:#333;border:1px solid #555;border-radius:3px;color:#eee;font-size:13px;';
+
+    // Door ID
+    const idLabel = document.createElement('label');
+    idLabel.style.cssText = fieldStyle;
+    idLabel.textContent = 'Door ID (unique name for this door):';
+    const idInput = document.createElement('input');
+    idInput.type = 'text';
+    idInput.placeholder = 'e.g. town_east_exit';
+    idInput.style.cssText = inputStyle;
+    idLabel.appendChild(idInput);
+    box.appendChild(idLabel);
+
+    // Target map
+    const mapLabel = document.createElement('label');
+    mapLabel.style.cssText = fieldStyle;
+    mapLabel.textContent = 'Target map:';
+    const mapSelect = document.createElement('select');
+    mapSelect.style.cssText = inputStyle;
+    if (availableMaps.length > 0) {
+      availableMaps.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        mapSelect.appendChild(opt);
+      });
+    } else {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '(no maps found — type below)';
+      mapSelect.appendChild(opt);
+    }
+    mapLabel.appendChild(mapSelect);
+    box.appendChild(mapLabel);
+
+    // Target door ID
+    const targetLabel = document.createElement('label');
+    targetLabel.style.cssText = 'display:block;margin-bottom:18px;font-size:13px;';
+    targetLabel.textContent = 'Target door ID (door to spawn near on arrival):';
+    const targetInput = document.createElement('input');
+    targetInput.type = 'text';
+    targetInput.placeholder = 'e.g. dungeon_west_entrance';
+    targetInput.style.cssText = inputStyle;
+    targetLabel.appendChild(targetInput);
+    box.appendChild(targetLabel);
+
+    // Buttons
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = 'padding:6px 14px;background:#444;border:1px solid #666;border-radius:3px;color:#eee;cursor:pointer;font-size:13px;';
+    cancelBtn.addEventListener('click', () => { document.body.removeChild(overlay); resolve(null); });
+
+    const placeBtn = document.createElement('button');
+    placeBtn.textContent = 'Place Door';
+    placeBtn.style.cssText = 'padding:6px 14px;background:#2a5a2a;border:1px solid #4a8a4a;border-radius:3px;color:#eee;cursor:pointer;font-size:13px;';
+    placeBtn.addEventListener('click', () => {
+      const id          = idInput.value.trim();
+      const targetMap   = mapSelect.value.trim();
+      const targetDoorId = targetInput.value.trim();
+      if (!id)          { alert('Please enter a door ID.');          return; }
+      if (!targetMap)   { alert('Please select a target map.');      return; }
+      if (!targetDoorId){ alert('Please enter a target door ID.');   return; }
+      document.body.removeChild(overlay);
+      resolve({ id, x: wx, y: wy, targetMap, targetDoorId });
+    });
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(placeBtn);
+    box.appendChild(btnRow);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    setTimeout(() => idInput.focus(), 0);
+  });
+}
+
 function renderTile(tile, alpha) {
   const def = tileRegistry[tile.type];
   if (!def) return;
@@ -1171,6 +1360,17 @@ canvas.addEventListener('mousedown', e => {
 
     if (wx < 0 || wy < 0 || wx > mapWidth || wy > mapHeight) return;
 
+    if (selectedCategory === 'door') {
+      showDoorModal(wx, wy).then(doorData => {
+        if (doorData) {
+          placedDoors.push(doorData);
+          updateStatus();
+        }
+      });
+      e.preventDefault();
+      return;
+    }
+
     if (selectedCategory === 'enemy') {
       const def = enemyRegistry[selectedType];
       placedEnemies.push({
@@ -1260,6 +1460,16 @@ canvas.addEventListener('contextmenu', e => {
     }
   }
 
+  // Try doors first (±24 px wide, ±32 px tall hit area)
+  for (let i = placedDoors.length - 1; i >= 0; i--) {
+    const d = placedDoors[i];
+    if (Math.abs(wx - d.x) <= 24 && Math.abs(wy - d.y) <= 32) {
+      placedDoors.splice(i, 1);
+      updateStatus();
+      return;
+    }
+  }
+
   // Try enemies first (point markers, ±12 px square hit area)
   for (let i = placedEnemies.length - 1; i >= 0; i--) {
     const e = placedEnemies[i];
@@ -1335,6 +1545,8 @@ document.addEventListener('keydown', e => {
   if ((e.code === 'Delete' || e.code === 'Backspace') && document.activeElement === document.body) {
     if (selectedCategory === 'tile' && placedTiles.length > 0) {
       placedTiles.pop();
+    } else if (selectedCategory === 'door' && placedDoors.length > 0) {
+      placedDoors.pop();
     } else if (selectedCategory === 'enemy' && placedEnemies.length > 0) {
       placedEnemies.pop();
     } else if (selectedCategory === 'mob' && placedMobs.length > 0) {
@@ -1394,7 +1606,7 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  const data = { defaultTile, spawnPoint, tiles: placedTiles, objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies, neutralZones: placedNeutralZones };
+  const data = { defaultTile, spawnPoint, tiles: placedTiles, objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies, neutralZones: placedNeutralZones, doors: placedDoors };
 
   statusBar.textContent = `Saving ${name}.json…`;
   try {
@@ -1405,7 +1617,7 @@ saveBtn.addEventListener('click', async () => {
     });
     const json = await res.json();
     if (json.ok) {
-      statusBar.textContent = `Saved → ${name}.json  (${placedTiles.length} tiles, ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies, ${placedNeutralZones.length} neutral zones)`;
+      statusBar.textContent = `Saved → ${name}.json  (${placedTiles.length} tiles, ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies, ${placedNeutralZones.length} neutral zones, ${placedDoors.length} doors)`;
     } else {
       statusBar.textContent = `Save failed: ${json.error}`;
     }
@@ -1438,10 +1650,11 @@ loadBtn.addEventListener('click', async () => {
     placedMobs         = Array.isArray(data.mobs)         ? data.mobs         : [];
     placedEnemies      = Array.isArray(data.enemies)      ? data.enemies      : [];
     placedNeutralZones = Array.isArray(data.neutralZones) ? data.neutralZones : [];
+    placedDoors        = Array.isArray(data.doors)        ? data.doors        : [];
     // Refresh the default tile indicator in sidebar
     const defRow = document.getElementById('tile-default-row');
     if (defRow) defRow.textContent = `Background: ${defaultTile}`;
-    statusBar.textContent = `Loaded ${name}.json — ${placedTiles.length} tiles, ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies, ${placedNeutralZones.length} neutral zones`;
+    statusBar.textContent = `Loaded ${name}.json — ${placedTiles.length} tiles, ${placedObjects.length} objects, ${placedNpcs.length} NPCs, ${placedMobs.length} mob zones, ${placedEnemies.length} enemies, ${placedNeutralZones.length} neutral zones, ${placedDoors.length} doors`;
   } catch (err) {
     statusBar.textContent = `Load error: ${err.message}`;
   }
@@ -1449,7 +1662,7 @@ loadBtn.addEventListener('click', async () => {
 
 // ── Clear ──────────────────────────────────────────────────────────────────────
 clearBtn.addEventListener('click', () => {
-  const total = placedTiles.length + placedObjects.length + placedNpcs.length + placedMobs.length + placedEnemies.length + placedNeutralZones.length;
+  const total = placedTiles.length + placedObjects.length + placedNpcs.length + placedMobs.length + placedEnemies.length + placedNeutralZones.length + placedDoors.length;
   if (total === 0) return;
   if (confirm(`Clear all ${total} placed items?`)) {
     placedTiles        = [];
@@ -1458,6 +1671,7 @@ clearBtn.addEventListener('click', () => {
     placedMobs         = [];
     placedEnemies      = [];
     placedNeutralZones = [];
+    placedDoors        = [];
     updateStatus();
   }
 });
@@ -1467,8 +1681,8 @@ function updateStatus() {
   const sel    = isDraggingSpawnPoint ? `Dragging spawn point` : (selectedType ? `Selected: ${selectedType}` : 'No selection');
   const coords = cursorOnCanvas ? `  Cursor: (${cursorWX}, ${cursorWY})` : '';
   const spawn  = `  Spawn: (${spawnPoint.x}, ${spawnPoint.y})`;
-  const count  = `  Tiles: ${placedTiles.length}  Objects: ${placedObjects.length}  NPCs: ${placedNpcs.length}  Mob zones: ${placedMobs.length}  Enemies: ${placedEnemies.length}  Neutral zones: ${placedNeutralZones.length}`;
-  const hint   = (selectedCategory === 'mob' || selectedCategory === 'neutralZone') ? '  — drag to draw rect' : (selectedCategory === 'tile' ? '  — click/drag to paint, right-click to erase' : '');
+  const count  = `  Tiles: ${placedTiles.length}  Objects: ${placedObjects.length}  NPCs: ${placedNpcs.length}  Mob zones: ${placedMobs.length}  Enemies: ${placedEnemies.length}  Neutral zones: ${placedNeutralZones.length}  Doors: ${placedDoors.length}`;
+  const hint   = (selectedCategory === 'mob' || selectedCategory === 'neutralZone') ? '  — drag to draw rect' : (selectedCategory === 'tile' ? '  — click/drag to paint, right-click to erase' : (selectedCategory === 'door' ? '  — click to place, right-click to delete' : ''));
   statusBar.textContent = sel + hint + coords + spawn + count;
 }
 
@@ -1547,6 +1761,15 @@ async function init() {
   for (const key of Object.keys(tileRegistry)) {
     loadImage('tile_' + key, `/assets/tiles/${key}.png`);
   }
+
+  // Load door image
+  loadImage('door', '/assets/maps/door_to_map.png');
+
+  // Fetch available maps for door target dropdown
+  fetch('/design/maps')
+    .then(r => r.ok ? r.json() : [])
+    .then(maps => { availableMaps = Array.isArray(maps) ? maps : []; })
+    .catch(() => {});
 
   // Fit map to viewport and start render loop
   fitMap();

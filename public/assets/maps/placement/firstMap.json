@@ -1,6 +1,9 @@
 {
   "defaultTile": "grass_basic",
-  "spawnPoint": { "x": 100, "y": 100 },
+  "spawnPoint": {
+    "x": 100,
+    "y": 100
+  },
   "tiles": [],
   "objects": [
     {
@@ -736,6 +739,17 @@
       "width": 50,
       "height": 50,
       "quantity": 1
+    }
+  ],
+  "enemies": [],
+  "neutralZones": [],
+  "doors": [
+    {
+      "id": "firstMap_west",
+      "x": 17,
+      "y": 968,
+      "targetMap": "m1",
+      "targetDoorId": "m1_east"
     }
   ]
 }

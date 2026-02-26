@@ -54,6 +54,15 @@ export interface TilePlacement {
   y:    number;
 }
 
+/** A door that teleports the player to another map */
+export interface DoorData {
+  id:           string;
+  x:            number;
+  y:            number;
+  targetMap:    string;
+  targetDoorId: string;
+}
+
 /** Map initialisation message payload */
 export interface MapDataMessage {
   defaultTile?: string;
@@ -62,6 +71,7 @@ export interface MapDataMessage {
   objects:      StaticObjectData[];
   npcs:         NpcData[];
   mobs:         MobPlacement[];
+  doors?:       DoorData[];
 }
 
 /** Chat message payload */
@@ -98,12 +108,13 @@ export interface RemotePlayer {
   onChange: (cb: () => void) => void;
 }
 
-/** Scene init data passed from HomeScene → GameScene */
+/** Scene init data passed from HomeScene → GameScene (or GameScene → GameScene on teleport) */
 export interface GameSceneData {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  room: any; // Colyseus.Room<any>
-  nickname: string;
-  skin: string;
+  room:      any; // Colyseus.Room<any>
+  nickname:  string;
+  skin:      string;
+  mapName?:  string;
 }
 
 /** Represents one remote player entity in the GameScene */
