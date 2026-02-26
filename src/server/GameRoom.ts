@@ -177,8 +177,8 @@ export class GameRoom extends Room<GameState> {
     this.setState(new GameState());
     this.setPatchRate(1000 / 20); // 20 Hz state broadcast
 
-    // ── Load fixed objects positions from test.json ─────────────────────────
-    const mapFile  = path.resolve(__dirname, "../../public/assets/maps/placement/test.json");
+    // ── Load fixed objects positions from map json file ─────────────────────────
+    const mapFile  = path.resolve(__dirname, "../../public/assets/maps/placement/m1.json");
     const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
       defaultTile?:  string;
       spawnPoint?:   { x: number; y: number };
