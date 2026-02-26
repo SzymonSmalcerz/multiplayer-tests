@@ -574,10 +574,18 @@ export class GameRoom extends Room<GameState> {
       player.weapon              = profile.weapon;
       player.potions             = profile.potions;
       player.potionHealRemaining = profile.potionHealRemaining;
-      player.partyId             = profile.partyId;
-      player.isPartyOwner        = profile.isPartyOwner;
-      player.partyName           = profile.partyName;
       player.attackBonus         = (player.level - 1) * 0.5; // recalculate bonus
+
+      // Validate party still exists in GlobalBus (may have been disbanded in transit)
+      if (profile.partyId) {
+        const party = globalBus.getParty(profile.partyId);
+        if (party && party.members.has(pid)) {
+          player.partyId      = party.id;
+          player.isPartyOwner = profile.isPartyOwner;
+          player.partyName    = party.name; // live name in case it was renamed
+        }
+        // else: party gone or player removed — leave partyId as "" (default)
+      }
     } else {
       player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
       player.skin      = String(options.skin ?? "male/grey");
@@ -592,6 +600,9 @@ export class GameRoom extends Room<GameState> {
     this.state.players.set(client.sessionId, player);
     this.lastPositions.set(client.sessionId, { x: player.x, y: player.y, time: Date.now() });
     this.playerHitCooldowns.set(client.sessionId, new Map());
+
+    // If player is in a party, sync HUD for all party members already in this room
+    if (player.partyId) this.updatePartyMemberStates(player.partyId);
 
     this.broadcast("chat", {
       sessionId: "server",

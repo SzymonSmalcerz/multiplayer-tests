@@ -256,6 +256,7 @@ export class HomeScene extends Phaser.Scene {
         nickname,
         skin:        this.selectedSkin,
         persistentId: getPersistentId(),
+        mapName:     "m1",
       });
 
       // Persist session info for reconnection

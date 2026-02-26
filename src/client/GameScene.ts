@@ -247,6 +247,7 @@ export class GameScene extends Phaser.Scene {
     this.globalLeaderboardData = null;
     this.doors            = [];
     this.doorSprites      = new Map();
+    this.partyHudRows     = [];
 
     // Keep reconnection token fresh — it may change after a reconnect
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
