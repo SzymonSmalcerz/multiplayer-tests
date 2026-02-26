@@ -15,7 +15,7 @@ export class PlayerState extends Schema {
   @type("number") x: number = 0;
   @type("number") y: number = 0;
   @type("string") nickname: string = "";
-  @type("string") skin: string = "male/1lvl";
+  @type("string") skin: string = "male/grey";
   @type("number") direction: number = 0;    // 0=down 1=left 2=up 3=right
   @type("boolean") showWeapon: boolean = false;
   @type("number") hp: number = 100;
@@ -492,7 +492,7 @@ export class GameRoom extends Room<GameState> {
     player.x         = this.spawnPoint.x;
     player.y         = this.spawnPoint.y;
     player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
-    player.skin      = String(options.skin ?? "male/1lvl");
+    player.skin      = String(options.skin ?? "male/grey");
     player.hp        = 100;
     player.maxHp     = 100;
     player.level     = 1;

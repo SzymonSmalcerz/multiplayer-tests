@@ -11,7 +11,7 @@ import { ShopUI } from "./ui/ShopUI";
 import { EquipmentUI } from "./ui/EquipmentUI";
 import { HealerShopUI } from "./ui/HealerShopUI";
 import { ActionBarUI } from "./ui/ActionBarUI";
-import { ALL_SKINS, FRAME_W as FRAME_SIZE } from "./skins";
+import { SKINS_TO_LOAD, getSkinForLevel, isTierBoundary, FRAME_W as FRAME_SIZE } from "./skins";
 import {
   xpForNextLevel,
   worldToMinimapOffset,
@@ -34,8 +34,7 @@ const ANIM_FPS            = 10;
 const ATTACK_ANIM_MS      = 750;   // sword orbit animation duration (ms)
 const ATTACK_COOLDOWN_MS  = 1000;  // ms between attacks
 
-// All selectable skins — preloaded so any player's chosen skin renders correctly
-const SKINS_TO_LOAD = ALL_SKINS;
+// All sprite files — preloaded so any player's chosen skin renders correctly at every tier
 
 // Player collision box (pixel coords within the 64×64 sprite frame)
 const PLAYER_BODY_X      = 26;
@@ -62,7 +61,7 @@ const DIR_TO_ROW = [2, 1, 0, 3] as const;
 const DIR_WALK_STATE   = ["walk_down",   "walk_side",   "walk_up"  ] as const;
 const DIR_ATTACK_STATE = ["attack_down", "attack_side", "attack_up"] as const;
 
-// Converts "male/1lvl" → "male_1lvl"
+// Converts "male/5lvl_blond" → "male_5lvl_blond" (Phaser texture key)
 function skinKey(skin: string): string {
   return skin.replace("/", "_");
 }
@@ -746,10 +745,17 @@ export class GameScene extends Phaser.Scene {
     // Gold display
     this.hudGoldText.setText(`Gold: ${p.gold ?? 0}`);
 
-    // Update nickname label when level changes
+    // Update nickname label and sprite when level changes
     if (p.level !== this.localLevel) {
       this.localLevel = p.level;
       this.localLabel.setText(`${this.localNickname} [Lv.${p.level}]`);
+      // Swap spritesheet when crossing a tier boundary (5, 10, 15, …)
+      if (isTierBoundary(p.level)) {
+        const newKey = skinKey(getSkinForLevel(this.localSkin, p.level));
+        if (this.textures.exists(newKey) && this.localSprite.texture.key !== newKey) {
+          this.localSprite.setTexture(newKey, DIR_TO_ROW[this.localDirection] * 9);
+        }
+      }
     }
   }
 
@@ -1284,7 +1290,7 @@ export class GameScene extends Phaser.Scene {
   // ── Setup helpers ──────────────────────────────────────────────────────────
 
   private createLocalPlayer(x: number, y: number): void {
-    const key = skinKey(this.localSkin);
+    const key = skinKey(getSkinForLevel(this.localSkin, 1));
     this.localSprite = this.physics.add.sprite(x, y, key);
     this.localSprite.setCollideWorldBounds(true);
     this.localSprite.setDepth(y + FRAME_SIZE / 2);
@@ -1497,8 +1503,8 @@ export class GameScene extends Phaser.Scene {
   // ── Remote player management ───────────────────────────────────────────────
 
   private addRemotePlayer(player: RemotePlayer, sessionId: string): void {
-    const key     = skinKey(player.skin ?? "male/1lvl");
-    const safeKey = this.textures.exists(key) ? key : "male_1lvl";
+    const key     = skinKey(getSkinForLevel(player.skin ?? "male/grey", player.level ?? 1));
+    const safeKey = this.textures.exists(key) ? key : "male_5lvl_grey";
     const lv      = player.level ?? 1;
 
     const sprite = this.physics.add.sprite(player.x, player.y, safeKey);
@@ -1645,6 +1651,14 @@ export class GameScene extends Phaser.Scene {
       if (e.level !== newLv) {
         e.level = newLv;
         e.label.setText(`${player.nickname} [Lv.${newLv}]`);
+        // Swap spritesheet when crossing a tier boundary (5, 10, 15, …)
+        if (isTierBoundary(newLv)) {
+          const newKey = skinKey(getSkinForLevel(player.skin, newLv));
+          if (this.textures.exists(newKey) && e.skinKey !== newKey) {
+            e.sprite.setTexture(newKey, DIR_TO_ROW[e.direction] * 9);
+            e.skinKey = newKey;
+          }
+        }
       }
 
       // Update party membership and label color
@@ -2037,7 +2051,7 @@ export class GameScene extends Phaser.Scene {
     this.localDirection = dir;
 
     // ── Player sprite animation ────────────────────────────────────────────
-    const key     = skinKey(this.localSkin);
+    const key     = skinKey(getSkinForLevel(this.localSkin, this.localLevel));
     const animKey = `${key}_${DIR_NAMES[dir]}`;
     if (moving) {
       this.localSprite.play(animKey, true);
@@ -2188,7 +2202,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // ── Remote player sprite animation ───────────────────────────────────
-      const safeKey = this.textures.exists(key) ? key : "male_1lvl";
+      const safeKey = this.textures.exists(key) ? key : "male_5lvl_grey";
       const animKey = `${safeKey}_${DIR_NAMES[direction]}`;
 
       if (moving) {

@@ -6,6 +6,27 @@ import {
   FRAME_W, FRAME_H, SHEET_W, SHEET_H, PREVIEW_ROW,
 } from "./skins";
 
+// ── Skin migration ─────────────────────────────────────────────────────────────
+
+/**
+ * Converts an old-format skin string (e.g. "male/5lvl_blond", "male/1lvl")
+ * to the new hairstyle-identifier format (e.g. "male/blond").
+ * New-format strings (no "lvl" in variant) are returned unchanged.
+ */
+function migrateSkin(stored: string): string {
+  const slash = stored.indexOf("/");
+  if (slash === -1) return MALE_SKINS[0];
+  const gender  = stored.slice(0, slash);
+  const variant = stored.slice(slash + 1);
+
+  if (!variant.includes("lvl")) return stored; // already new format
+
+  // "{N}lvl" → default, "{N}lvl_{hairstyle}" → "{gender}/{hairstyle}"
+  const match = variant.match(/^\d+lvl_?(\w+)?$/);
+  if (!match || !match[1]) return gender === "female" ? FEMALE_SKINS[0] : MALE_SKINS[0];
+  return `${gender}/${match[1]}`;
+}
+
 // ── Sprite frame geometry ────────────────────────────────────────────────────
 
 /**
@@ -54,7 +75,7 @@ function getPersistentId(): string {
 // ── HomeScene ────────────────────────────────────────────────────────────────
 
 export class HomeScene extends Phaser.Scene {
-  private selectedSkin = MALE_SKINS[0]; // default: male/1lvl
+  private selectedSkin = MALE_SKINS[0]; // default: male/blond
   private activeGender: "male" | "female" = "male";
 
   constructor() {
@@ -115,12 +136,14 @@ export class HomeScene extends Phaser.Scene {
     const overlay = document.getElementById("overlay");
     if (overlay) overlay.style.display = "flex";
 
-    // Pre-fill skin from last session
+    // Pre-fill skin from last session (migrate old format if needed)
     const savedSkin = localStorage.getItem(LS_SKIN);
     if (savedSkin) {
-      const gender = savedSkin.startsWith("female/") ? "female" : "male";
+      const migrated = migrateSkin(savedSkin);
+      if (migrated !== savedSkin) localStorage.setItem(LS_SKIN, migrated);
+      const gender = migrated.startsWith("female/") ? "female" : "male";
       this.activeGender = gender;
-      this.selectedSkin = savedSkin;
+      this.selectedSkin = migrated;
       // Sync the tab button highlight
       document.querySelectorAll<HTMLButtonElement>(".tab-btn").forEach(btn => {
         btn.classList.toggle("active", btn.dataset.gender === gender);
@@ -177,9 +200,9 @@ export class HomeScene extends Phaser.Scene {
       thumb.dataset.skin = skin;
       thumb.title = skin.split("/")[1]; // tooltip with variant name
 
-      // Position the correct frame via CSS background
-      const [g, variant] = skin.split("/");
-      thumb.style.backgroundImage = `url('/assets/player/${g}/${variant}.png')`;
+      // Position the correct frame via CSS background (use 5lvl sprite as preview)
+      const [g, hairstyle] = skin.split("/");
+      thumb.style.backgroundImage = `url('/assets/player/${g}/5lvl_${hairstyle}.png')`;
       thumb.style.backgroundSize = BG_SIZE;
       thumb.style.backgroundPosition = `0px ${BG_POS_Y}px`;
 
