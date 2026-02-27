@@ -30,6 +30,7 @@ export class PlayerState extends Schema {
   @type("string")  partyId: string = "";
   @type("boolean") isPartyOwner: boolean = false;
   @type("string")  partyName: string = "";
+  @type("string")  partyRoster: string = "";
   @type("number")  gold: number = 0;
   @type("string")  weapon: string = "sword";
   @type("number")  potions: number = 0;
@@ -234,6 +235,7 @@ export class GameRoom extends Room<GameState> {
     // ── Register with GlobalBus for cross-room chat and leaderboard ─────────────
     globalBus.registerRoom(this.roomId, {
       broadcastFn:  (type, msg) => this.broadcast(type, msg),
+      onPartyUpdate: (partyId) => this.updatePartyMemberStates(partyId),
       getPlayersFn: () => {
         const out: Array<{ nickname: string; level: number; xp: number; partyName: string; isDead: boolean }> = [];
         this.state.players.forEach(p => {
@@ -443,38 +445,39 @@ export class GameRoom extends Room<GameState> {
       this.updatePartyMemberStates(sender.partyId);
     });
 
-    this.onMessage("party_kick", (client, data: { targetId: string }) => {
+    this.onMessage("party_kick", (client, data: { targetId?: string; targetPid?: string }) => {
       const sender = this.state.players.get(client.sessionId);
-      if (!sender || !sender.isPartyOwner) return;
+      if (!sender || !sender.isPartyOwner || !sender.partyId) return;
 
-      const target = this.state.players.get(data.targetId);
-      if (!target || target.partyId !== sender.partyId) return;
+      let targetPid = data.targetPid;
+      let kickedNickname = "Unknown";
 
-      const targetPid = this.sessionToPersistentId.get(data.targetId);
+      // Support legacy targetId (sessionId)
+      if (data.targetId && !targetPid) {
+        targetPid = this.sessionToPersistentId.get(data.targetId);
+        const target = this.state.players.get(data.targetId);
+        if (target) kickedNickname = target.nickname;
+      }
+
       if (!targetPid) return;
 
       const partyId = sender.partyId;
-      const kickedNickname = target.nickname;
+      const party = globalBus.getParty(partyId);
+      if (!party || !party.members.has(targetPid)) return;
+
+      // Fetch nickname from profile if we didn't get it from local state
+      if (kickedNickname === "Unknown") {
+        const profile = globalBus.getProfile(targetPid);
+        if (profile) kickedNickname = profile.nickname;
+      }
       
       globalBus.leaveParty(partyId, targetPid);
-      target.partyId      = "";
-      target.isPartyOwner = false;
-      target.partyName    = "";
 
-      // Tell the kicked player privately
-      const kickedClient = this.clients.find(c => c.sessionId === data.targetId);
-      kickedClient?.send("chat", { sessionId: "server", nickname: "Server",
-        message: "You were kicked out of the party" });
+      // Note: GlobalBus.leaveParty will trigger publishPartyUpdate, 
+      // which will call updatePartyMemberStates in all rooms.
+      // So we don't need to manually clear state here anymore.
 
-      const party = globalBus.getParty(partyId);
-      if (!party) {
-        // Disbanded automatically if only owner left
-        this.updatePartyMemberStates(partyId); // Clear for any remaining (owner)
-        // Note: globalBus.leaveParty handles disbanding if members <= 1
-      } else {
-        this.sendPartyChat(partyId, `${kickedNickname} was kicked from the party`);
-        this.updatePartyMemberStates(partyId);
-      }
+      this.sendPartyChat(partyId, `${kickedNickname} was kicked from the party`);
     });
 
     this.onMessage<AttackMessage>("attack", (client, data) => {
@@ -601,8 +604,30 @@ export class GameRoom extends Room<GameState> {
     this.lastPositions.set(client.sessionId, { x: player.x, y: player.y, time: Date.now() });
     this.playerHitCooldowns.set(client.sessionId, new Map());
 
+    // ── Update Global Profile immediately so party members see us ────────────
+    if (pid) {
+      globalBus.saveProfile(pid, {
+        nickname:            player.nickname,
+        skin:                player.skin,
+        level:               player.level,
+        xp:                  player.xp,
+        gold:                player.gold,
+        hp:                  player.hp,
+        maxHp:               player.maxHp,
+        weapon:              player.weapon,
+        potions:             player.potions,
+        potionHealRemaining: player.potionHealRemaining,
+        partyId:             player.partyId,
+        isPartyOwner:        player.isPartyOwner,
+        partyName:           player.partyName,
+      });
+    }
+
     // If player is in a party, sync HUD for all party members already in this room
     if (player.partyId) this.updatePartyMemberStates(player.partyId);
+
+    // Refresh global leaderboard so the new player is immediately visible
+    globalBus.broadcastLeaderboard();
 
     this.broadcast("chat", {
       sessionId: "server",
@@ -630,10 +655,8 @@ export class GameRoom extends Room<GameState> {
       return;
     }
 
-    // Unintentional disconnect — leave/disband party immediately
-    this.disbandOrLeaveParty(client.sessionId);
-
-    // Mark as disconnected — ghost stays in world, still killable
+    // Unintentional disconnect — mark as disconnected.
+    // We only leave/disband the party if they fail to reconnect within the grace period.
     if (player) player.disconnected = true;
 
     console.log(`[Room] ${name} disconnected — holding slot for 60 s`);
@@ -644,7 +667,8 @@ export class GameRoom extends Room<GameState> {
       if (player) player.disconnected = false;
       console.log(`[Room] ${name} reconnected`);
     } catch {
-      // Grace period expired — clean up for real
+      // Grace period expired — leave party and clean up for real
+      this.disbandOrLeaveParty(client.sessionId);
       this.cleanupPlayer(client.sessionId);
       console.log(`[Room] ${name} removed (grace period expired). Players: ${this.state.players.size}`);
     }
@@ -1012,17 +1036,23 @@ export class GameRoom extends Room<GameState> {
   /** Update PlayerState for all local members of a global party. */
   private updatePartyMemberStates(partyId: string): void {
     const party = globalBus.getParty(partyId);
+    const rosterJson = party ? JSON.stringify(globalBus.getPartyRoster(partyId)) : "";
+
     this.state.players.forEach((player, sessionId) => {
       const pid = this.sessionToPersistentId.get(sessionId);
       if (pid && party && party.members.has(pid)) {
         player.partyId      = partyId;
         player.isPartyOwner = (party.id === pid);
         player.partyName    = party.name;
-      } else if (player.partyId === partyId) {
-        // No longer in this party
+        player.partyRoster  = rosterJson;
+      } else if (pid && player.partyId === partyId) {
+        // Only clear party state when we KNOW the player's pid and they are NOT in the party.
+        // Skipping unknown-pid players prevents accidentally clearing party for anyone whose
+        // persistentId mapping was temporarily absent (e.g. mid-teleport edge cases).
         player.partyId      = "";
         player.isPartyOwner = false;
         player.partyName    = "";
+        player.partyRoster  = "";
       }
     });
   }

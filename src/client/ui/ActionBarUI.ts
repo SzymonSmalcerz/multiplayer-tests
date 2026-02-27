@@ -50,6 +50,17 @@ export class ActionBarUI {
     this.scene          = scene;
     this.getPlayerState = getPlayerState;
     this.onActivate     = onActivate;
+
+    // Load from localStorage if available
+    const saved = localStorage.getItem("actionBarState");
+    if (saved) {
+      try {
+        const state = JSON.parse(saved);
+        if (Array.isArray(state)) {
+          for (let i = 0; i < 4; i++) this.slots[i].item = state[i] ?? null;
+        }
+      } catch (e) { /* ignore */ }
+    }
   }
 
   /** Call once after scene `create()` to build the bar. */
@@ -103,7 +114,24 @@ export class ActionBarUI {
       });
       hitArea.on("pointerover", () => this.drawSlotBg(idx, true));
       hitArea.on("pointerout",  () => this.drawSlotBg(idx, false));
+
+      // Re-render icon if slot was imported before build()
+      if (this.slots[i].item) this.rebuildSlotIcon(i);
     }
+  }
+
+  exportState(): any {
+    return this.slots.map(s => s.item);
+  }
+
+  importState(state: any): void {
+    if (!Array.isArray(state)) return;
+    for (let i = 0; i < 4; i++) {
+      this.slots[i].item = state[i] ?? null;
+      // If built, icon will be updated in next update() or build() handles it
+      if (this.slotBg.length > 0) this.rebuildSlotIcon(i);
+    }
+    localStorage.setItem("actionBarState", JSON.stringify(this.exportState()));
   }
 
   /** Called every frame by GameScene to refresh counts and availability. */
@@ -132,6 +160,7 @@ export class ActionBarUI {
     if (slotIndex < 0 || slotIndex >= 4) return;
     this.slots[slotIndex].item = itemType;
     this.rebuildSlotIcon(slotIndex);
+    localStorage.setItem("actionBarState", JSON.stringify(this.exportState()));
   }
 
   /** Returns screen-space bounds of each slot for drag-drop hit-testing. */

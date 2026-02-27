@@ -750,6 +750,13 @@
       "y": 968,
       "targetMap": "m1",
       "targetDoorId": "m1_east"
+    },
+    {
+      "id": "firstMap_orc_town",
+      "x": 1980,
+      "y": 1830,
+      "targetMap": "orc_town",
+      "targetDoorId": "orc_town"
     }
   ]
 }

@@ -100,6 +100,7 @@ export interface RemotePlayer {
   partyId: string;
   isPartyOwner: boolean;
   partyName: string;
+  partyRoster: string;
   gold: number;
   weapon: string;
   potions: number;
@@ -115,6 +116,9 @@ export interface GameSceneData {
   nickname:  string;
   skin:      string;
   mapName?:  string;
+  leaderboardData?: Array<{ nickname: string; level: number; xp: number; partyName: string }>;
+  actionBarState?: any;
+  equipmentState?: any;
 }
 
 /** Represents one remote player entity in the GameScene */

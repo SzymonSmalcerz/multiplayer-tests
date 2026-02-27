@@ -98,5 +98,55 @@
       "width": 27,
       "height": 28
     }
+  },
+  "orc_commander": {
+    "type": "orc_commander",
+    "label": "Orc commander",
+    "level": 10,
+    "hp": 300,
+    "damage": 5,
+    "xpReward": 500,
+    "goldAmount": 100,
+    "goldChance": 0.5,
+    "defaultRespawnTime": 20,
+    "speed": 150,
+    "aggroRange": 440,
+    "attackRange": 48,
+    "attackCooldownMs": 300,
+    "frameWidth": 64,
+    "frameHeight": 64,
+    "framesPerState": 8,
+    "spritePath": "/assets/enemies/orc_commander.png",
+    "hitbox": {
+      "x": 4,
+      "y": 2,
+      "width": 56,
+      "height": 59
+    }
+  },
+  "orc_warrior": {
+    "type": "orc_warrior",
+    "label": "Orc warrior",
+    "level": 7,
+    "hp": 200,
+    "damage": 4,
+    "xpReward": 150,
+    "goldAmount": 35,
+    "goldChance": 0.3,
+    "defaultRespawnTime": 10,
+    "speed": 110,
+    "aggroRange": 320,
+    "attackRange": 48,
+    "attackCooldownMs": 300,
+    "frameWidth": 64,
+    "frameHeight": 64,
+    "framesPerState": 6,
+    "spritePath": "/assets/enemies/orc_warrior.png",
+    "hitbox": {
+      "x": 3,
+      "y": 3,
+      "width": 58,
+      "height": 57
+    }
   }
 }
