@@ -34,9 +34,11 @@ type GetPlayersFn = () => Array<{
 }>;
 
 interface RoomHandle {
-  broadcastFn:  BroadcastFn;
-  getPlayersFn: GetPlayersFn;
+  broadcastFn:    BroadcastFn;
+  getPlayersFn:   GetPlayersFn;
   onPartyUpdate?: (partyId: string) => void;
+  /** Try to send a typed message to one specific player (by persistentId). Returns true if found. */
+  sendToPlayerFn: (pid: string, type: string, msg: unknown) => boolean;
 }
 
 class GlobalBus {
@@ -136,8 +138,22 @@ class GlobalBus {
       if (handle.onPartyUpdate) {
         handle.onPartyUpdate(partyId);
       }
-      handle.broadcastFn("party_update", { partyId });
     });
+  }
+
+  /** Force a cross-room roster refresh for an active party (e.g. after live HP sync). */
+  refreshParty(partyId: string): void {
+    this.publishPartyUpdate(partyId);
+  }
+
+  /**
+   * Send a typed message to a specific player identified by persistentId.
+   * Iterates all rooms until one finds the active session and delivers the message.
+   */
+  sendToPlayer(targetPid: string, type: string, msg: unknown): void {
+    for (const handle of this.rooms.values()) {
+      if (handle.sendToPlayerFn(targetPid, type, msg)) return;
+    }
   }
 
   getPartyRoster(partyId: string): Array<{ pid: string; nickname: string; level: number; hp: number; maxHp: number }> {

@@ -995,16 +995,15 @@ export class GameScene extends Phaser.Scene {
       const myState = this.room.state.players.get(this.mySessionId);
       if (myState && myState.partyRoster) {
         try {
-          const roster: Array<{ pid: string; nickname: string; level: number; hp: number; maxHp: number }> = JSON.parse(myState.partyRoster);
-          
-          roster.forEach((m) => {
-            if (m.nickname === myState.nickname) return; // Skip self
+          const roster: Array<{ pid: string; sessionId: string | null; nickname: string; level: number; hp: number; maxHp: number }> = JSON.parse(myState.partyRoster);
 
-            // Find if they are in the same room to get LIVE data
-            let liveState: RemotePlayer | undefined;
-            this.room.state.players.forEach((p) => {
-              if (p.nickname === m.nickname) liveState = p;
-            });
+          roster.forEach((m) => {
+            if (m.sessionId === this.mySessionId) return; // Skip self
+
+            // Look up live state by sessionId (O(1), collision-proof)
+            const liveState: RemotePlayer | undefined = m.sessionId
+              ? this.room.state.players.get(m.sessionId) ?? undefined
+              : undefined;
 
             members.push({
               targetPid: m.pid,
@@ -1697,7 +1696,6 @@ export class GameScene extends Phaser.Scene {
       // Party state change — update label colors of all remote players
       const newPartyId = player.partyId ?? "";
       const newIsOwner = player.isPartyOwner ?? false;
-      const newRoster  = player.partyRoster ?? "";
 
       if (newPartyId !== this.myPartyId || newIsOwner !== this.myIsPartyOwner) {
         this.myPartyId      = newPartyId;

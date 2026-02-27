@@ -170,6 +170,9 @@ export class GameRoom extends Room<GameState> {
   /** targetSessionId → inviterSessionId */
   private pendingInvites = new Map<string, string>();
 
+  /** Timestamp of last cross-room party HP sync (for away-member HP freshness) */
+  private lastRosterSyncAt = 0;
+  private static readonly ROSTER_SYNC_INTERVAL_MS = 5_000;
 
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -234,8 +237,16 @@ export class GameRoom extends Room<GameState> {
 
     // ── Register with GlobalBus for cross-room chat and leaderboard ─────────────
     globalBus.registerRoom(this.roomId, {
-      broadcastFn:  (type, msg) => this.broadcast(type, msg),
+      broadcastFn:   (type, msg) => this.broadcast(type, msg),
       onPartyUpdate: (partyId) => this.updatePartyMemberStates(partyId),
+      sendToPlayerFn: (pid, type, msg) => {
+        const sessionId = this.persistentIdToSession.get(pid);
+        if (!sessionId) return false;
+        const client = this.clients.find((c: Client) => c.sessionId === sessionId);
+        if (!client) return false;
+        client.send(type, msg);
+        return true;
+      },
       getPlayersFn: () => {
         const out: Array<{ nickname: string; level: number; xp: number; partyName: string; isDead: boolean }> = [];
         this.state.players.forEach(p => {
@@ -422,11 +433,12 @@ export class GameRoom extends Room<GameState> {
 
       const success = globalBus.joinParty(partyId, joinerPid);
       if (success) {
+        // Schema fields (partyId, isPartyOwner, partyName, partyRoster) are already set
+        // for all rooms by the publishPartyUpdate triggered inside joinParty.
+        // Setting joiner fields here keeps the local state consistent without waiting
+        // for the next Colyseus patch cycle.
         joiner.partyId      = partyId;
         joiner.isPartyOwner = false;
-        this.updatePartyMemberStates(partyId);
-        
-        const party = globalBus.getParty(partyId);
         this.sendPartyChat(partyId, `${joiner.nickname} joined the party`);
       }
     });
@@ -472,11 +484,15 @@ export class GameRoom extends Room<GameState> {
       }
       
       globalBus.leaveParty(partyId, targetPid);
+      // publishPartyUpdate is triggered inside leaveParty, so all rooms'
+      // updatePartyMemberStates will clear the kicked player's party schema fields.
 
-      // Note: GlobalBus.leaveParty will trigger publishPartyUpdate, 
-      // which will call updatePartyMemberStates in all rooms.
-      // So we don't need to manually clear state here anymore.
-
+      // Personal notification — works cross-map via GlobalBus.sendToPlayer
+      globalBus.sendToPlayer(targetPid, "chat", {
+        sessionId: "server",
+        nickname:  "Server",
+        message:   "You were kicked from the party",
+      });
       this.sendPartyChat(partyId, `${kickedNickname} was kicked from the party`);
     });
 
@@ -780,6 +796,7 @@ export class GameRoom extends Room<GameState> {
     this.tickPlayerWeapons(now);
     this.tickPlayerRegen(now, dtSec);
     this.tickPotionHealing(dtSec);
+    this.tickPartyRosterSync(now);
 
     // Process respawn queue
     for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
@@ -1033,10 +1050,60 @@ export class GameRoom extends Room<GameState> {
     globalBus.publishChat(payload, this.roomId); // other rooms
   }
 
+  /**
+   * Build a JSON roster for the given party, mixing live schema data for
+   * members in THIS room with saved profile data for members on other maps.
+   * Each entry includes a `sessionId` (non-null only when the member is local)
+   * so the client can do an O(1) look-up instead of a fragile name search.
+   */
+  private buildRosterJson(partyId: string): string {
+    const party = globalBus.getParty(partyId);
+    if (!party) return "";
+
+    const roster: Array<{
+      pid:       string;
+      sessionId: string | null;
+      nickname:  string;
+      level:     number;
+      hp:        number;
+      maxHp:     number;
+    }> = [];
+
+    party.members.forEach((pid) => {
+      const sessionId    = this.persistentIdToSession.get(pid) ?? null;
+      const localPlayer  = sessionId ? this.state.players.get(sessionId) : null;
+
+      if (localPlayer) {
+        // Live data — accurate every time this room's state is queried
+        roster.push({
+          pid,
+          sessionId,
+          nickname: localPlayer.nickname,
+          level:    localPlayer.level,
+          hp:       localPlayer.hp,
+          maxHp:    localPlayer.maxHp,
+        });
+      } else {
+        // Away member — use profile saved on their last join/sync
+        const profile = globalBus.getProfile(pid);
+        roster.push({
+          pid,
+          sessionId: null,
+          nickname:  profile?.nickname ?? "Unknown",
+          level:     profile?.level    ?? 1,
+          hp:        profile?.hp       ?? 0,
+          maxHp:     profile?.maxHp    ?? 100,
+        });
+      }
+    });
+
+    return JSON.stringify(roster);
+  }
+
   /** Update PlayerState for all local members of a global party. */
   private updatePartyMemberStates(partyId: string): void {
-    const party = globalBus.getParty(partyId);
-    const rosterJson = party ? JSON.stringify(globalBus.getPartyRoster(partyId)) : "";
+    const party      = globalBus.getParty(partyId);
+    const rosterJson = party ? this.buildRosterJson(partyId) : "";
 
     this.state.players.forEach((player, sessionId) => {
       const pid = this.sessionToPersistentId.get(sessionId);
@@ -1046,15 +1113,39 @@ export class GameRoom extends Room<GameState> {
         player.partyName    = party.name;
         player.partyRoster  = rosterJson;
       } else if (pid && player.partyId === partyId) {
-        // Only clear party state when we KNOW the player's pid and they are NOT in the party.
-        // Skipping unknown-pid players prevents accidentally clearing party for anyone whose
-        // persistentId mapping was temporarily absent (e.g. mid-teleport edge cases).
+        // Only clear when we KNOW the pid and confirm they are no longer in the party.
         player.partyId      = "";
         player.isPartyOwner = false;
         player.partyName    = "";
         player.partyRoster  = "";
       }
     });
+  }
+
+  /**
+   * Every ROSTER_SYNC_INTERVAL_MS, flush each party member's live HP to their
+   * GlobalBus profile and trigger a cross-room roster refresh.  This keeps the
+   * HP bars of away members fresh within a ~5 s window.
+   */
+  private tickPartyRosterSync(now: number): void {
+    if (now - this.lastRosterSyncAt < GameRoom.ROSTER_SYNC_INTERVAL_MS) return;
+    this.lastRosterSyncAt = now;
+
+    const partiesNeedingRefresh = new Set<string>();
+
+    this.state.players.forEach((player, sessionId) => {
+      if (!player.partyId) return;
+      const pid = this.sessionToPersistentId.get(sessionId);
+      if (!pid) return;
+
+      const profile = globalBus.getProfile(pid);
+      if (profile && (profile.hp !== player.hp || profile.maxHp !== player.maxHp)) {
+        globalBus.saveProfile(pid, { ...profile, hp: player.hp, maxHp: player.maxHp });
+        partiesNeedingRefresh.add(player.partyId);
+      }
+    });
+
+    partiesNeedingRefresh.forEach((partyId) => globalBus.refreshParty(partyId));
   }
 
   private disbandOrLeaveParty(sessionId: string): void {
