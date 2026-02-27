@@ -34,8 +34,11 @@ type GetPlayersFn = () => Array<{
 }>;
 
 interface RoomHandle {
-  broadcastFn:  BroadcastFn;
-  getPlayersFn: GetPlayersFn;
+  broadcastFn:    BroadcastFn;
+  getPlayersFn:   GetPlayersFn;
+  onPartyUpdate?: (partyId: string) => void;
+  /** Try to send a typed message to one specific player (by persistentId). Returns true if found. */
+  sendToPlayerFn: (pid: string, type: string, msg: unknown) => boolean;
 }
 
 class GlobalBus {
@@ -55,6 +58,8 @@ class GlobalBus {
     if (!this.leaderboardTimer) {
       this.leaderboardTimer = setInterval(() => this.broadcastLeaderboard(), 3000);
     }
+    // Broadcast immediately so new rooms get data right away
+    this.broadcastLeaderboard();
   }
 
   unregisterRoom(roomId: string): void {
@@ -89,17 +94,20 @@ class GlobalBus {
       name: name,
       members: new Set([ownerPid]),
     });
+    this.publishPartyUpdate(partyId);
     return partyId;
   }
 
   disbandParty(partyId: string): void {
     this.parties.delete(partyId);
+    this.publishPartyUpdate(partyId);
   }
 
   joinParty(partyId: string, memberPid: string): boolean {
     const party = this.parties.get(partyId);
     if (party && party.members.size < 5) {
       party.members.add(memberPid);
+      this.publishPartyUpdate(partyId);
       return true;
     }
     return false;
@@ -111,6 +119,8 @@ class GlobalBus {
       party.members.delete(memberPid);
       if (party.members.size <= 1) {
         this.disbandParty(partyId);
+      } else {
+        this.publishPartyUpdate(partyId);
       }
     }
   }
@@ -119,7 +129,59 @@ class GlobalBus {
     const party = this.parties.get(partyId);
     if (party) {
       party.name = newName;
+      this.publishPartyUpdate(partyId);
     }
+  }
+
+  private publishPartyUpdate(partyId: string): void {
+    this.rooms.forEach((handle) => {
+      if (handle.onPartyUpdate) {
+        handle.onPartyUpdate(partyId);
+      }
+    });
+  }
+
+  /** Force a cross-room roster refresh for an active party (e.g. after live HP sync). */
+  refreshParty(partyId: string): void {
+    this.publishPartyUpdate(partyId);
+  }
+
+  /**
+   * Send a typed message to a specific player identified by persistentId.
+   * Iterates all rooms until one finds the active session and delivers the message.
+   */
+  sendToPlayer(targetPid: string, type: string, msg: unknown): void {
+    for (const handle of this.rooms.values()) {
+      if (handle.sendToPlayerFn(targetPid, type, msg)) return;
+    }
+  }
+
+  getPartyRoster(partyId: string): Array<{ pid: string; nickname: string; level: number; hp: number; maxHp: number }> {
+    const party = this.parties.get(partyId);
+    if (!party) return [];
+
+    const roster: Array<{ pid: string; nickname: string; level: number; hp: number; maxHp: number }> = [];
+    party.members.forEach((pid) => {
+      const profile = this.profiles.get(pid);
+      if (profile) {
+        roster.push({
+          pid,
+          nickname: profile.nickname,
+          level:    profile.level,
+          hp:       profile.hp,
+          maxHp:    profile.maxHp,
+        });
+      } else {
+        roster.push({
+          pid,
+          nickname: "Unknown",
+          level:    1,
+          hp:       0,
+          maxHp:    100,
+        });
+      }
+    });
+    return roster;
   }
 
   // ── Cross-room chat ──────────────────────────────────────────────────────────
@@ -140,7 +202,7 @@ class GlobalBus {
 
   // ── Global leaderboard ───────────────────────────────────────────────────────
 
-  private broadcastLeaderboard(): void {
+  broadcastLeaderboard(): void {
     const allPlayers: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
 
     this.rooms.forEach((handle) => {
@@ -158,6 +220,9 @@ class GlobalBus {
 
     allPlayers.sort((a, b) => b.level !== a.level ? b.level - a.level : b.xp - a.xp);
     const top5 = allPlayers.slice(0, 5);
+
+    // Skip broadcast if empty to prevent overwriting client state during map transitions
+    if (top5.length === 0) return;
 
     this.rooms.forEach((handle) => {
       handle.broadcastFn("global_leaderboard", top5);

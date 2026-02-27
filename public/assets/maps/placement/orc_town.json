@@ -1,0 +1,757 @@
+{
+  "defaultTile": "dirt",
+  "spawnPoint": {
+    "x": 100,
+    "y": 100
+  },
+  "tiles": [],
+  "objects": [
+    {
+      "type": "tree2",
+      "x": 720,
+      "y": 204
+    },
+    {
+      "type": "tree2",
+      "x": 524,
+      "y": 315
+    },
+    {
+      "type": "tree2",
+      "x": 734,
+      "y": 492
+    },
+    {
+      "type": "tree2",
+      "x": 978,
+      "y": 500
+    },
+    {
+      "type": "tree2",
+      "x": 937,
+      "y": 806
+    },
+    {
+      "type": "tree2",
+      "x": 280,
+      "y": 1042
+    },
+    {
+      "type": "tree2",
+      "x": 40,
+      "y": 806
+    },
+    {
+      "type": "tree1",
+      "x": 863,
+      "y": 865
+    },
+    {
+      "type": "tree1",
+      "x": 539,
+      "y": 673
+    },
+    {
+      "type": "tree1",
+      "x": 339,
+      "y": 503
+    },
+    {
+      "type": "tree1",
+      "x": 852,
+      "y": 267
+    },
+    {
+      "type": "tree1",
+      "x": 535,
+      "y": 97
+    },
+    {
+      "type": "tree1",
+      "x": 225,
+      "y": 621
+    },
+    {
+      "type": "tree1",
+      "x": 306,
+      "y": 810
+    },
+    {
+      "type": "tree1",
+      "x": 660,
+      "y": 968
+    },
+    {
+      "type": "tree1",
+      "x": 520,
+      "y": 1179
+    },
+    {
+      "type": "tree1",
+      "x": 343,
+      "y": 1356
+    },
+    {
+      "type": "tree1",
+      "x": 33,
+      "y": 1367
+    },
+    {
+      "type": "tree1",
+      "x": 546,
+      "y": 1533
+    },
+    {
+      "type": "tree1",
+      "x": 819,
+      "y": 1348
+    },
+    {
+      "type": "tent",
+      "x": 1797,
+      "y": 49
+    },
+    {
+      "type": "tent",
+      "x": 1528,
+      "y": 112
+    },
+    {
+      "type": "tent",
+      "x": 1779,
+      "y": 282
+    },
+    {
+      "type": "wood",
+      "x": 1757,
+      "y": 83
+    },
+    {
+      "type": "wood",
+      "x": 1734,
+      "y": 97
+    },
+    {
+      "type": "wood",
+      "x": 1727,
+      "y": 68
+    },
+    {
+      "type": "wood",
+      "x": 1764,
+      "y": 116
+    },
+    {
+      "type": "wood",
+      "x": 1786,
+      "y": 64
+    },
+    {
+      "type": "wood",
+      "x": 1753,
+      "y": 38
+    },
+    {
+      "type": "bucket_full",
+      "x": 1664,
+      "y": 245
+    },
+    {
+      "type": "bucket_full",
+      "x": 1919,
+      "y": 407
+    },
+    {
+      "type": "bucket_empty",
+      "x": 1882,
+      "y": 201
+    },
+    {
+      "type": "tree2",
+      "x": 1524,
+      "y": 968
+    },
+    {
+      "type": "tree2",
+      "x": 1476,
+      "y": 1633
+    },
+    {
+      "type": "tree2",
+      "x": 1317,
+      "y": 1898
+    },
+    {
+      "type": "tree2",
+      "x": 889,
+      "y": 1836
+    },
+    {
+      "type": "tree2",
+      "x": 893,
+      "y": 1636
+    },
+    {
+      "type": "tree2",
+      "x": 1229,
+      "y": 1415
+    },
+    {
+      "type": "tree2",
+      "x": 1081,
+      "y": 1031
+    },
+    {
+      "type": "tree2",
+      "x": 1273,
+      "y": 769
+    },
+    {
+      "type": "tree2",
+      "x": 1273,
+      "y": 559
+    },
+    {
+      "type": "tree2",
+      "x": 1746,
+      "y": 629
+    },
+    {
+      "type": "tree2",
+      "x": 1878,
+      "y": 1083
+    },
+    {
+      "type": "tree2",
+      "x": 1830,
+      "y": 1411
+    },
+    {
+      "type": "tree2",
+      "x": 1686,
+      "y": 1441
+    },
+    {
+      "type": "tree2",
+      "x": 1557,
+      "y": 1356
+    },
+    {
+      "type": "tree2",
+      "x": 1480,
+      "y": 1145
+    },
+    {
+      "type": "tree2",
+      "x": 1055,
+      "y": 1072
+    },
+    {
+      "type": "tree2",
+      "x": 889,
+      "y": 1496
+    },
+    {
+      "type": "tree2",
+      "x": 317,
+      "y": 1854
+    },
+    {
+      "type": "tree2",
+      "x": 0,
+      "y": 1581
+    },
+    {
+      "type": "tree2",
+      "x": 181,
+      "y": 1145
+    },
+    {
+      "type": "tree2",
+      "x": 63,
+      "y": 924
+    },
+    {
+      "type": "tree2",
+      "x": 136,
+      "y": 422
+    },
+    {
+      "type": "tree2",
+      "x": 361,
+      "y": 130
+    },
+    {
+      "type": "tree2",
+      "x": 1059,
+      "y": 260
+    },
+    {
+      "type": "tree2",
+      "x": 1273,
+      "y": 695
+    },
+    {
+      "type": "tree2",
+      "x": 830,
+      "y": 828
+    },
+    {
+      "type": "tree2",
+      "x": 210,
+      "y": 1038
+    },
+    {
+      "type": "tree2",
+      "x": 642,
+      "y": 1171
+    },
+    {
+      "type": "tree2",
+      "x": 801,
+      "y": 1061
+    },
+    {
+      "type": "tree2",
+      "x": 996,
+      "y": 1278
+    },
+    {
+      "type": "fence_vertical",
+      "x": 1050,
+      "y": 0
+    },
+    {
+      "type": "fence_vertical",
+      "x": 1050,
+      "y": 56
+    },
+    {
+      "type": "fence_vertical",
+      "x": 1050,
+      "y": 111
+    },
+    {
+      "type": "fence",
+      "x": 1057,
+      "y": 161
+    },
+    {
+      "type": "fence",
+      "x": 1178,
+      "y": 161
+    },
+    {
+      "type": "fence",
+      "x": 1299,
+      "y": 161
+    },
+    {
+      "type": "fence",
+      "x": 1420,
+      "y": 161
+    },
+    {
+      "type": "fence_vertical",
+      "x": 1538,
+      "y": 119
+    },
+    {
+      "type": "fence_vertical",
+      "x": 1538,
+      "y": 62
+    },
+    {
+      "type": "fence_vertical",
+      "x": 1538,
+      "y": 0
+    }
+  ],
+  "npcs": [],
+  "mobs": [
+    {
+      "type": "pig",
+      "x": 1114,
+      "y": 3,
+      "width": 229,
+      "height": 146,
+      "speed": 1,
+      "changeTime": 4000,
+      "specialTime": 4000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 4
+    },
+    {
+      "type": "pig",
+      "x": 1253,
+      "y": 3,
+      "width": 250,
+      "height": 144,
+      "speed": 1,
+      "changeTime": 4000,
+      "specialTime": 4000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 4
+    },
+    {
+      "type": "pig",
+      "x": 1301,
+      "y": 43,
+      "width": 221,
+      "height": 74,
+      "speed": 1,
+      "changeTime": 4000,
+      "specialTime": 4000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 4
+    },
+    {
+      "type": "pig",
+      "x": 1086,
+      "y": 22,
+      "width": 272,
+      "height": 62,
+      "speed": 1,
+      "changeTime": 4000,
+      "specialTime": 4000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 4
+    },
+    {
+      "type": "chicken",
+      "x": 1087,
+      "y": 5,
+      "width": 421,
+      "height": 146,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 1197,
+      "y": 10,
+      "width": 315,
+      "height": 148,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 1098,
+      "y": 2,
+      "width": 207,
+      "height": 157,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 1304,
+      "y": 7,
+      "width": 168,
+      "height": 87,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 1132,
+      "y": 79,
+      "width": 179,
+      "height": 77,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 1145,
+      "y": 10,
+      "width": 262,
+      "height": 75,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 1329,
+      "y": 85,
+      "width": 189,
+      "height": 68,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    }
+  ],
+  "enemies": [
+    {
+      "type": "orc",
+      "x": 673,
+      "y": 871,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 821,
+      "y": 762,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1122,
+      "y": 709,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1234,
+      "y": 957,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1461,
+      "y": 1140,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1104,
+      "y": 1074,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 686,
+      "y": 1806,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 122,
+      "y": 1650,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 7,
+      "y": 573,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1755,
+      "y": 1128,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1796,
+      "y": 1502,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1249,
+      "y": 1806,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1767,
+      "y": 1844,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1821,
+      "y": 922,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1438,
+      "y": 647,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1072,
+      "y": 256,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 842,
+      "y": 71,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 1072,
+      "y": 548,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc",
+      "x": 414,
+      "y": 1687,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 469,
+      "y": 1023,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1375,
+      "y": 452,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1771,
+      "y": 857,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1485,
+      "y": 996,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1020,
+      "y": 558,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 940,
+      "y": 256,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1349,
+      "y": 342,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1731,
+      "y": 339,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1834,
+      "y": 256,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1744,
+      "y": 146,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1658,
+      "y": 63,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1747,
+      "y": 252,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1528,
+      "y": 398,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1830,
+      "y": 491,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1890,
+      "y": 628,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1581,
+      "y": 624,
+      "respawnTime": 10
+    },
+    {
+      "type": "orc_commander",
+      "x": 1575,
+      "y": 329,
+      "respawnTime": 20
+    },
+    {
+      "type": "orc_commander",
+      "x": 1688,
+      "y": 538,
+      "respawnTime": 20
+    },
+    {
+      "type": "orc_commander",
+      "x": 1894,
+      "y": 535,
+      "respawnTime": 20
+    },
+    {
+      "type": "orc_commander",
+      "x": 1369,
+      "y": 232,
+      "respawnTime": 20
+    },
+    {
+      "type": "orc_commander",
+      "x": 1611,
+      "y": 830,
+      "respawnTime": 20
+    }
+  ],
+  "neutralZones": [],
+  "doors": [
+    {
+      "id": "orc_town",
+      "x": 17,
+      "y": 996,
+      "targetMap": "firstMap",
+      "targetDoorId": "firstMap_orc_town"
+    }
+  ]
+}

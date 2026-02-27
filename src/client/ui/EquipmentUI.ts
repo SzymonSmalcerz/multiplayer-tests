@@ -65,11 +65,31 @@ export class EquipmentUI {
     this.onUsePotion     = onUsePotion;
     this.onInteract      = onInteract;
     this.actionBarUI     = actionBarUI;
+
+    // Load from localStorage if available
+    const saved = localStorage.getItem("equipmentState");
+    if (saved) {
+      try {
+        const state = JSON.parse(saved);
+        if (Array.isArray(state)) this.inventory = [...state];
+      } catch (e) { /* ignore */ }
+    }
   }
 
   get isEquipmentOpen(): boolean { return this.isOpen; }
 
   toggle(): void { this.isOpen ? this.close() : this.open(); }
+
+  exportState(): any {
+    return [...this.inventory];
+  }
+
+  importState(state: any): void {
+    if (Array.isArray(state)) {
+      this.inventory = [...state];
+      localStorage.setItem("equipmentState", JSON.stringify(this.inventory));
+    }
+  }
 
   /** Call every frame from GameScene while the panel is open. */
   updateItems(potions: number, potionHealRemaining: number, hp: number, maxHp: number): void {
@@ -419,6 +439,8 @@ export class EquipmentUI {
         const targetItem = this.inventory[i];
         this.inventory[i] = itemType;
         this.inventory[sourceIdx] = targetItem;
+
+        localStorage.setItem("equipmentState", JSON.stringify(this.inventory));
 
         // Redraw panel to reflect new order
         this.close();

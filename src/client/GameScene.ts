@@ -139,6 +139,7 @@ export class GameScene extends Phaser.Scene {
   // Static objects
   private staticObjectsGroup!: Phaser.Physics.Arcade.StaticGroup;
   private animatedObjectsGroup!: Phaser.Physics.Arcade.StaticGroup;
+  private mapVisualsGroup!: Phaser.GameObjects.Group;
   private objectsRegistry: Record<string, StaticObjectDef> = {};
   private bgTileSprite!: Phaser.GameObjects.TileSprite;
   private tilesRegistry: Record<string, { type: string; imageWidth: number; imageHeight: number }> = {};
@@ -186,6 +187,15 @@ export class GameScene extends Phaser.Scene {
   private minimapCloseBtn!:   Phaser.GameObjects.Text;
   private minimapNorthLabel!: Phaser.GameObjects.Text;
   private keyM!:              Phaser.Input.Keyboard.Key;
+
+  // Pending UI states to restore after map change
+  private pendingActionBarState: any = null;
+  private pendingEquipmentState: any = null;
+  private pendingMapData: MapDataMessage | null = null;
+  private pendingAddPlayers: Array<{ player: RemotePlayer; sessionId: string }> = [];
+  private pendingAddEnemies: Array<{ enemy: EnemyData; id: string }> = [];
+  private pendingChatMessages: Array<{ sessionId: string; nickname: string; message: string }> = [];
+  private isCreated = false;
 
   // Leaderboard
   private leaderboardBg!:     Phaser.GameObjects.Graphics;
@@ -238,16 +248,46 @@ export class GameScene extends Phaser.Scene {
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   init(data: GameSceneData): void {
+    console.log(`[Scene] Init for map: ${data.mapName ?? "m1"}. Has leaderboard data: ${!!data.leaderboardData}`);
     this.room             = data.room;
     this.localNickname    = data.nickname;
     this.localSkin        = data.skin;
     this.mySessionId      = data.room.sessionId as string;
     this.currentMapName   = data.mapName ?? "m1";
     this.isTeleporting    = false;
-    this.globalLeaderboardData = null;
-    this.doors            = [];
-    this.doorSprites      = new Map();
-    this.partyHudRows     = [];
+    this.isCreated        = false;
+    this.localLevel       = 0;
+    this.localIsDead      = false;
+    
+    // Clear all tracking maps and buffers
+    this.remoteMap.clear();
+    this.enemyMap.clear();
+    this.pendingAddPlayers = [];
+    this.pendingAddEnemies = [];
+    this.pendingChatMessages = [];
+    this.pendingMapData = null;
+    this.doors = [];
+    this.doorSprites.clear();
+    this.partyHudRows = [];
+
+    // Keep globalLeaderboardData across map changes — it's cross-map data and stays valid.
+    if (data.leaderboardData) {
+      this.globalLeaderboardData = data.leaderboardData;
+      console.log(`[Scene] Restored ${this.globalLeaderboardData.length} leaderboard entries.`);
+    }
+    
+    // Restore UI states from map change
+    this.pendingActionBarState = data.actionBarState || null;
+    this.pendingEquipmentState = data.equipmentState || null;
+
+    // Fetch chat elements early so they are available for displayChatMessage
+    this.chatInputWrap = document.getElementById("chat-input-wrap")!;
+    this.chatInput     = document.getElementById("chat-input") as HTMLInputElement;
+    this.chatDisplay   = document.getElementById("chat-display")!;
+
+    this.setupRoomListeners();
+
+    this.localWeaponKey   = "";   // force texture sync on first update frame of new scene
 
     // Keep reconnection token fresh — it may change after a reconnect
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -256,6 +296,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // Add loader error tracking
+    this.load.on("loaderror", (file: any) => {
+      console.error(`[Loader] Failed to load asset: ${file.key} from ${file.url}`);
+    });
+
     // Player sprite sheets
     for (const skin of SKINS_TO_LOAD) {
       this.load.spritesheet(skinKey(skin), `/assets/player/${skin}.png`, {
@@ -356,6 +401,7 @@ export class GameScene extends Phaser.Scene {
     // ── Static object groups ─────────────────────────────────────────────────
     this.staticObjectsGroup    = this.physics.add.staticGroup();
     this.animatedObjectsGroup  = this.physics.add.staticGroup({ classType: Phaser.Physics.Arcade.Sprite });
+    this.mapVisualsGroup       = this.add.group();
 
     // ── Object registry (populated from objects.json loaded in preload) ────────
     this.objectsRegistry = (this.cache.json.get("objects_registry") ?? {}) as Record<string, StaticObjectDef>;
@@ -370,6 +416,33 @@ export class GameScene extends Phaser.Scene {
     this.createHUD();
     this.createPartyHUD();
     this.createMinimap();
+
+    // ── Mark created and flush buffers ─────────────────────────────────────
+    this.isCreated = true;
+
+    // Apply early network data
+    if (this.pendingMapData) {
+      this.applyMapData(this.pendingMapData);
+    }
+
+    this.pendingAddPlayers.forEach(({ player, sessionId }) => this.doAddPlayer(player, sessionId));
+    this.pendingAddPlayers = [];
+
+    this.pendingAddEnemies.forEach(({ enemy, id }) => this.addEnemy(enemy, id));
+    this.pendingAddEnemies = [];
+
+    this.pendingChatMessages.forEach(msg => this.displayChatMessage(msg));
+    this.pendingChatMessages = [];
+
+    // Request fresh map data once world is ready
+    this.room.send("get_map");
+
+    // ── Snap to Authoritative Position ─────────────────────────────────────
+    const myState = this.room.state.players.get(this.mySessionId);
+    if (myState && this.localSprite) {
+      console.log(`[Scene] Snapping to server position: ${myState.x}, ${myState.y}`);
+      this.localSprite.setPosition(myState.x, myState.y);
+    }
 
     // ── Death UI (hidden by default) ─────────────────────────────────────────
     this.createDeathUI();
@@ -413,6 +486,7 @@ export class GameScene extends Phaser.Scene {
         if (itemType === "health_potion") this.room.send("use_potion");
       },
     );
+    if (this.pendingActionBarState) this.actionBarUI.importState(this.pendingActionBarState);
     this.actionBarUI.build();
 
     // ── Equipment UI ─────────────────────────────────────────────────────────
@@ -434,6 +508,7 @@ export class GameScene extends Phaser.Scene {
       () => { this.ignoreNextMapClick = true; },
       this.actionBarUI,
     );
+    if (this.pendingEquipmentState) this.equipmentUI.importState(this.pendingEquipmentState);
 
     // ── Healer Shop UI ────────────────────────────────────────────────────────
     this.healerShopUI = new HealerShopUI(
@@ -532,9 +607,6 @@ export class GameScene extends Phaser.Scene {
       this.hidePlayerActionMenu();
       this.onMapClick(pointer.worldX, pointer.worldY);
     });
-
-    // ── Colyseus listeners ───────────────────────────────────────────────────
-    this.setupRoomListeners();
   }
 
   // ── Attack ─────────────────────────────────────────────────────────────────
@@ -556,9 +628,7 @@ export class GameScene extends Phaser.Scene {
   // ── Chat ───────────────────────────────────────────────────────────────────
 
   private setupChatUI(): void {
-    this.chatInputWrap = document.getElementById("chat-input-wrap")!;
-    this.chatInput     = document.getElementById("chat-input") as HTMLInputElement;
-    this.chatDisplay   = document.getElementById("chat-display")!;
+    if (!this.chatInputWrap || !this.chatInput || !this.chatDisplay) return;
 
     this.keyEnter.on("down", () => {
       if (!this.isTyping) {
@@ -887,8 +957,8 @@ export class GameScene extends Phaser.Scene {
       kickBtn.on("pointerout",  () => kickBtn.setColor("#ff9966"));
       kickBtn.on("pointerdown", () => {
         this.ignoreNextMapClick = true;
-        const targetId = kickBtn.getData("targetId") as string;
-        if (targetId) this.room.send("party_kick", { targetId });
+        const targetPid = kickBtn.getData("targetPid") as string;
+        if (targetPid) this.room.send("party_kick", { targetPid });
       });
 
       this.partyHudRows.push({ bg, hpBar, xpBar, nameText, kickBtn });
@@ -904,7 +974,7 @@ export class GameScene extends Phaser.Scene {
     const BAR_W   = 192;
 
     // Collect other party members in stable order (with sessionId for kick)
-    const members: Array<{ sessionId: string; nickname: string; level: number; hp: number; maxHp: number }> = [];
+    const members: Array<{ targetPid: string; nickname: string; level: number; hp: number; maxHp: number; isAway: boolean }> = [];
     const inParty = this.myPartyId !== "";
 
     // Show/hide party header
@@ -922,18 +992,32 @@ export class GameScene extends Phaser.Scene {
     this.partyHudRenameBtn.setVisible(inParty && this.myIsPartyOwner);
 
     if (inParty) {
-      this.remoteMap.forEach((_entity, sessionId) => {
-        const state = this.room.state.players.get(sessionId);
-        if (state && state.partyId === this.myPartyId) {
-          members.push({
-            sessionId,
-            nickname: state.nickname,
-            level:    state.level,
-            hp:       state.hp,
-            maxHp:    state.maxHp,
+      const myState = this.room.state.players.get(this.mySessionId);
+      if (myState && myState.partyRoster) {
+        try {
+          const roster: Array<{ pid: string; sessionId: string | null; nickname: string; level: number; hp: number; maxHp: number }> = JSON.parse(myState.partyRoster);
+
+          roster.forEach((m) => {
+            if (m.sessionId === this.mySessionId) return; // Skip self
+
+            // Look up live state by sessionId (O(1), collision-proof)
+            const liveState: RemotePlayer | undefined = m.sessionId
+              ? this.room.state.players.get(m.sessionId) ?? undefined
+              : undefined;
+
+            members.push({
+              targetPid: m.pid,
+              nickname:  m.nickname,
+              level:     m.level,
+              hp:        liveState ? liveState.hp : m.hp,
+              maxHp:     liveState ? liveState.maxHp : m.maxHp,
+              isAway:    !liveState,
+            });
           });
+        } catch (e) {
+          console.error("Failed to parse party roster", e);
         }
-      });
+      }
     }
 
     for (let i = 0; i < 4; i++) {
@@ -953,16 +1037,22 @@ export class GameScene extends Phaser.Scene {
         // HP bar track
         row.bg.fillStyle(0x660000, 1).fillRect(12, y + 20, BAR_W, 8);
 
-        row.hpBar.fillStyle(0xff3333, 1)
-          .fillRect(12, y + 20, Math.floor(BAR_W * hpRatio), 8);
+        if (m.isAway) {
+          // Full solid grey bar for away players
+          row.hpBar.fillStyle(0x666666, 1).fillRect(12, y + 20, BAR_W, 8);
+        } else {
+          // Standard HP bar for local players
+          row.hpBar.fillStyle(0xff3333, 1).fillRect(12, y + 20, Math.floor(BAR_W * hpRatio), 8);
+        }
 
+        const nameLabel = m.isAway ? `${m.nickname} (Away)` : m.nickname;
         row.nameText
-          .setText(`${m.nickname} [Lv.${m.level}]`)
+          .setText(nameLabel)
           .setPosition(14, y + 4)
           .setVisible(true);
 
         row.kickBtn
-          .setData("targetId", m.sessionId)
+          .setData("targetPid", m.targetPid)
           .setVisible(this.myIsPartyOwner);
       } else {
         row.nameText.setVisible(false);
@@ -1052,6 +1142,11 @@ export class GameScene extends Phaser.Scene {
     .setVisible(false);
 
     this.createLeaderboard();
+    
+    // If we already have global data (restored in init), show it immediately
+    if (this.globalLeaderboardData && this.globalLeaderboardData.length > 0) {
+      this.updateLeaderboard();
+    }
   }
 
   private openMinimap(): void {
@@ -1147,6 +1242,8 @@ export class GameScene extends Phaser.Scene {
     const lbX = camW - 208;
     const lbY = 216;
 
+    this.leaderboardRows = [];
+
     this.leaderboardBg = this.add.graphics()
       .fillStyle(0x111111, 0.85)
       .fillRect(0, 0, MINIMAP_SIZE, 120)
@@ -1184,8 +1281,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateLeaderboard(): void {
-    // Safety check: skip if scene is shutting down or UI is destroyed
-    if (!this.scene.isActive() || !this.leaderboardBg || !this.leaderboardBg.active) return;
+    // Safety check: skip if UI is destroyed
+    if (!this.leaderboardBg || !this.leaderboardBg.active) {
+      return;
+    }
 
     const camW = this.cameras.main.width;
     const lbX = camW - 208;
@@ -1195,15 +1294,27 @@ export class GameScene extends Phaser.Scene {
     this.leaderboardHeader.setPosition(lbX + MINIMAP_SIZE / 2, lbY + 8);
 
     // Prefer cross-map global data; fall back to local room players until first broadcast
-    let top5: Array<{ nickname: string; level: number; xp: number; partyName: string }>;
-    if (this.globalLeaderboardData) {
+    let top5: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
+    if (this.globalLeaderboardData && this.globalLeaderboardData.length > 0) {
       top5 = this.globalLeaderboardData.slice(0, 5);
     } else {
       const allPlayers: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
       this.room.state.players.forEach((p: RemotePlayer) => {
-        allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName });
+        if (!p.isDead) {
+          allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName });
+        }
       });
       top5 = sortLeaderboard(allPlayers).slice(0, 5);
+    }
+
+    // Diagnostic log for data presence
+    if (top5.length > 0 && this.leaderboardRows.length > 0) {
+      // console.log(`[Leaderboard] Rendering ${top5.length} entries at ${lbX},${lbY}. Rows ready: ${this.leaderboardRows.length}`);
+    }
+
+    // If we truly have NO players (even local), keep the existing rows visible if they were already there.
+    if (top5.length === 0 && this.leaderboardRows.some(r => r.visible)) {
+      return;
     }
 
     let currentY = lbY + 32;
@@ -1219,8 +1330,6 @@ export class GameScene extends Phaser.Scene {
         const rawContent = `${p.nickname}${partyTag} Lv.${p.level}`;
         
         let text = `${i + 1}. ${rawContent}`;
-        
-        // If content > 20 signs, move the rest to a new line
         if (rawContent.length > 20) {
           text = `${i + 1}. ${rawContent.slice(0, 20)}\n   ${rawContent.slice(20)}`;
         }
@@ -1228,8 +1337,9 @@ export class GameScene extends Phaser.Scene {
         row.setText(text);
         row.setVisible(true);
 
-        // Advance Y for the next row based on the actual height of this text object
-        currentY += row.height + 4; 
+        // Advance Y for the next row — fallback to 20px if height is 0
+        const h = row.height > 0 ? row.height : 18;
+        currentY += h + 4; 
       } else {
         row.setVisible(false);
       }
@@ -1451,21 +1561,47 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private setupRoomListeners(): void {
-    this.room.onMessage("map_data", (data: MapDataMessage) => {
-      // Apply map default tile to the background
-      if (data.defaultTile && this.textures.exists(data.defaultTile)) {
-        this.bgTileSprite.setTexture(data.defaultTile);
-      }
-      // Render individually placed tiles (depth 0.5 = above background, below objects)
-      this.placeTiles(data.tiles ?? []);
-      this.placeStaticObjects(data.objects);
-      this.buildNavGrid(data.objects);
+  private clearMap(): void {
+    console.log("[Map] Clearing old map objects.");
+    if (this.staticObjectsGroup)   this.staticObjectsGroup.clear(true, true);
+    if (this.animatedObjectsGroup) this.animatedObjectsGroup.clear(true, true);
+    if (this.mapVisualsGroup)      this.mapVisualsGroup.clear(true, true);
+    if (this.mobSystem)            this.mobSystem.destroy();
+    
+    this.doors = [];
+    this.doorSprites.clear();
+  }
+
+  private applyMapData(data: MapDataMessage): void {
+    if (!this.bgTileSprite) return;
+
+    this.clearMap();
+
+    console.log(`[Map] Applying map data. Tiles: ${data.tiles?.length ?? 0}, Objects: ${data.objects.length}`);
+
+    // Apply map default tile to the background
+    if (data.defaultTile && this.textures.exists(data.defaultTile)) {
+      this.bgTileSprite.setTexture(data.defaultTile);
+    }
+    // Render individually placed tiles (depth 0.5 = above background, below objects)
+    this.placeTiles(data.tiles ?? []);
+    this.placeStaticObjects(data.objects);
+    this.buildNavGrid(data.objects);
+    if (this.localSprite) {
       this.physics.add.collider(this.localSprite, this.staticObjectsGroup);
       this.physics.add.collider(this.localSprite, this.animatedObjectsGroup);
-      this.placeNpcs(data.npcs ?? []);
-      this.mobSystem.createMobs(data.mobs ?? []);
-      this.placeDoors(data.doors ?? []);
+    }
+    this.placeNpcs(data.npcs ?? []);
+    if (this.mobSystem) this.mobSystem.createMobs(data.mobs ?? []);
+    this.placeDoors(data.doors ?? []);
+  }
+
+  private setupRoomListeners(): void {
+    this.room.onMessage("map_data", (data: MapDataMessage) => {
+      console.log(`[Network] Received map_data for ${this.currentMapName}. Tiles: ${data.tiles?.length ?? 0}`);
+      this.pendingMapData = data;
+      // If scene is already active/created, apply immediately
+      if (this.bgTileSprite) this.applyMapData(data);
     });
 
     // Server confirmed travel — leave current room and join target
@@ -1476,33 +1612,41 @@ export class GameScene extends Phaser.Scene {
     // Global leaderboard from server (aggregated across all maps)
     this.room.onMessage("global_leaderboard",
       (data: Array<{ nickname: string; level: number; xp: number; partyName: string }>) => {
+        console.log(`[Network] Received leaderboard update. Count: ${data.length}`);
         this.globalLeaderboardData = data;
+        this.updateLeaderboard(); // Force refresh
       }
     );
 
-    this.room.send("get_map");
-
     // Player added
     this.room.state.players.onAdd((player: RemotePlayer, sessionId: string) => {
-      if (sessionId === this.mySessionId) {
-        this.localSprite.setPosition(player.x, player.y);
+      if (!this.isCreated) {
+        this.pendingAddPlayers.push({ player, sessionId });
         return;
       }
-      this.addRemotePlayer(player, sessionId);
+      this.doAddPlayer(player, sessionId);
     });
 
     // Player left
     this.room.state.players.onRemove((_player: RemotePlayer, sessionId: string) => {
+      console.log(`[Network] onRemove player: ${sessionId}`);
+      this.pendingAddPlayers = this.pendingAddPlayers.filter(p => p.sessionId !== sessionId);
       this.removeRemotePlayer(sessionId);
+      if (this.isCreated) this.updateLeaderboard();
     });
 
     // Enemy added
     this.room.state.enemies.onAdd((enemy: EnemyData, id: string) => {
+      if (!this.isCreated) {
+        this.pendingAddEnemies.push({ enemy, id });
+        return;
+      }
       this.addEnemy(enemy, id);
     });
 
     // Enemy removed
     this.room.state.enemies.onRemove((_enemy: EnemyData, id: string) => {
+      this.pendingAddEnemies = this.pendingAddEnemies.filter(e => e.id !== id);
       this.removeEnemy(id);
     });
 
@@ -1534,24 +1678,28 @@ export class GameScene extends Phaser.Scene {
       if (sessionId !== this.mySessionId) return;
 
       // Position reconciliation
-      const dx = Math.abs(player.x - this.localSprite.x);
-      const dy = Math.abs(player.y - this.localSprite.y);
-      if (dx > RECONCILE_THRESHOLD || dy > RECONCILE_THRESHOLD) {
-        this.localSprite.setPosition(player.x, player.y);
+      if (this.localSprite) {
+        const dx = Math.abs(player.x - this.localSprite.x);
+        const dy = Math.abs(player.y - this.localSprite.y);
+        if (dx > RECONCILE_THRESHOLD || dy > RECONCILE_THRESHOLD) {
+          this.localSprite.setPosition(player.x, player.y);
+        }
       }
 
       // Weapon change — swap sprite
       const newWeapon = player.weapon ?? "sword";
       if (newWeapon !== this.localWeaponKey) {
         this.localWeaponKey = newWeapon;
-        this.localWeapon.setTexture(newWeapon);
+        if (this.localWeapon) this.localWeapon.setTexture(newWeapon);
       }
 
       // Party state change — update label colors of all remote players
       const newPartyId = player.partyId ?? "";
-      if (newPartyId !== this.myPartyId) {
+      const newIsOwner = player.isPartyOwner ?? false;
+
+      if (newPartyId !== this.myPartyId || newIsOwner !== this.myIsPartyOwner) {
         this.myPartyId      = newPartyId;
-        this.myIsPartyOwner = player.isPartyOwner ?? false;
+        this.myIsPartyOwner = newIsOwner;
         this.remoteMap.forEach((entity, sid) => {
           const rp = this.room.state.players.get(sid);
           if (!rp) return;
@@ -1563,18 +1711,50 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private doAddPlayer(player: RemotePlayer, sessionId: string): void {
+    if (sessionId === this.mySessionId) {
+      if (this.localSprite) {
+        console.log(`[Scene] Identified local player ${sessionId}. Snapping to ${player.x}, ${player.y}`);
+        this.localSprite.setPosition(player.x, player.y);
+      }
+      this.updateLeaderboard();
+      return;
+    }
+
+    if (this.remoteMap.has(sessionId)) {
+      console.warn(`[Scene] Player ${sessionId} already exists in remoteMap. Updating state instead.`);
+      // The onChange listener will handle state updates, so we can just return
+      return;
+    }
+
+    this.addRemotePlayer(player, sessionId);
+    this.updateLeaderboard();
+  }
+
   // ── Remote player management ───────────────────────────────────────────────
 
   private addRemotePlayer(player: RemotePlayer, sessionId: string): void {
-    const key     = skinKey(getSkinForLevel(player.skin ?? "male/grey", player.level ?? 1));
-    const safeKey = this.textures.exists(key) ? key : "male_5lvl_grey";
     const lv      = player.level ?? 1;
+    const key     = skinKey(getSkinForLevel(player.skin ?? "male/grey", lv));
+    const safeKey = this.textures.exists(key) ? key : "male_5lvl_grey";
+
+    console.log(`[Scene] addRemotePlayer: ${player.nickname} (${sessionId}) at ${player.x},${player.y}. Skin: ${safeKey}. isDead: ${player.isDead}`);
+
+    if (!this.textures.exists(safeKey)) {
+      console.error(`[Scene] Texture ${safeKey} missing for player ${player.nickname}!`);
+    }
 
     const sprite = this.physics.add.sprite(player.x, player.y, safeKey);
     sprite.setDepth(player.y + FRAME_SIZE / 2);
-    sprite.play(`${safeKey}_walk_down`);
-    sprite.stop();
-    sprite.setFrame(DIR_TO_ROW[0] * 9);
+    
+    const walkAnim = `${safeKey}_walk_down`;
+    if (this.anims.exists(walkAnim)) {
+      sprite.play(walkAnim);
+      sprite.stop();
+      sprite.setFrame(DIR_TO_ROW[0] * 9);
+    } else {
+      console.warn(`[Scene] Animation ${walkAnim} missing for ${player.nickname}`);
+    }
 
     const initWeapon = player.weapon ?? "sword";
     const weaponSprite = this.add.image(player.x, player.y, initWeapon);
@@ -1660,6 +1840,13 @@ export class GameScene extends Phaser.Scene {
       isDead: player.isDead || false,
       partyId: player.partyId ?? "",
     };
+
+    // Apply initial visibility
+    const isDead = !!player.isDead;
+    sprite.setVisible(!isDead);
+    label.setVisible(!isDead);
+    graveSprite.setVisible(isDead);
+    if (isDead) graveSprite.setPosition(player.x, player.y);
 
     this.remoteMap.set(sessionId, entity);
 
@@ -2300,7 +2487,8 @@ export class GameScene extends Phaser.Scene {
   private placeTiles(tiles: TilePlacement[]): void {
     for (const tile of tiles) {
       if (!this.textures.exists(tile.type)) continue;
-      this.add.image(tile.x, tile.y, tile.type).setOrigin(0, 0).setDepth(0.5);
+      const img = this.add.image(tile.x, tile.y, tile.type).setOrigin(0, 0).setDepth(0.5);
+      this.mapVisualsGroup.add(img);
     }
   }
 
@@ -2331,6 +2519,7 @@ export class GameScene extends Phaser.Scene {
           sprite.setDisplaySize(def.imageWidth, def.imageHeight);
           sprite.setDepth(obj.y + def.imageHeight);
           sprite.play(`anim_${obj.type}`);
+          this.mapVisualsGroup.add(sprite);
         }
       } else {
         if (def.collision) {
@@ -2348,6 +2537,7 @@ export class GameScene extends Phaser.Scene {
           img.setOrigin(0, 0);
           img.setDisplaySize(def.imageWidth, def.imageHeight);
           img.setDepth(obj.y + def.imageHeight);
+          this.mapVisualsGroup.add(img);
         }
       }
     }
@@ -2375,6 +2565,7 @@ export class GameScene extends Phaser.Scene {
       });
 
       this.doorSprites.set(door.id, img);
+      this.mapVisualsGroup.add(img);
     }
   }
 
@@ -2466,11 +2657,16 @@ export class GameScene extends Phaser.Scene {
 
       localStorage.setItem("reconnToken", newRoom.reconnectionToken);
 
+      console.log(`[Door] Traveling to ${targetMap}. Exporting leaderboard: ${!!this.globalLeaderboardData}`);
+
       const data: GameSceneData = {
         room:     newRoom,
         nickname: this.localNickname,
         skin:     this.localSkin,
         mapName:  targetMap,
+        leaderboardData: this.globalLeaderboardData || undefined,
+        actionBarState: this.actionBarUI.exportState(),
+        equipmentState: this.equipmentUI.exportState(),
       };
       
       // Clean up UI before switching
@@ -2492,6 +2688,11 @@ export class GameScene extends Phaser.Scene {
   // ── Chat display ────────────────────────────────────────────────────────────
 
   private displayChatMessage(data: { sessionId: string; nickname: string; message: string }): void {
+    if (!this.isCreated || !this.localSprite) {
+      this.pendingChatMessages.push(data);
+      return;
+    }
+
     const msgEl = document.createElement("div");
     msgEl.className = "chat-msg";
     if (data.sessionId === "server") {
@@ -2505,7 +2706,12 @@ export class GameScene extends Phaser.Scene {
       const nameColor = inParty ? "#77aaff" : "#ffff44";
       msgEl.innerHTML = `<span class="name" style="color:${nameColor}">${data.nickname}:</span> ${data.message}`;
     }
-    this.chatDisplay.appendChild(msgEl);
+    
+    if (this.chatDisplay) {
+      this.chatDisplay.appendChild(msgEl);
+    } else {
+      console.warn("[Chat] chatDisplay is missing, cannot append message.");
+    }
 
     setTimeout(() => {
       msgEl.style.animation = "fadeOut 0.5s forwards";
@@ -2804,15 +3010,19 @@ export class GameScene extends Phaser.Scene {
     this.fitNpcSprite(sprite);
     const labelX = traderX + sprite.displayWidth / 2;
 
-    this.add.text(labelX, traderY - 40, "Trader", {
+    const nameLabel = this.add.text(labelX, traderY - 40, "Trader", {
       fontSize: "13px", color: "#ffd700",
       stroke: "#000000", strokeThickness: 3, resolution: 2,
     }).setOrigin(0.5, 1).setDepth(depth + 1);
 
-    this.add.text(labelX, traderY - 54, "[click to trade]", {
+    const tradeLabel = this.add.text(labelX, traderY - 54, "[click to trade]", {
       fontSize: "10px", color: "#aaaaaa",
       stroke: "#000000", strokeThickness: 2, resolution: 2,
     }).setOrigin(0.5, 1).setDepth(depth + 1);
+
+    this.mapVisualsGroup.add(sprite);
+    this.mapVisualsGroup.add(nameLabel);
+    this.mapVisualsGroup.add(tradeLabel);
 
     sprite.on("pointerover", () => sprite.setTint(0xdddddd));
     sprite.on("pointerout",  () => sprite.clearTint());
@@ -2834,15 +3044,19 @@ export class GameScene extends Phaser.Scene {
     this.fitNpcSprite(sprite);
     const labelX = healerX + sprite.displayWidth / 2;
 
-    this.add.text(labelX, healerY - 40, "Healer", {
+    const nameLabel = this.add.text(labelX, healerY - 40, "Healer", {
       fontSize: "13px", color: "#88ffcc",
       stroke: "#000000", strokeThickness: 3, resolution: 2,
     }).setOrigin(0.5, 1).setDepth(depth + 1);
 
-    this.add.text(labelX, healerY - 54, "[click to trade]", {
+    const tradeLabel = this.add.text(labelX, healerY - 54, "[click to trade]", {
       fontSize: "10px", color: "#aaaaaa",
       stroke: "#000000", strokeThickness: 2, resolution: 2,
     }).setOrigin(0.5, 1).setDepth(depth + 1);
+
+    this.mapVisualsGroup.add(sprite);
+    this.mapVisualsGroup.add(nameLabel);
+    this.mapVisualsGroup.add(tradeLabel);
 
     sprite.on("pointerover", () => sprite.setTint(0xddffee));
     sprite.on("pointerout",  () => sprite.clearTint());
