@@ -152,6 +152,18 @@ export class GameScene extends Phaser.Scene {
   private hudXpText!:    Phaser.GameObjects.Text;
   private hudGoldText!:  Phaser.GameObjects.Text;
 
+  // HUD dirty-flag cache — avoids redundant Graphics redraws each frame
+  private hudLastHpFillW   = -1;
+  private hudLastHpText    = "";
+  private hudLastPotionKey = "";
+  private hudLastXpFillW   = -1;
+  private hudLastXpText    = "";
+  private hudLastGoldText  = "";
+
+  // Party roster parse cache — only re-parse when the JSON string changes
+  private cachedRosterJson = "";
+  private cachedRoster: Array<{ pid: string; sessionId: string | null; nickname: string; level: number; hp: number; maxHp: number }> = [];
+
   // Party state
   private myPartyId      = "";
   private myIsPartyOwner = false;
@@ -288,6 +300,16 @@ export class GameScene extends Phaser.Scene {
     this.setupRoomListeners();
 
     this.localWeaponKey   = "";   // force texture sync on first update frame of new scene
+
+    // Reset HUD dirty-flag cache so bars are fully redrawn on first frame of new scene
+    this.hudLastHpFillW   = -1;
+    this.hudLastHpText    = "";
+    this.hudLastPotionKey = "";
+    this.hudLastXpFillW   = -1;
+    this.hudLastXpText    = "";
+    this.hudLastGoldText  = "";
+    this.cachedRosterJson = "";
+    this.cachedRoster     = [];
 
     // Keep reconnection token fresh — it may change after a reconnect
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -824,37 +846,56 @@ export class GameScene extends Phaser.Scene {
 
     const maxBarW = 192;
 
-    // HP bar
+    // HP bar — only redraw when the fill width changes
     const hpRatio  = Math.max(0, Math.min(1, p.hp / p.maxHp));
     const hpFillW  = Math.floor(maxBarW * hpRatio);
-    this.hudHpBar.clear();
-    this.hudHpBar.fillStyle(0xff3333, 1);
-    this.hudHpBar.fillRect(12, 14, hpFillW, 13);
-    this.hudHpText.setText(`HP: ${Math.floor(p.hp)}/${p.maxHp}`);
+    if (hpFillW !== this.hudLastHpFillW) {
+      this.hudLastHpFillW = hpFillW;
+      this.hudHpBar.clear();
+      this.hudHpBar.fillStyle(0xff3333, 1);
+      this.hudHpBar.fillRect(12, 14, hpFillW, 13);
+    }
+    const hpText = `HP: ${Math.floor(p.hp)}/${p.maxHp}`;
+    if (hpText !== this.hudLastHpText) {
+      this.hudLastHpText = hpText;
+      this.hudHpText.setText(hpText);
+    }
 
-    // Potion incoming-heal overlay (green segment continuing from current HP)
+    // Potion incoming-heal overlay — only redraw when overlay geometry changes
     const potionRemaining = (p.potionHealRemaining as number) ?? 0;
-    this.hudPotionBar.clear();
-    if (potionRemaining > 0 && p.maxHp > 0) {
-      const poolCapped  = Math.min(potionRemaining, p.maxHp - p.hp);
-      const poolRatio   = Math.max(0, poolCapped / p.maxHp);
-      const poolW       = Math.floor(maxBarW * poolRatio);
+    const poolCapped = potionRemaining > 0 ? Math.min(potionRemaining, p.maxHp - p.hp) : 0;
+    const poolW      = Math.floor(maxBarW * Math.max(0, poolCapped / (p.maxHp || 1)));
+    const potionKey  = `${hpFillW}:${poolW}`;
+    if (potionKey !== this.hudLastPotionKey) {
+      this.hudLastPotionKey = potionKey;
+      this.hudPotionBar.clear();
       if (poolW > 0) {
         this.hudPotionBar.fillStyle(0x44ff88, 0.8);
         this.hudPotionBar.fillRect(12 + hpFillW, 14, poolW, 13);
       }
     }
 
-    // XP bar
+    // XP bar — only redraw when fill width changes
     const xpNeeded = xpForNextLevel(p.level);
-    const xpRatio  = Math.max(0, Math.min(1, p.xp / xpNeeded));
-    this.hudXpBar.clear();
-    this.hudXpBar.fillStyle(0x3399ff, 1);
-    this.hudXpBar.fillRect(12, 32, Math.floor(maxBarW * xpRatio), 13);
-    this.hudXpText.setText(`XP: ${Math.floor(p.xp)}/${xpNeeded}  Lv.${p.level}`);
+    const xpFillW  = Math.floor(maxBarW * Math.max(0, Math.min(1, p.xp / xpNeeded)));
+    if (xpFillW !== this.hudLastXpFillW) {
+      this.hudLastXpFillW = xpFillW;
+      this.hudXpBar.clear();
+      this.hudXpBar.fillStyle(0x3399ff, 1);
+      this.hudXpBar.fillRect(12, 32, xpFillW, 13);
+    }
+    const xpText = `XP: ${Math.floor(p.xp)}/${xpNeeded}  Lv.${p.level}`;
+    if (xpText !== this.hudLastXpText) {
+      this.hudLastXpText = xpText;
+      this.hudXpText.setText(xpText);
+    }
 
     // Gold display
-    this.hudGoldText.setText(`Gold: ${p.gold ?? 0}`);
+    const goldText = `Gold: ${p.gold ?? 0}`;
+    if (goldText !== this.hudLastGoldText) {
+      this.hudLastGoldText = goldText;
+      this.hudGoldText.setText(goldText);
+    }
 
     // Update nickname label and sprite when level changes
     if (p.level !== this.localLevel) {
@@ -995,7 +1036,12 @@ export class GameScene extends Phaser.Scene {
       const myState = this.room.state.players.get(this.mySessionId);
       if (myState && myState.partyRoster) {
         try {
-          const roster: Array<{ pid: string; sessionId: string | null; nickname: string; level: number; hp: number; maxHp: number }> = JSON.parse(myState.partyRoster);
+          // Reparse only when the JSON string changes (not every frame)
+          if (myState.partyRoster !== this.cachedRosterJson) {
+            this.cachedRosterJson = myState.partyRoster;
+            this.cachedRoster = JSON.parse(myState.partyRoster);
+          }
+          const roster = this.cachedRoster;
 
           roster.forEach((m) => {
             if (m.sessionId === this.mySessionId) return; // Skip self
@@ -1839,6 +1885,7 @@ export class GameScene extends Phaser.Scene {
       weapon: player.weapon ?? "sword",
       isDead: player.isDead || false,
       partyId: player.partyId ?? "",
+      lastHpRatio: -1,
     };
 
     // Apply initial visibility
@@ -2115,6 +2162,8 @@ export class GameScene extends Phaser.Scene {
       type: enemy.type,
       hp: enemy.hp,
       maxHp: enemy.maxHp,
+      lastHpRatio: -1,
+      lastAnimKey: "",
     };
 
     this.enemyMap.set(id, entity);
@@ -2160,10 +2209,10 @@ export class GameScene extends Phaser.Scene {
       if (entity.isDead || !entity.sprite || !entity.sprite.active) return;
 
       const { sprite, hpBar } = entity;
-      const prevX = sprite.x;
-      const prevY = sprite.y;
 
       // Lerp toward authoritative position
+      const prevX = sprite.x;
+      const prevY = sprite.y;
       sprite.x = Phaser.Math.Linear(sprite.x, entity.targetX, LERP_FACTOR);
       sprite.y = Phaser.Math.Linear(sprite.y, entity.targetY, LERP_FACTOR);
 
@@ -2172,48 +2221,51 @@ export class GameScene extends Phaser.Scene {
       hpBar.setDepth(depth + 1);
       entity.label.setPosition(sprite.x, sprite.y - 36).setDepth(depth + 2);
 
-      // ── HP bar ─────────────────────────────────────────────────────────────
-      hpBar.clear();
-      if (entity.hp > 0 && entity.maxHp > 0) {
-        const ratio = Math.max(0, Math.min(1, entity.hp / entity.maxHp));
-        hpBar.fillStyle(0x000000, 0.6);
-        hpBar.fillRect(sprite.x - 16, sprite.y - 32, 32, 4);
-        hpBar.fillStyle(0xff3333, 1);
-        hpBar.fillRect(sprite.x - 16, sprite.y - 32, Math.floor(32 * ratio), 4);
+      // ── HP bar — only redraw when sprite moved or HP ratio changed ──────────
+      const hpRatio = (entity.hp > 0 && entity.maxHp > 0)
+        ? Math.max(0, Math.min(1, entity.hp / entity.maxHp))
+        : 0;
+      const moved = Math.abs(sprite.x - prevX) > 0.01 || Math.abs(sprite.y - prevY) > 0.01;
+      if (moved || hpRatio !== entity.lastHpRatio) {
+        entity.lastHpRatio = hpRatio;
+        hpBar.clear();
+        if (hpRatio > 0) {
+          hpBar.fillStyle(0x000000, 0.6);
+          hpBar.fillRect(sprite.x - 16, sprite.y - 32, 32, 4);
+          hpBar.fillStyle(0xff3333, 1);
+          hpBar.fillRect(sprite.x - 16, sprite.y - 32, Math.floor(32 * hpRatio), 4);
+        }
       }
 
-      // ── Animation ──────────────────────────────────────────────────────────
-      const dir    = entity.isAttacking ? entity.attackDirection : entity.direction;
-      const moving = Math.abs(entity.targetX - sprite.x) > 1 || Math.abs(entity.targetY - sprite.y) > 1;
+      // ── Animation — only call play() when the target animation changes ──────
+      const dir     = entity.isAttacking ? entity.attackDirection : entity.direction;
+      const moving2 = Math.abs(entity.targetX - sprite.x) > 1 || Math.abs(entity.targetY - sprite.y) > 1;
+      const type    = entity.type;
 
-      const type = entity.type;
+      let targetAnimKey = "";
+      let flipX         = false;
       if (entity.isAttacking) {
         if (dir === 3) {
-          // right attack = attack_side frames + flipX
-          sprite.setFlipX(true);
-          const k = `${type}_attack_side`;
-          if (this.anims.exists(k)) sprite.play(k, true);
+          flipX = true;
+          targetAnimKey = `${type}_attack_side`;
         } else {
-          sprite.setFlipX(false);
-          const k = `${type}_${DIR_ATTACK_STATE[dir] ?? "attack_down"}`;
-          if (this.anims.exists(k)) sprite.play(k, true);
+          targetAnimKey = `${type}_${DIR_ATTACK_STATE[dir] ?? "attack_down"}`;
         }
-      } else if (moving) {
+      } else if (moving2) {
         if (entity.direction === 3) {
-          // right walk = walk_side frames + flipX
-          sprite.setFlipX(true);
-          const k = `${type}_walk_side`;
-          if (this.anims.exists(k)) sprite.play(k, true);
+          flipX = true;
+          targetAnimKey = `${type}_walk_side`;
         } else {
-          sprite.setFlipX(false);
-          const k = `${type}_${DIR_WALK_STATE[entity.direction] ?? "walk_down"}`;
-          if (this.anims.exists(k)) sprite.play(k, true);
+          targetAnimKey = `${type}_${DIR_WALK_STATE[entity.direction] ?? "walk_down"}`;
         }
       } else {
-        // No target / out of range — idle
-        sprite.setFlipX(false);
-        const k = `${type}_idle`;
-        if (this.anims.exists(k)) sprite.play(k, true);
+        targetAnimKey = `${type}_idle`;
+      }
+
+      if (targetAnimKey !== entity.lastAnimKey) {
+        entity.lastAnimKey = targetAnimKey;
+        sprite.setFlipX(flipX);
+        if (this.anims.exists(targetAnimKey)) sprite.play(targetAnimKey, true);
       }
     });
   }
@@ -2383,7 +2435,11 @@ export class GameScene extends Phaser.Scene {
         entity.label.setPosition(entity.sprite.x, entity.sprite.y - 42);
         entity.partyLabel?.setVisible(false);
         if (entity.chatBubble) entity.chatBubble.setPosition(entity.sprite.x, entity.sprite.y - 65);
-        entity.hpBar?.clear();
+        // Clear the HP bar exactly once when the player dies (lastHpRatio -1 = already cleared)
+        if (entity.hpBar && entity.lastHpRatio !== -1) {
+          entity.hpBar.clear();
+          entity.lastHpRatio = -1;
+        }
         return;
       }
 
@@ -2416,17 +2472,22 @@ export class GameScene extends Phaser.Scene {
 
       // ── World HP bar ──────────────────────────────────────────────────────
       if (entity.hpBar) {
-        entity.hpBar.clear();
         // Use live state — never rely on cached partyId
         const rp = this.room.state.players.get(sessionId);
-        if (rp && rp.maxHp > 0) {
-          const hpRatio = Math.max(0, Math.min(1, rp.hp / rp.maxHp));
-          const bw = 40;
-          const bx = sprite.x - bw / 2;
-          const by = sprite.y - 38;
-          entity.hpBar.fillStyle(0x000000, 0.6).fillRect(bx, by, bw, 4);
-          entity.hpBar.fillStyle(0xff3333, 1).fillRect(bx, by, Math.floor(bw * hpRatio), 4);
-          entity.hpBar.setDepth(playerDepth + 1);
+        const hpRatio = (rp && rp.maxHp > 0) ? Math.max(0, Math.min(1, rp.hp / rp.maxHp)) : 0;
+        const moved   = Math.abs(sprite.x - prevX) > 0.01 || Math.abs(sprite.y - prevY) > 0.01;
+        // Only redraw when the sprite moved (bar follows sprite) or HP changed
+        if (moved || hpRatio !== entity.lastHpRatio) {
+          entity.lastHpRatio = hpRatio;
+          entity.hpBar.clear();
+          if (rp && rp.maxHp > 0) {
+            const bw = 40;
+            const bx = sprite.x - bw / 2;
+            const by = sprite.y - 38;
+            entity.hpBar.fillStyle(0x000000, 0.6).fillRect(bx, by, bw, 4);
+            entity.hpBar.fillStyle(0xff3333, 1).fillRect(bx, by, Math.floor(bw * hpRatio), 4);
+            entity.hpBar.setDepth(playerDepth + 1);
+          }
         }
       }
 
@@ -2472,6 +2533,7 @@ export class GameScene extends Phaser.Scene {
   // ── Position send ──────────────────────────────────────────────────────────
 
   private sendPositionIfNeeded(time: number): void {
+    if (this.isTeleporting) return;
     if (time - this.lastSendTime < SEND_RATE_MS) return;
     this.lastSendTime = time;
     this.room.send("move", {

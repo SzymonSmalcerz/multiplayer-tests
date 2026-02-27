@@ -142,6 +142,8 @@ export interface RemotePlayerEntity {
   hpBar?: Phaser.GameObjects.Graphics;
   partyId: string;
   partyLabel?: Phaser.GameObjects.Text;
+  /** Last HP ratio drawn to the world HP bar (-1 = bar is cleared / force redraw) */
+  lastHpRatio: number;
 }
 
 /** Enemy state proxy (mirrors server EnemyState schema) */
@@ -173,4 +175,8 @@ export interface EnemyEntity {
   type: string;
   hp: number;
   maxHp: number;
+  /** Last HP ratio drawn to the world HP bar (-1 = bar is cleared / force redraw) */
+  lastHpRatio: number;
+  /** Last animation key passed to sprite.play() — skip if unchanged */
+  lastAnimKey: string;
 }
