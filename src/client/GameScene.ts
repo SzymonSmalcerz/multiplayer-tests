@@ -329,6 +329,10 @@ export class GameScene extends Phaser.Scene {
         frameWidth: FRAME_SIZE, frameHeight: FRAME_SIZE,
       });
     }
+    // GM sprite sheet (single file, no level tiers)
+    this.load.spritesheet("gm", "/assets/player/gm.png", {
+      frameWidth: FRAME_SIZE, frameHeight: FRAME_SIZE,
+    });
 
     // Background tiles — loaded dynamically from tiles registry
     this.load.json("tiles_registry", "/design/tiles");
@@ -900,12 +904,16 @@ export class GameScene extends Phaser.Scene {
     // Update nickname label and sprite when level changes
     if (p.level !== this.localLevel) {
       this.localLevel = p.level;
-      this.localLabel.setText(`${this.localNickname} [Lv.${p.level}]`);
-      // Swap spritesheet when crossing a tier boundary (5, 10, 15, …)
-      if (isTierBoundary(p.level)) {
-        const newKey = skinKey(getSkinForLevel(this.localSkin, p.level));
-        if (this.textures.exists(newKey) && this.localSprite.texture.key !== newKey) {
-          this.localSprite.setTexture(newKey, DIR_TO_ROW[this.localDirection] * 9);
+      if (p.isGM) {
+        this.localLabel.setText(`${this.localNickname} [GM]`);
+      } else {
+        this.localLabel.setText(`${this.localNickname} [Lv.${p.level}]`);
+        // Swap spritesheet when crossing a tier boundary (5, 10, 15, …)
+        if (isTierBoundary(p.level)) {
+          const newKey = skinKey(getSkinForLevel(this.localSkin, p.level));
+          if (this.textures.exists(newKey) && this.localSprite.texture.key !== newKey) {
+            this.localSprite.setTexture(newKey, DIR_TO_ROW[this.localDirection] * 9);
+          }
         }
       }
     }
@@ -1495,7 +1503,7 @@ export class GameScene extends Phaser.Scene {
   // ── Setup helpers ──────────────────────────────────────────────────────────
 
   private createLocalPlayer(x: number, y: number): void {
-    const key = skinKey(getSkinForLevel(this.localSkin, 1));
+    const key = this.localSkin === "gm" ? "gm" : skinKey(getSkinForLevel(this.localSkin, 1));
     this.localSprite = this.physics.add.sprite(x, y, key);
     this.localSprite.setCollideWorldBounds(true);
     this.localSprite.setDepth(y + FRAME_SIZE / 2);
@@ -1512,7 +1520,7 @@ export class GameScene extends Phaser.Scene {
     this.localSprite.setFrame(DIR_TO_ROW[0] * 9);
 
     this.localLabel = this.add
-      .text(x, y - 42, `${this.localNickname} [Lv.1]`, {
+      .text(x, y - 42, this.localSkin === "gm" ? `${this.localNickname} [GM]` : `${this.localNickname} [Lv.1]`, {
         fontSize: "13px",
         color: "#44ff44",
         stroke: "#000000",
@@ -1536,6 +1544,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createAnimations(): void {
+    // ── GM walk animations ────────────────────────────────────────────────────
+    if (this.textures.exists("gm")) {
+      for (let row = 0; row < 4; row++) {
+        const start = row * 9;
+        const end   = start + 8;
+        const aKey  = `gm_${ROW_ANIM_NAMES[row]}`;
+        if (!this.anims.exists(aKey)) {
+          this.anims.create({
+            key: aKey,
+            frames: this.anims.generateFrameNumbers("gm", { start, end }),
+            frameRate: ANIM_FPS,
+            repeat: -1,
+          });
+        }
+      }
+    }
+
     // ── Player walk animations ────────────────────────────────────────────────
     for (const skin of SKINS_TO_LOAD) {
       const key = skinKey(skin);
@@ -1704,6 +1729,11 @@ export class GameScene extends Phaser.Scene {
       this.displayChatMessage(data);
     });
 
+    // Kicked by GM — clear reconnect token so a page refresh starts a fresh session
+    this.room.onMessage("kick", () => {
+      localStorage.removeItem("reconnToken");
+    });
+
     // Coin drop animation
     this.room.onMessage("coin_drop", (data: { id: string; x: number; y: number }) => {
       this.spawnCoinAnimation(data.id, data.x, data.y);
@@ -1780,11 +1810,17 @@ export class GameScene extends Phaser.Scene {
   // ── Remote player management ───────────────────────────────────────────────
 
   private addRemotePlayer(player: RemotePlayer, sessionId: string): void {
-    const lv      = player.level ?? 1;
-    const key     = skinKey(getSkinForLevel(player.skin ?? "male/grey", lv));
-    const safeKey = this.textures.exists(key) ? key : "male_5lvl_grey";
+    const lv    = player.level ?? 1;
+    const isGM  = player.isGM ?? false;
+    let safeKey: string;
+    if (isGM) {
+      safeKey = this.textures.exists("gm") ? "gm" : "male_5lvl_grey";
+    } else {
+      const key = skinKey(getSkinForLevel(player.skin ?? "male/grey", lv));
+      safeKey   = this.textures.exists(key) ? key : "male_5lvl_grey";
+    }
 
-    console.log(`[Scene] addRemotePlayer: ${player.nickname} (${sessionId}) at ${player.x},${player.y}. Skin: ${safeKey}. isDead: ${player.isDead}`);
+    console.log(`[Scene] addRemotePlayer: ${player.nickname} (${sessionId}) at ${player.x},${player.y}. Skin: ${safeKey}. isDead: ${player.isDead}. isGM: ${isGM}`);
 
     if (!this.textures.exists(safeKey)) {
       console.error(`[Scene] Texture ${safeKey} missing for player ${player.nickname}!`);
@@ -1812,10 +1848,11 @@ export class GameScene extends Phaser.Scene {
     graveSprite.setDepth(sprite.depth);
     graveSprite.setVisible(false);
 
+    const labelText = isGM ? `${player.nickname ?? ""} [GM]` : `${player.nickname ?? ""} [Lv.${lv}]`;
     const label = this.add
-      .text(player.x, player.y - 42, `${player.nickname ?? ""} [Lv.${lv}]`, {
+      .text(player.x, player.y - 42, labelText, {
         fontSize: "13px",
-        color: "#ffff44",
+        color: isGM ? "#ff8800" : "#ffff44",
         stroke: "#000000",
         strokeThickness: 3,
         resolution: 2,
@@ -1845,6 +1882,9 @@ export class GameScene extends Phaser.Scene {
       const target = this.room.state.players.get(sessionId);
       const myState = this.room.state.players.get(this.mySessionId);
       if (!target || !myState) return;
+
+      // GMs cannot invite or be invited
+      if (target.isGM || myState.isGM) return;
 
       // Only highlight if we can invite: target must be solo, and we must be solo or the owner
       const canInvite = (target.partyId === "") &&
@@ -1947,13 +1987,17 @@ export class GameScene extends Phaser.Scene {
       const newLv = player.level ?? 1;
       if (e.level !== newLv) {
         e.level = newLv;
-        e.label.setText(`${player.nickname} [Lv.${newLv}]`);
-        // Swap spritesheet when crossing a tier boundary (5, 10, 15, …)
-        if (isTierBoundary(newLv)) {
-          const newKey = skinKey(getSkinForLevel(player.skin, newLv));
-          if (this.textures.exists(newKey) && e.skinKey !== newKey) {
-            e.sprite.setTexture(newKey, DIR_TO_ROW[e.direction] * 9);
-            e.skinKey = newKey;
+        if (player.isGM) {
+          e.label.setText(`${player.nickname} [GM]`);
+        } else {
+          e.label.setText(`${player.nickname} [Lv.${newLv}]`);
+          // Swap spritesheet when crossing a tier boundary (5, 10, 15, …)
+          if (isTierBoundary(newLv)) {
+            const newKey = skinKey(getSkinForLevel(player.skin, newLv));
+            if (this.textures.exists(newKey) && e.skinKey !== newKey) {
+              e.sprite.setTexture(newKey, DIR_TO_ROW[e.direction] * 9);
+              e.skinKey = newKey;
+            }
           }
         }
       }
@@ -1989,6 +2033,10 @@ export class GameScene extends Phaser.Scene {
 
     const target = this.room.state.players.get(sessionId);
     if (!target) return;
+
+    // GMs cannot invite or be invited
+    const myState = this.room.state.players.get(this.mySessionId);
+    if (target.isGM || myState?.isGM) return;
 
     // Only show if we can invite: target must be solo, and we must be solo or the owner
     const canInvite = (target.partyId === "") &&
@@ -2353,7 +2401,7 @@ export class GameScene extends Phaser.Scene {
     this.localDirection = dir;
 
     // ── Player sprite animation ────────────────────────────────────────────
-    const key     = skinKey(getSkinForLevel(this.localSkin, this.localLevel));
+    const key     = this.localSkin === "gm" ? "gm" : skinKey(getSkinForLevel(this.localSkin, this.localLevel));
     const animKey = `${key}_${DIR_NAMES[dir]}`;
     if (moving) {
       this.localSprite.play(animKey, true);

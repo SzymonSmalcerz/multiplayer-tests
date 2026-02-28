@@ -196,12 +196,95 @@
       display: none;
     }
 
+    #gm-error-msg {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: #ff8080;
+      text-align: center;
+      display: none;
+    }
+
     .controls-hint {
       margin-top: 14px;
       font-size: 0.75rem;
       color: #446644;
       text-align: center;
     }
+
+    /* ── GM login link ──────────────────────────────────────────────── */
+    .gm-link {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 8px;
+      background: none;
+      border: 1px solid rgba(255, 136, 0, 0.3);
+      border-radius: 6px;
+      color: #aa6600;
+      font-size: 0.8rem;
+      cursor: pointer;
+      text-align: center;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .gm-link:hover {
+      color: #ff8800;
+      border-color: rgba(255, 136, 0, 0.6);
+    }
+
+    /* ── GM login form ──────────────────────────────────────────────── */
+    #gm-form { display: none; }
+
+    #gm-form .gm-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #ff8800;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    #gm-form .gm-subtitle {
+      font-size: 0.78rem;
+      color: #886644;
+      text-align: center;
+      margin-bottom: 18px;
+    }
+
+    #gm-submit-btn {
+      width: 100%;
+      padding: 13px;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: linear-gradient(135deg, #7a3d00, #bb5500);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    #gm-submit-btn:hover  { opacity: 0.9; transform: translateY(-1px); }
+    #gm-submit-btn:active { transform: translateY(0); }
+    #gm-submit-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    #gm-login, #gm-password {
+      width: 100%;
+      padding: 11px 16px;
+      font-size: 1rem;
+      background: rgba(255,255,255,0.07);
+      border: 2px solid rgba(255, 136, 0, 0.3);
+      border-radius: 8px;
+      color: #e8ffe8;
+      outline: none;
+      text-align: center;
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+      transition: border-color 0.2s;
+    }
+
+    #gm-login::placeholder, #gm-password::placeholder { color: rgba(200,150,100,0.4); }
+    #gm-login:focus, #gm-password:focus { border-color: #ff8800; }
 
     /* ── Chat UI ──────────────────────────────────────────────────── */
     #chat-wrapper {
@@ -324,33 +407,67 @@
       <h1>Open World</h1>
       <p class="subtitle">Multiplayer — up to 50 players</p>
 
-      <!-- Avatar picker -->
-      <div class="avatar-section">
-        <label>Choose your character</label>
-        <div class="avatar-tabs">
-          <button class="tab-btn active" data-gender="male">Male</button>
-          <button class="tab-btn"        data-gender="female">Female</button>
+      <!-- Regular player form -->
+      <div id="regular-form">
+        <!-- Avatar picker -->
+        <div class="avatar-section">
+          <label>Choose your character</label>
+          <div class="avatar-tabs">
+            <button class="tab-btn active" data-gender="male">Male</button>
+            <button class="tab-btn"        data-gender="female">Female</button>
+          </div>
+          <div class="avatar-grid-wrap">
+            <div id="avatar-grid"></div>
+          </div>
         </div>
-        <div class="avatar-grid-wrap">
-          <div id="avatar-grid"></div>
+
+        <!-- Nickname -->
+        <div class="nick-section">
+          <label>Nickname</label>
+          <input
+            id="nickname"
+            type="text"
+            placeholder="Your nickname…"
+            maxlength="15"
+            autocomplete="off"
+            spellcheck="false"
+          />
         </div>
+
+        <button id="join-btn">Join Game</button>
+        <div id="error-msg"></div>
       </div>
 
-      <!-- Nickname -->
-      <div class="nick-section">
-        <label>Nickname</label>
-        <input
-          id="nickname"
-          type="text"
-          placeholder="Your nickname…"
-          maxlength="15"
-          autocomplete="off"
-          spellcheck="false"
-        />
+      <!-- GM login form -->
+      <div id="gm-form">
+        <p class="gm-title">Game Master Login</p>
+        <p class="gm-subtitle">Restricted access</p>
+
+        <div class="nick-section">
+          <label>Username</label>
+          <input
+            id="gm-login"
+            type="text"
+            placeholder="Username…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+
+        <div class="nick-section">
+          <label>Password</label>
+          <input
+            id="gm-password"
+            type="password"
+            placeholder="Password…"
+          />
+        </div>
+
+        <button id="gm-submit-btn">Login as GM</button>
+        <div id="gm-error-msg"></div>
+        <button id="gm-back-btn" class="gm-link">← Back to game</button>
       </div>
 
-      <button id="join-btn">Join Game</button>
-      <div id="error-msg"></div>
       <p class="controls-hint">WASD / Arrow Keys to move</p>
     </div>
   </div>

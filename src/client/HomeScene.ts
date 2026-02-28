@@ -136,9 +136,27 @@ export class HomeScene extends Phaser.Scene {
     const overlay = document.getElementById("overlay");
     if (overlay) overlay.style.display = "flex";
 
+    const regularForm = document.getElementById("regular-form");
+    const gmForm      = document.getElementById("gm-form");
+    const isLoginPage = window.location.pathname === "/login";
+
+    if (isLoginPage) {
+      // Show only the GM login form — no avatar picker for regular players to stumble upon
+      if (regularForm) regularForm.style.display = "none";
+      if (gmForm)      gmForm.style.display      = "block";
+      this.wireGMLoginButton();
+      const gmLoginInput = document.getElementById("gm-login") as HTMLInputElement | null;
+      if (gmLoginInput) gmLoginInput.focus();
+      return;
+    }
+
+    // ── Regular player flow ───────────────────────────────────────────────────
+    if (regularForm) regularForm.style.display = "block";
+    if (gmForm)      gmForm.style.display      = "none";
+
     // Pre-fill skin from last session (migrate old format if needed)
     const savedSkin = localStorage.getItem(LS_SKIN);
-    if (savedSkin) {
+    if (savedSkin && savedSkin !== "gm") {
       const migrated = migrateSkin(savedSkin);
       if (migrated !== savedSkin) localStorage.setItem(LS_SKIN, migrated);
       const gender = migrated.startsWith("female/") ? "female" : "male";
@@ -156,13 +174,90 @@ export class HomeScene extends Phaser.Scene {
 
     const input = document.getElementById("nickname") as HTMLInputElement | null;
     if (input) {
-      // Pre-fill nickname from last session
+      // Pre-fill nickname from last session (skip if it was a GM session)
       const savedNick = localStorage.getItem(LS_NICKNAME);
-      input.value = savedNick ?? "";
+      input.value = (savedNick && savedNick !== "admin") ? savedNick : "";
       input.focus();
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") void this.joinGame();
       });
+    }
+  }
+
+  // ── GM Login ──────────────────────────────────────────────────────────────
+
+  private wireGMLoginButton(): void {
+    const backBtn = document.getElementById("gm-back-btn");
+    if (backBtn) {
+      const fresh = backBtn.cloneNode(true) as HTMLElement;
+      backBtn.parentNode?.replaceChild(fresh, backBtn);
+      fresh.addEventListener("click", () => {
+        // Always go back to the main game page from /login
+        window.location.href = "/";
+      });
+    }
+
+    const submitBtn = document.getElementById("gm-submit-btn") as HTMLButtonElement | null;
+    if (submitBtn) {
+      const fresh = submitBtn.cloneNode(true) as HTMLButtonElement;
+      submitBtn.parentNode?.replaceChild(fresh, submitBtn);
+      fresh.addEventListener("click", () => void this.joinAsGM());
+    }
+
+    const pwInput = document.getElementById("gm-password") as HTMLInputElement | null;
+    if (pwInput) {
+      pwInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") void this.joinAsGM();
+      });
+    }
+  }
+
+  private async joinAsGM(): Promise<void> {
+    const loginInput = document.getElementById("gm-login")    as HTMLInputElement    | null;
+    const pwInput    = document.getElementById("gm-password") as HTMLInputElement    | null;
+    const submitBtn  = document.getElementById("gm-submit-btn") as HTMLButtonElement | null;
+    const errorEl    = document.getElementById("gm-error-msg");
+
+    const login    = loginInput?.value.trim() ?? "";
+    const password = pwInput?.value.trim()    ?? "";
+
+    if (!login || !password) {
+      if (errorEl) { errorEl.textContent = "Please enter login and password."; errorEl.style.display = "block"; }
+      return;
+    }
+
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Connecting…"; }
+    if (errorEl)   errorEl.style.display = "none";
+
+    try {
+      const protocol  = window.location.protocol === "https:" ? "wss" : "ws";
+      const client    = new Client(`${protocol}://${window.location.host}`);
+
+      const room = await client.joinOrCreate("game", {
+        login,
+        password,
+        persistentId: getPersistentId(),
+        mapName:      "m1",
+      });
+
+      localStorage.setItem(LS_RECON_TOKEN, room.reconnectionToken);
+      localStorage.setItem(LS_NICKNAME,    "admin");
+      localStorage.setItem(LS_SKIN,        "gm");
+
+      // Move away from /login so a page reload reconnects from /
+      history.replaceState({}, "", "/");
+
+      const overlay = document.getElementById("overlay");
+      if (overlay) overlay.style.display = "none";
+
+      const data: GameSceneData = { room, nickname: "admin", skin: "gm" };
+      this.scene.start("GameScene", data);
+    } catch (err) {
+      console.error("GM login error:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      const friendly = msg.includes("logging failed") ? "Invalid credentials." : "Connection failed — is the server running?";
+      if (errorEl) { errorEl.textContent = friendly; errorEl.style.display = "block"; }
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Login as GM"; }
     }
   }
 

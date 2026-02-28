@@ -36,6 +36,7 @@ export class PlayerState extends Schema {
   @type("number")  potions: number = 0;
   @type("number")  potionHealRemaining: number = 0;
   @type("boolean") disconnected: boolean = false;
+  @type("boolean") isGM: boolean = false;
 }
 
 export class EnemyState extends Schema {
@@ -166,6 +167,10 @@ export class GameRoom extends Room<GameState> {
   /** Enemies waiting to respawn */
   private respawnQueue: Array<{ def: EnemySpawnDef | null; type: string; spawnAt: number }> = [];
 
+  // ── Kick tracking ──────────────────────────────────────────────────────────
+  /** Sessions being force-kicked: skip reconnect grace period and reset their profile */
+  private kickedSessions = new Set<string>();
+
   // ── Party bookkeeping ──────────────────────────────────────────────────────
   /** targetSessionId → inviterSessionId */
   private pendingInvites = new Map<string, string>();
@@ -250,7 +255,9 @@ export class GameRoom extends Room<GameState> {
       getPlayersFn: () => {
         const out: Array<{ nickname: string; level: number; xp: number; partyName: string; isDead: boolean }> = [];
         this.state.players.forEach(p => {
-          out.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName, isDead: p.isDead });
+          if (!p.isGM) {
+            out.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName, isDead: p.isDead });
+          }
         });
         return out;
       },
@@ -323,6 +330,13 @@ export class GameRoom extends Room<GameState> {
     this.onMessage("chat", (client, message: string) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || !message || message.trim().length === 0) return;
+
+      // Intercept GM slash commands
+      if (player.isGM && message.trim().startsWith("/")) {
+        this.handleGMCommand(client, player, message.trim());
+        return;
+      }
+
       const payload = {
         sessionId: client.sessionId,
         nickname:  player.nickname,
@@ -381,11 +395,15 @@ export class GameRoom extends Room<GameState> {
       const sender = this.state.players.get(client.sessionId);
       if (!sender) return;
 
+      // GM cannot participate in parties
+      if (sender.isGM) return;
+
       // Only solo players or party owners may invite
       if (sender.partyId !== "" && !sender.isPartyOwner) return;
 
       const target = this.state.players.get(data.targetId);
       if (!target || target.partyId !== "") return; // target already in a party
+      if (target.isGM) return; // cannot invite GM
 
       // If sender already has a party, check it isn't full
       if (sender.partyId !== "") {
@@ -555,7 +573,15 @@ export class GameRoom extends Room<GameState> {
     });
   }
 
-  onJoin(client: Client, options: { nickname?: string; skin?: string; persistentId?: string; mapName?: string; spawnX?: number; spawnY?: number }): void {
+  onJoin(client: Client, options: { nickname?: string; skin?: string; persistentId?: string; mapName?: string; spawnX?: number; spawnY?: number; login?: string; password?: string }): void {
+    // ── GM authentication ─────────────────────────────────────────────────────
+    const isGMLogin = typeof options.login === "string" || typeof options.password === "string";
+    if (isGMLogin) {
+      if (options.login !== "admin" || options.password !== "admin123") {
+        throw new Error("logging failed");
+      }
+    }
+
     // ── Multi-window prevention ──────────────────────────────────────────────
     const pid = typeof options.persistentId === "string" ? options.persistentId.slice(0, 64) : "";
     if (pid) {
@@ -581,39 +607,50 @@ export class GameRoom extends Room<GameState> {
     player.y         = Math.max(32, Math.min(MAP_HEIGHT - 32, rawSpawnY));
     
     // ── Load Profile or Init Defaults ────────────────────────────────────────
-    const profile = pid ? globalBus.getProfile(pid) : undefined;
-    if (profile) {
-      player.nickname            = profile.nickname;
-      player.skin                = profile.skin;
-      player.hp                  = profile.hp;
-      player.maxHp               = profile.maxHp;
-      player.level               = profile.level;
-      player.xp                  = profile.xp;
-      player.gold                = profile.gold;
-      player.weapon              = profile.weapon;
-      player.potions             = profile.potions;
-      player.potionHealRemaining = profile.potionHealRemaining;
-      player.attackBonus         = (player.level - 1) * 0.5; // recalculate bonus
-
-      // Validate party still exists in GlobalBus (may have been disbanded in transit)
-      if (profile.partyId) {
-        const party = globalBus.getParty(profile.partyId);
-        if (party && party.members.has(pid)) {
-          player.partyId      = party.id;
-          player.isPartyOwner = profile.isPartyOwner;
-          player.partyName    = party.name; // live name in case it was renamed
-        }
-        // else: party gone or player removed — leave partyId as "" (default)
-      }
-    } else {
-      player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
-      player.skin      = String(options.skin ?? "male/grey");
-      player.hp        = 100;
-      player.maxHp     = 100;
-      player.level     = 1;
-      player.xp        = 0;
+    if (isGMLogin) {
+      // GM setup — hardcoded state, no profile loading
+      player.isGM       = true;
+      player.nickname   = "admin";
+      player.level      = 99;
+      player.skin       = "gm";
+      player.hp         = 9999;
+      player.maxHp      = 9999;
       player.attackBonus = 0;
-      player.gold      = 1000;
+    } else {
+      const profile = pid ? globalBus.getProfile(pid) : undefined;
+      if (profile) {
+        player.nickname            = profile.nickname;
+        player.skin                = profile.skin;
+        player.hp                  = profile.hp;
+        player.maxHp               = profile.maxHp;
+        player.level               = profile.level;
+        player.xp                  = profile.xp;
+        player.gold                = profile.gold;
+        player.weapon              = profile.weapon;
+        player.potions             = profile.potions;
+        player.potionHealRemaining = profile.potionHealRemaining;
+        player.attackBonus         = (player.level - 1) * 0.5; // recalculate bonus
+
+        // Validate party still exists in GlobalBus (may have been disbanded in transit)
+        if (profile.partyId) {
+          const party = globalBus.getParty(profile.partyId);
+          if (party && party.members.has(pid)) {
+            player.partyId      = party.id;
+            player.isPartyOwner = profile.isPartyOwner;
+            player.partyName    = party.name; // live name in case it was renamed
+          }
+          // else: party gone or player removed — leave partyId as "" (default)
+        }
+      } else {
+        player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
+        player.skin      = String(options.skin ?? "male/grey");
+        player.hp        = 100;
+        player.maxHp     = 100;
+        player.level     = 1;
+        player.xp        = 0;
+        player.attackBonus = 0;
+        player.gold      = 1000;
+      }
     }
 
     this.state.players.set(client.sessionId, player);
@@ -621,7 +658,7 @@ export class GameRoom extends Room<GameState> {
     this.playerHitCooldowns.set(client.sessionId, new Map());
 
     // ── Update Global Profile immediately so party members see us ────────────
-    if (pid) {
+    if (pid && !player.isGM) {
       globalBus.saveProfile(pid, {
         nickname:            player.nickname,
         skin:                player.skin,
@@ -664,10 +701,19 @@ export class GameRoom extends Room<GameState> {
     });
     this.pendingInvites.delete(client.sessionId);
 
-    if (consented) {
-      // Intentional leave (map teleport) — save profile with party info intact, then clean up
-      console.log(`[Room] ${name} left intentionally (consented).`);
-      this.cleanupPlayer(client.sessionId);
+    const wasKicked = this.kickedSessions.has(client.sessionId);
+    this.kickedSessions.delete(client.sessionId);
+
+    if (consented || wasKicked) {
+      if (wasKicked) {
+        // Kicked: wipe profile so they start fresh on next join
+        console.log(`[Room] ${name} was kicked — removing and resetting profile.`);
+        this.cleanupPlayer(client.sessionId, true);
+      } else {
+        // Intentional leave (map teleport) — save profile intact, then clean up
+        console.log(`[Room] ${name} left intentionally (consented).`);
+        this.cleanupPlayer(client.sessionId);
+      }
       return;
     }
 
@@ -690,30 +736,37 @@ export class GameRoom extends Room<GameState> {
     }
   }
 
-  /** Centralized cleanup logic for player removal */
-  private cleanupPlayer(sessionId: string): void {
+  /** Centralized cleanup logic for player removal.
+   *  @param resetProfile  When true (kick), delete the saved profile so the player starts fresh. */
+  private cleanupPlayer(sessionId: string, resetProfile = false): void {
     const player = this.state.players.get(sessionId);
     if (!player) return;
 
-    // ── Save Profile before deleting ────────────────────────────────────────
+    // ── Save / reset profile before deleting (skip entirely for GM) ─────────
     const pid = this.sessionToPersistentId.get(sessionId);
     if (pid) {
-      const profile: PlayerProfile = {
-        nickname:            player.nickname,
-        skin:                player.skin,
-        level:               player.level,
-        xp:                  player.xp,
-        gold:                player.gold,
-        hp:                  player.hp,
-        maxHp:               player.maxHp,
-        weapon:              player.weapon,
-        potions:             player.potions,
-        potionHealRemaining: player.potionHealRemaining,
-        partyId:             player.partyId,
-        isPartyOwner:        player.isPartyOwner,
-        partyName:           player.partyName,
-      };
-      globalBus.saveProfile(pid, profile);
+      if (!player.isGM) {
+        if (resetProfile) {
+          globalBus.deleteProfile(pid);
+        } else {
+          const profile: PlayerProfile = {
+            nickname:            player.nickname,
+            skin:                player.skin,
+            level:               player.level,
+            xp:                  player.xp,
+            gold:                player.gold,
+            hp:                  player.hp,
+            maxHp:               player.maxHp,
+            weapon:              player.weapon,
+            potions:             player.potions,
+            potionHealRemaining: player.potionHealRemaining,
+            partyId:             player.partyId,
+            isPartyOwner:        player.isPartyOwner,
+            partyName:           player.partyName,
+          };
+          globalBus.saveProfile(pid, profile);
+        }
+      }
 
       if (this.persistentIdToSession.get(pid) === sessionId) {
         this.persistentIdToSession.delete(pid);
@@ -811,10 +864,10 @@ export class GameRoom extends Room<GameState> {
       }
     }
 
-    // Collect living, non-dead players
+    // Collect living, non-dead, non-GM players (GM is invisible to enemies)
     const players: Array<{ id: string; state: PlayerState }> = [];
     this.state.players.forEach((p, id) => {
-      if (p.hp > 0 && !p.isDead) players.push({ id, state: p });
+      if (p.hp > 0 && !p.isDead && !p.isGM) players.push({ id, state: p });
     });
 
     if (players.length === 0) return;
@@ -972,6 +1025,7 @@ export class GameRoom extends Room<GameState> {
     this.playerAttacks.forEach((startTime, sessionId) => {
       const player = this.state.players.get(sessionId);
       if (!player || player.isDead) return;
+      if (player.isGM) return; // GM cannot deal damage
 
       const elapsed = now - startTime;
       if (elapsed >= PLAYER_ATTACK_ANIM_MS) return; // guard (setTimeout handles cleanup)
@@ -1019,6 +1073,7 @@ export class GameRoom extends Room<GameState> {
       this.state.players.forEach((target, targetId) => {
         if (targetId === sessionId) return; // can't hit self
         if (target.isDead) return;
+        if (target.isGM) return; // GM is immune to all damage
         // Neutral zone: target player is protected
         if (this.isInNeutralZone(target.x, target.y)) return;
         // Same party: no friendly fire
@@ -1168,6 +1223,144 @@ export class GameRoom extends Room<GameState> {
     }
     
     this.updatePartyMemberStates(partyId);
+  }
+
+  // ── GM Commands ──────────────────────────────────────────────────────────────
+
+  private handleGMCommand(client: Client, gmPlayer: PlayerState, message: string): void {
+    const sendPrivate = (msg: string) => {
+      client.send("chat", { sessionId: "server", nickname: "Server", message: msg });
+    };
+
+    const parts = message.split(/\s+/);
+    const command = parts[0].toLowerCase();
+
+    if (command === "/spawn") {
+      // /spawn {enemy name} {number}
+      const enemyName = parts[1];
+      const count     = parseInt(parts[2] ?? "1", 10);
+
+      if (!enemyName || !ENEMY_REGISTRY[enemyName]) {
+        sendPrivate(`Unknown enemy type: "${enemyName ?? ""}". Check ENEMY_REGISTRY for valid names.`);
+        return;
+      }
+      if (isNaN(count) || count <= 0 || count > 100) {
+        sendPrivate("Invalid number. Must be between 1 and 100.");
+        return;
+      }
+
+      const regDef = ENEMY_REGISTRY[enemyName];
+      for (let i = 0; i < count; i++) {
+        let spawned = false;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const x = gmPlayer.x + (Math.random() - 0.5) * 400; // ±200 px
+          const y = gmPlayer.y + (Math.random() - 0.5) * 400;
+
+          if (x < 32 || x > MAP_WIDTH - 32 || y < 32 || y > MAP_HEIGHT - 32) continue;
+          if (this.isInNeutralZone(x, y)) continue;
+
+          const id    = `enemy_${++this.enemyCounter}`;
+          const enemy = new EnemyState();
+          enemy.id        = id;
+          enemy.type      = enemyName;
+          enemy.x         = x;
+          enemy.y         = y;
+          enemy.direction = 0;
+          enemy.isDead    = false;
+          enemy.hp        = regDef.hp;
+          enemy.maxHp     = regDef.hp;
+          this.state.enemies.set(id, enemy);
+          this.enemyAttackCooldowns.set(id, new Map());
+          // No spawn def — these enemies don't respawn after being killed
+          spawned = true;
+          break;
+        }
+        if (!spawned) {
+          sendPrivate("spawning enemies failed");
+        }
+      }
+
+    } else if (command === "/kick") {
+      // /kick {player nickname}
+      const targetNick = parts.slice(1).join(" ");
+      if (!targetNick) { sendPrivate("Usage: /kick {nickname}"); return; }
+
+      const toKick: Array<{ sessionId: string; kickClient: Client }> = [];
+      this.state.players.forEach((p, sid) => {
+        if (p.nickname === targetNick && !p.isGM) {
+          const kc = this.clients.find((c: Client) => c.sessionId === sid);
+          if (kc) toKick.push({ sessionId: sid, kickClient: kc });
+        }
+      });
+
+      if (toKick.length === 0) {
+        sendPrivate(`Player "${targetNick}" not found.`);
+        return;
+      }
+
+      for (const { sessionId, kickClient } of toKick) {
+        this.kickedSessions.add(sessionId); // flag before leave so onLeave skips grace period
+        this.disbandOrLeaveParty(sessionId);
+        kickClient.send("chat", {
+          sessionId: "server",
+          nickname:  "Server",
+          message:   "You were kicked out of the world.",
+        });
+        // Tell the client to clear its reconnect token BEFORE the socket closes,
+        // so a page refresh will show the login screen and start a clean session.
+        kickClient.send("kick", {});
+        // Remove from game state immediately — don't wait for onLeave to fire.
+        // onLeave will still run but cleanupPlayer will be a no-op (player already gone).
+        this.cleanupPlayer(sessionId, true);
+        kickClient.leave();
+      }
+
+    } else if (command === "/exp") {
+      // /exp {amount} {player nickname}
+      const amount     = parseInt(parts[1] ?? "", 10);
+      const targetNick = parts.slice(2).join(" ");
+
+      if (isNaN(amount) || amount <= 0) { sendPrivate("Usage: /exp {amount} {nickname}"); return; }
+      if (!targetNick)                  { sendPrivate("Usage: /exp {amount} {nickname}"); return; }
+
+      let found = false;
+      this.state.players.forEach((p, sid) => {
+        if (p.nickname === targetNick && !p.isGM) {
+          p.xp += amount;
+          this.checkLevelUp(sid);
+          found = true;
+        }
+      });
+      if (!found) sendPrivate(`Player "${targetNick}" not found.`);
+
+    } else if (command === "/gold") {
+      // /gold {amount} {player nickname}
+      const amount     = parseInt(parts[1] ?? "", 10);
+      const targetNick = parts.slice(2).join(" ");
+
+      if (isNaN(amount) || amount <= 0) { sendPrivate("Usage: /gold {amount} {nickname}"); return; }
+      if (!targetNick)                  { sendPrivate("Usage: /gold {amount} {nickname}"); return; }
+
+      let found = false;
+      this.state.players.forEach((p, sid) => {
+        if (p.nickname === targetNick && !p.isGM) {
+          p.gold += amount;
+          const targetClient = this.clients.find((c: Client) => c.sessionId === sid);
+          if (targetClient) {
+            targetClient.send("chat", {
+              sessionId: "server",
+              nickname:  "Server",
+              message:   `You received ${amount} gold from the Game Master.`,
+            });
+          }
+          found = true;
+        }
+      });
+      if (!found) sendPrivate(`Player "${targetNick}" not found.`);
+
+    } else {
+      sendPrivate(`Unknown command: ${command}. Available: /spawn, /kick, /exp, /gold`);
+    }
   }
 
   private killEnemy(enemyId: string, killerSessionId: string): void {

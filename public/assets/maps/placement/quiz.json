@@ -1,0 +1,20 @@
+{
+  "defaultTile": "grass_basic",
+  "spawnPoint": {
+    "x": 336,
+    "y": 203
+  },
+  "tiles": [],
+  "objects": [
+    {
+      "type": "tree1",
+      "x": 415,
+      "y": 369
+    }
+  ],
+  "npcs": [],
+  "mobs": [],
+  "enemies": [],
+  "neutralZones": [],
+  "doors": []
+}

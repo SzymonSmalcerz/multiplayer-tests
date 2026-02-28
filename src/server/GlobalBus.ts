@@ -80,6 +80,10 @@ class GlobalBus {
     this.profiles.set(persistentId, profile);
   }
 
+  deleteProfile(persistentId: string): void {
+    this.profiles.delete(persistentId);
+  }
+
   // ── Party Management ─────────────────────────────────────────────────────────
 
   getParty(partyId: string): GlobalParty | undefined {
