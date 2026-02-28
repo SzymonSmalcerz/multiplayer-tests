@@ -350,6 +350,14 @@ export class GameRoom extends Room<GameState> {
       }
     });
 
+    this.onMessage("start_session", (client) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player?.isGM) return;
+      globalBus.startGameSession(this.passcode);
+      this.broadcast("door_travel", { targetMap: "m1", spawnX: 100, spawnY: 100 });
+      console.log(`[Room] GM started session ${this.passcode} — teleporting all to m1`);
+    });
+
     this.onMessage("chat", (client, message: string) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || !message || message.trim().length === 0) return;
@@ -709,6 +717,11 @@ export class GameRoom extends Room<GameState> {
 
     // Refresh global leaderboard so the new player is immediately visible
     globalBus.broadcastLeaderboard();
+
+    // Late-joiner redirect: if the session already started but player landed in waitingArea, send them to m1
+    if (this.mapName === "waitingArea" && globalBus.isSessionStarted(this.passcode)) {
+      setTimeout(() => client.send("door_travel", { targetMap: "m1", spawnX: 100, spawnY: 100 }), 200);
+    }
 
     this.broadcast("chat", {
       sessionId: "server",

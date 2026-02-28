@@ -51,7 +51,7 @@ class GlobalBus {
 
   // ── Session registry ─────────────────────────────────────────────────────────
   /** passcode → session metadata */
-  private activeSessions = new Map<string, { name: string }>();
+  private activeSessions = new Map<string, { name: string; isStarted: boolean }>();
 
   // ── Per-session state ────────────────────────────────────────────────────────
   /** passcode → persistentId → PlayerProfile */
@@ -76,7 +76,7 @@ class GlobalBus {
   // ── Session lifecycle ────────────────────────────────────────────────────────
 
   createSession(passcode: string, name: string): void {
-    this.activeSessions.set(passcode, { name });
+    this.activeSessions.set(passcode, { name, isStarted: false });
     // Pre-initialize empty maps for this session
     this.profiles.set(passcode, new Map());
     this.parties.set(passcode, new Map());
@@ -102,6 +102,15 @@ class GlobalBus {
 
   getSessionName(passcode: string): string {
     return this.activeSessions.get(passcode)?.name ?? "";
+  }
+
+  startGameSession(passcode: string): void {
+    const session = this.activeSessions.get(passcode);
+    if (session) session.isStarted = true;
+  }
+
+  isSessionStarted(passcode: string): boolean {
+    return this.activeSessions.get(passcode)?.isStarted ?? false;
   }
 
   // ── Room registration ────────────────────────────────────────────────────────

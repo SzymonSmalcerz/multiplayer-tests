@@ -93,7 +93,11 @@ export class GameScene extends Phaser.Scene {
 
   // Private session
   private passcode = "";
+  private sessionName = "";
   private isSessionEnded = false;
+
+  // Waiting room UI
+  private waitingRoomDots!: Phaser.GameObjects.Graphics;
 
   // Global leaderboard (updated by server every 3 s)
   private globalLeaderboardData: Array<{ nickname: string; level: number; xp: number; partyName: string }> | null = null;
@@ -267,6 +271,7 @@ export class GameScene extends Phaser.Scene {
     this.localNickname    = data.nickname;
     this.localSkin        = data.skin;
     this.passcode         = data.passcode ?? "";
+    this.sessionName      = data.sessionName ?? "";
     this.mySessionId      = data.room.sessionId as string;
     this.currentMapName   = data.mapName ?? "m1";
     this.isTeleporting    = false;
@@ -449,8 +454,11 @@ export class GameScene extends Phaser.Scene {
     this.createPartyHUD();
     this.createMinimap();
 
-    // ── GM passcode badge ────────────────────────────────────────────────────
-    if (this.localSkin === "gm" && this.passcode) {
+    // ── Waiting room UI (replaces all HUD / minimap for waitingArea) ────────────
+    if (this.currentMapName === "waitingArea") {
+      this.createWaitingRoomUI();
+    } else if (this.localSkin === "gm" && this.passcode) {
+      // GM passcode badge (shown on normal maps only)
       const w = this.cameras.main.width;
       this.add.text(w / 2, 10, `Session: ${this.passcode}`, {
         fontSize:        "13px",
@@ -656,6 +664,7 @@ export class GameScene extends Phaser.Scene {
   // ── Attack ─────────────────────────────────────────────────────────────────
 
   private triggerAttack(): void {
+    if (this.currentMapName === "waitingArea") return;
     if (this.localIsAttacking) return;          // already mid-swing
     if (this.localIsDead) return;
     if (this.localAttackCooldownTimer > 0) return; // still on cooldown
@@ -756,10 +765,17 @@ export class GameScene extends Phaser.Scene {
     this.interpolateRemotePlayers(delta);
     this.updateEnemies();
     this.mobSystem.update();
+
+    if (this.currentMapName === "waitingArea") {
+      this.updateWaitingRoomDots();
+      this.sendPositionIfNeeded(time);
+      return;
+    }
+
     this.updateHUD();
     this.updatePartyHUD();
     this.updateLeaderboard();
-    
+
     this.repositionMinimapUI();
     if (this.minimapOpen) {
       this.updateMinimap();
@@ -782,7 +798,120 @@ export class GameScene extends Phaser.Scene {
 
   // ── HUD ────────────────────────────────────────────────────────────────────
 
+  // ── Waiting Room UI ─────────────────────────────────────────────────────────
+
+  private createWaitingRoomUI(): void {
+    const D = 99990;
+    const { width, height } = this.cameras.main;
+    const cx = width  / 2;
+    const cy = height / 2;
+    const MAP_SIZE = 200;
+
+    // Position the minimap centered; labels / button sit above it
+    const mmX = cx - MAP_SIZE / 2;
+    const mmY = cy - 86;
+
+    if (this.localSkin === "gm") {
+      // ── GM view ──────────────────────────────────────────────────────────
+
+      // Dark panel behind button + session code
+      this.add.graphics()
+        .fillStyle(0x000000, 0.65)
+        .fillRoundedRect(cx - 140, cy - 260, 280, 120, 10)
+        .setScrollFactor(0).setDepth(D);
+
+      // "Enter World" button
+      const btnBg = this.add.rectangle(cx, cy - 210, 240, 52, 0x2d7a2d)
+        .setScrollFactor(0).setDepth(D + 1).setInteractive({ useHandCursor: true });
+      const btnText = this.add.text(cx, cy - 210, "Enter World", {
+        fontSize: "20px", color: "#ffffff", fontStyle: "bold",
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 2);
+
+      btnBg.on("pointerover",  () => btnBg.setFillStyle(0x3fa83f));
+      btnBg.on("pointerout",   () => btnBg.setFillStyle(0x2d7a2d));
+      btnBg.on("pointerdown",  () => {
+        this.room.send("start_session");
+        btnBg.destroy();
+        btnText.destroy();
+      });
+
+      // Session code badge
+      if (this.passcode) {
+        this.add.text(cx, cy - 168, `Session: ${this.passcode}`, {
+          fontSize: "14px", color: "#ff8800",
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 2);
+      }
+    } else {
+      // ── Player view ──────────────────────────────────────────────────────
+
+      const label = this.sessionName && this.sessionName !== "Unnamed Session"
+        ? `Welcome to "${this.sessionName}"`
+        : "Welcome to the Waiting Room";
+
+      // Dark panel behind text
+      this.add.graphics()
+        .fillStyle(0x000000, 0.65)
+        .fillRoundedRect(cx - 200, cy - 260, 400, 110, 10)
+        .setScrollFactor(0).setDepth(D);
+
+      this.add.text(cx, cy - 225, label, {
+        fontSize: "22px", color: "#ffffff", fontStyle: "bold",
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1);
+
+      this.add.text(cx, cy - 183, "Waiting for host to start the session…", {
+        fontSize: "14px", color: "#aaaaaa",
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1);
+    }
+
+    // Minimap background (centered below labels / button)
+    this.add.graphics()
+      .fillStyle(0x111111, 0.85)
+      .fillRect(mmX, mmY, MAP_SIZE, MAP_SIZE)
+      .lineStyle(1, 0x334433, 1)
+      .strokeRect(mmX, mmY, MAP_SIZE, MAP_SIZE)
+      .setScrollFactor(0).setDepth(D);
+
+    // Minimap "Waiting Room" label above the panel
+    this.add.text(cx, mmY - 18, "Waiting Room", {
+      fontSize: "12px", color: "#888888",
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1);
+
+    // Dots layer (redrawn every frame)
+    this.waitingRoomDots = this.add.graphics()
+      .setScrollFactor(0).setDepth(D + 1);
+  }
+
+  private updateWaitingRoomDots(): void {
+    if (!this.waitingRoomDots || !this.waitingRoomDots.active) return;
+    this.waitingRoomDots.clear();
+
+    const MAP_SIZE = 200;
+    const { width, height } = this.cameras.main;
+    const cx   = width  / 2;
+    const cy   = height / 2;
+    const mmX  = cx - MAP_SIZE / 2;
+    const mmY  = cy - 56;
+
+    const mapW = (this.room.state.mapWidth  as number) || 300;
+    const mapH = (this.room.state.mapHeight as number) || 300;
+    const scaleX = MAP_SIZE / mapW;
+    const scaleY = MAP_SIZE / mapH;
+
+    this.room.state.players.forEach((p: { x: number; y: number; isGM: boolean }, sessionId: string) => {
+      const isMe = sessionId === this.mySessionId;
+      this.waitingRoomDots.fillStyle(isMe ? 0x00ff44 : (p.isGM ? 0xff8800 : 0x44aaff), 1);
+      this.waitingRoomDots.fillCircle(
+        mmX + p.x * scaleX,
+        mmY + p.y * scaleY,
+        isMe ? 5 : 4,
+      );
+    });
+  }
+
+  // ── HUD ─────────────────────────────────────────────────────────────────────
+
   private createHUD(): void {
+    if (this.currentMapName === "waitingArea") return;
     const D = 99998;
 
     // Dark background panel
@@ -856,6 +985,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateHUD(): void {
+    if (this.currentMapName === "waitingArea") return;
     const p = this.room.state.players.get(this.mySessionId);
     if (!p) return;
 
@@ -944,6 +1074,7 @@ export class GameScene extends Phaser.Scene {
   // ── Party HUD ──────────────────────────────────────────────────────────────
 
   private createPartyHUD(): void {
+    if (this.currentMapName === "waitingArea") return;
     const D       = 99998;
     const ROW_H   = 32;
     const ROW_GAP = 4;
@@ -1037,6 +1168,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updatePartyHUD(): void {
+    if (this.currentMapName === "waitingArea") return;
     const ROW_H    = 32;
     const ROW_GAP  = 4;
     const HEADER_H = 18;
@@ -1150,6 +1282,7 @@ export class GameScene extends Phaser.Scene {
   // ── Minimap ────────────────────────────────────────────────────────────────
 
   private createMinimap(): void {
+    if (this.currentMapName === "waitingArea") return;
     const D = 99990;
     const camW = this.cameras.main.width;
 
@@ -1262,6 +1395,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateMinimap(): void {
+    if (this.currentMapName === "waitingArea") return;
     if (!this.scene.isActive() || !this.minimapBg || !this.minimapBg.active) return;
     this.minimapDots.clear();
     const camW = this.cameras.main.width;
@@ -1370,6 +1504,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateLeaderboard(): void {
+    if (this.currentMapName === "waitingArea") return;
     // Safety check: skip if UI is destroyed
     if (!this.leaderboardBg || !this.leaderboardBg.active) {
       return;
@@ -2804,7 +2939,7 @@ export class GameScene extends Phaser.Scene {
 
       const protocol = window.location.protocol === "https:" ? "wss" : "ws";
       const client   = new Client(`${protocol}://${window.location.host}`);
-      const newRoom  = await client.joinOrCreate("game", {
+      const joinOptions: Record<string, unknown> = {
         mapName:     targetMap,
         nickname:    this.localNickname,
         skin:        this.localSkin,
@@ -2812,7 +2947,13 @@ export class GameScene extends Phaser.Scene {
         persistentId: localStorage.getItem("playerId") ?? undefined,
         spawnX,
         spawnY,
-      });
+      };
+      // Re-authenticate as GM so the server restores isGM status
+      if (this.localSkin === "gm") {
+        joinOptions.login    = "admin";
+        joinOptions.password = "admin123";
+      }
+      const newRoom  = await client.joinOrCreate("game", joinOptions);
 
       localStorage.setItem("reconnToken", newRoom.reconnectionToken);
 

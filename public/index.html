@@ -352,41 +352,6 @@
       text-align: center;
     }
 
-    /* ── Room created panel ─────────────────────────────────────── */
-    #room-created-panel { display: none; }
-
-    #passcode-display {
-      font-size: 2.4rem;
-      font-weight: 900;
-      letter-spacing: 10px;
-      color: #ff8800;
-      text-align: center;
-      background: rgba(255,136,0,0.1);
-      border: 2px solid rgba(255,136,0,0.4);
-      border-radius: 10px;
-      padding: 16px 12px;
-      margin-bottom: 8px;
-      text-shadow: 0 0 20px rgba(255,136,0,0.6);
-    }
-
-    #enter-world-btn {
-      width: 100%;
-      padding: 13px;
-      font-size: 1rem;
-      font-weight: 700;
-      letter-spacing: 1px;
-      background: linear-gradient(135deg, #2d7a2d, #3fa83f);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
-    }
-
-    #enter-world-btn:hover  { opacity: 0.9; transform: translateY(-1px); }
-    #enter-world-btn:active { transform: translateY(0); }
-    #enter-world-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-
     /* ── Session ended overlay ──────────────────────────────────── */
     #session-ended-overlay {
       position: fixed;
@@ -650,16 +615,6 @@
         <button id="gm-submit-btn">Create Session</button>
         <div id="gm-error-msg"></div>
         <button id="gm-back-btn" class="gm-link">← Back to game</button>
-      </div>
-
-      <!-- Room created panel (shown after GM creates a room) -->
-      <div id="room-created-panel" style="display:none">
-        <p class="gm-title">Session Created!</p>
-        <p class="gm-subtitle">Share this code with your players</p>
-        <div id="passcode-display"></div>
-        <p id="room-name-display" style="text-align:center;color:#886644;font-size:0.85rem;margin-bottom:16px"></p>
-        <button id="enter-world-btn">Enter World</button>
-        <div id="enter-world-error" style="margin-top:10px;font-size:0.85rem;color:#ff8080;text-align:center;display:none"></div>
       </div>
 
       <p class="controls-hint">WASD / Arrow Keys to move</p>

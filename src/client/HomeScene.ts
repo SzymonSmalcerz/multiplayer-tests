@@ -82,6 +82,12 @@ export class HomeScene extends Phaser.Scene {
   /** Passcode confirmed valid in Step 1 — used when submitting Step 2. */
   private confirmedPasscode = "";
 
+  /** Whether the session has already started (GM clicked "Enter World"). */
+  private sessionIsStarted = false;
+
+  /** Human-readable session name returned by the server. */
+  private sessionName = "";
+
   constructor() {
     super({ key: "HomeScene" });
   }
@@ -141,16 +147,14 @@ export class HomeScene extends Phaser.Scene {
     const overlay = document.getElementById("overlay");
     if (overlay) overlay.style.display = "flex";
 
-    const regularForm      = document.getElementById("regular-form");
-    const gmForm           = document.getElementById("gm-form");
-    const roomCreatedPanel = document.getElementById("room-created-panel");
-    const isLoginPage      = window.location.pathname === "/login";
+    const regularForm = document.getElementById("regular-form");
+    const gmForm      = document.getElementById("gm-form");
+    const isLoginPage = window.location.pathname === "/login";
 
     if (isLoginPage) {
       // Show only the GM login form
-      if (regularForm)      regularForm.style.display      = "none";
-      if (gmForm)           gmForm.style.display           = "block";
-      if (roomCreatedPanel) roomCreatedPanel.style.display = "none";
+      if (regularForm) regularForm.style.display = "none";
+      if (gmForm)      gmForm.style.display      = "block";
       this.wireGMLoginButton();
       const gmLoginInput = document.getElementById("gm-login") as HTMLInputElement | null;
       if (gmLoginInput) gmLoginInput.focus();
@@ -158,9 +162,8 @@ export class HomeScene extends Phaser.Scene {
     }
 
     // ── Regular player flow ───────────────────────────────────────────────────
-    if (regularForm)      regularForm.style.display      = "block";
-    if (gmForm)           gmForm.style.display           = "none";
-    if (roomCreatedPanel) roomCreatedPanel.style.display = "none";
+    if (regularForm) regularForm.style.display = "block";
+    if (gmForm)      gmForm.style.display      = "none";
 
     // Restore skin preference
     const savedSkin = localStorage.getItem(LS_SKIN);
@@ -261,18 +264,8 @@ export class HomeScene extends Phaser.Scene {
 
       const { passcode, name } = await resp.json() as { passcode: string; name: string };
 
-      // Show the room-created panel
-      const gmForm           = document.getElementById("gm-form");
-      const roomCreatedPanel = document.getElementById("room-created-panel");
-      const passcodeDisplay  = document.getElementById("passcode-display");
-      const roomNameDisplay  = document.getElementById("room-name-display");
-
-      if (gmForm)           gmForm.style.display           = "none";
-      if (roomCreatedPanel) roomCreatedPanel.style.display = "block";
-      if (passcodeDisplay)  passcodeDisplay.textContent    = passcode;
-      if (roomNameDisplay)  roomNameDisplay.textContent    = name !== "Unnamed Session" ? `"${name}"` : "";
-
-      this.wireEnterWorldButton(login, password, passcode);
+      // Go straight to the waiting area — no modal step needed
+      await this.joinAsGM(login, password, passcode, name);
     } catch (err) {
       console.error("GM session creation error:", err);
       if (errorEl) { errorEl.textContent = "Connection failed — is the server running?"; errorEl.style.display = "block"; }
@@ -280,23 +273,12 @@ export class HomeScene extends Phaser.Scene {
     }
   }
 
-  /** Step 2 of GM flow: join the Colyseus room with the generated passcode. */
-  private wireEnterWorldButton(login: string, password: string, passcode: string): void {
-    const btn = document.getElementById("enter-world-btn") as HTMLButtonElement | null;
-    if (!btn) return;
+  private async joinAsGM(login: string, password: string, passcode: string, sessionName = ""): Promise<void> {
+    const createBtn = document.getElementById("gm-submit-btn") as HTMLButtonElement | null;
+    const errorEl   = document.getElementById("gm-error-msg");
 
-    const fresh = btn.cloneNode(true) as HTMLButtonElement;
-    btn.parentNode?.replaceChild(fresh, btn);
-
-    fresh.addEventListener("click", () => void this.joinAsGM(login, password, passcode));
-  }
-
-  private async joinAsGM(login: string, password: string, passcode: string): Promise<void> {
-    const btn     = document.getElementById("enter-world-btn") as HTMLButtonElement | null;
-    const errorEl = document.getElementById("enter-world-error");
-
-    if (btn)     { btn.disabled = true; btn.textContent = "Connecting…"; }
-    if (errorEl) errorEl.style.display = "none";
+    if (createBtn) { createBtn.disabled = true; createBtn.textContent = "Connecting…"; }
+    if (errorEl)   errorEl.style.display = "none";
 
     try {
       const protocol = window.location.protocol === "https:" ? "wss" : "ws";
@@ -307,7 +289,7 @@ export class HomeScene extends Phaser.Scene {
         password,
         passcode,
         persistentId: getPersistentId(),
-        mapName:      "m1",
+        mapName:      "waitingArea",
       });
 
       localStorage.setItem(LS_RECON_TOKEN, room.reconnectionToken);
@@ -321,12 +303,12 @@ export class HomeScene extends Phaser.Scene {
       const overlay = document.getElementById("overlay");
       if (overlay) overlay.style.display = "none";
 
-      const data: GameSceneData = { room, nickname: "admin", skin: "gm", passcode };
+      const data: GameSceneData = { room, nickname: "admin", skin: "gm", passcode, mapName: "waitingArea", sessionName };
       this.scene.start("GameScene", data);
     } catch (err) {
       console.error("GM join error:", err);
       if (errorEl) { errorEl.textContent = "Connection failed — try again."; errorEl.style.display = "block"; }
-      if (btn) { btn.disabled = false; btn.textContent = "Enter World"; }
+      if (createBtn) { createBtn.disabled = false; createBtn.textContent = "Create Session"; }
     }
   }
 
@@ -399,7 +381,7 @@ export class HomeScene extends Phaser.Scene {
 
     try {
       const resp = await fetch(`/api/check-session/${encodeURIComponent(code)}`);
-      const data = await resp.json() as { valid: boolean; name?: string };
+      const data = await resp.json() as { valid: boolean; name?: string; isStarted?: boolean };
 
       if (!data.valid) {
         if (errorEl) errorEl.textContent = "Room not found — check the code and try again.";
@@ -408,6 +390,8 @@ export class HomeScene extends Phaser.Scene {
       }
 
       this.confirmedPasscode = code;
+      this.sessionIsStarted  = data.isStarted ?? false;
+      this.sessionName       = data.name ?? "";
       this.showStep(2, data.name ?? "");
     } catch {
       if (errorEl) errorEl.textContent = "Connection failed — is the server running?";
@@ -525,7 +509,7 @@ export class HomeScene extends Phaser.Scene {
         nickname,
         skin:         this.selectedSkin,
         persistentId: getPersistentId(),
-        mapName:      "m1",
+        mapName:      this.sessionIsStarted ? "m1" : "waitingArea",
         passcode,
       });
 
@@ -538,7 +522,8 @@ export class HomeScene extends Phaser.Scene {
       const overlay = document.getElementById("overlay");
       if (overlay) overlay.style.display = "none";
 
-      const data: GameSceneData = { room, nickname, skin: this.selectedSkin, passcode };
+      const mapName = this.sessionIsStarted ? "m1" : "waitingArea";
+      const data: GameSceneData = { room, nickname, skin: this.selectedSkin, passcode, mapName, sessionName: this.sessionName };
       this.scene.start("GameScene", data);
     } catch (err) {
       console.error("Connection error:", err);
