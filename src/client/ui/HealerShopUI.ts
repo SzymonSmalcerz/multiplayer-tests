@@ -9,6 +9,11 @@ export class HealerShopUI {
   private isOpen = false;
   private objects: Phaser.GameObjects.GameObject[] = [];
 
+  private ownedText: Phaser.GameObjects.Text | null = null;
+  private buyBtn:    Phaser.GameObjects.Text | null = null;
+  private localGold    = 0;
+  private localPotions = 0;
+
   private getPlayerState: () => { gold: number; potions: number } | null;
   private onBuy:      () => void;
   private onInteract: () => void;
@@ -91,8 +96,10 @@ export class HealerShopUI {
     // ── Potion row ────────────────────────────────────────────────────────────
     const rowY  = py + 50;
     const state = this.getPlayerState();
-    const gold  = state?.gold    ?? 0;
-    const owned = state?.potions ?? 0;
+    this.localGold    = state?.gold    ?? 0;
+    this.localPotions = state?.potions ?? 0;
+    const gold  = this.localGold;
+    const owned = this.localPotions;
 
     // Potion icon
     const icon = s.add.image(px + 44, rowY + 44, "health_potion");
@@ -120,14 +127,14 @@ export class HealerShopUI {
     }).setScrollFactor(0).setDepth(D + 2));
 
     // Owned
-    add(s.add.text(px + 82, rowY + 64, `Owned: ${owned}`, {
+    this.ownedText = add(s.add.text(px + 82, rowY + 64, `Owned: ${owned}`, {
       fontSize: "11px", color: "#aaaaaa",
       stroke: "#000", strokeThickness: 1, resolution: 2,
-    }).setScrollFactor(0).setDepth(D + 2));
+    }).setScrollFactor(0).setDepth(D + 2)) as Phaser.GameObjects.Text;
 
     // Buy button
     const canAfford = gold >= 20;
-    const buyBtn = add(s.add.text(px + PANEL_W - 16, rowY + 44, "Buy", {
+    this.buyBtn = add(s.add.text(px + PANEL_W - 16, rowY + 44, "Buy", {
       fontSize: "13px",
       color:           canAfford ? "#ffffff" : "#666666",
       backgroundColor: canAfford ? "#336633" : "#333333",
@@ -136,12 +143,19 @@ export class HealerShopUI {
     }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(D + 2)) as Phaser.GameObjects.Text;
 
     if (canAfford) {
-      buyBtn.setInteractive({ useHandCursor: true })
-        .on("pointerover", () => buyBtn.setBackgroundColor("#448844"))
-        .on("pointerout",  () => buyBtn.setBackgroundColor("#336633"))
+      this.buyBtn.setInteractive({ useHandCursor: true })
+        .on("pointerover", () => this.buyBtn?.setBackgroundColor("#448844"))
+        .on("pointerout",  () => this.buyBtn?.setBackgroundColor("#336633"))
         .on("pointerdown", () => {
           this.onInteract();
           this.onBuy();
+          this.localPotions++;
+          this.localGold -= 20;
+          this.ownedText?.setText(`Owned: ${this.localPotions}`);
+          if (this.localGold < 20) {
+            this.buyBtn?.removeInteractive();
+            this.buyBtn?.setColor("#666666").setBackgroundColor("#333333");
+          }
         });
     }
   }
@@ -150,6 +164,8 @@ export class HealerShopUI {
     if (!this.isOpen) return;
     this.isOpen = false;
     for (const obj of this.objects) obj.destroy();
-    this.objects = [];
+    this.objects   = [];
+    this.ownedText = null;
+    this.buyBtn    = null;
   }
 }
