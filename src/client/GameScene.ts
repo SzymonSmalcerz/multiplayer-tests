@@ -25,8 +25,6 @@ import {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MAP_W = 2000;
-const MAP_H = 2000;
 const PLAYER_SPEED        = 200;   // px/s — client prediction speed
 const SEND_RATE_MS        = 50;    // send position @ 20 Hz
 const LERP_FACTOR         = 0.18;  // interpolation factor for remote players / enemies
@@ -419,10 +417,10 @@ export class GameScene extends Phaser.Scene {
     // Start with grass_basic; updated to the map's defaultTile when map_data arrives
     this.tilesRegistry = (this.cache.json.get("tiles_registry") ?? {}) as Record<string, { type: string; imageWidth: number; imageHeight: number }>;
     const firstTile = Object.keys(this.tilesRegistry)[0] ?? "grass_basic";
-    this.bgTileSprite = this.add.tileSprite(0, 0, MAP_W, MAP_H, firstTile).setOrigin(0, 0).setDepth(0);
+    this.bgTileSprite = this.add.tileSprite(0, 0, this.room.state.mapWidth, this.room.state.mapHeight, firstTile).setOrigin(0, 0).setDepth(0);
 
     // ── Physics world bounds ────────────────────────────────────────────────
-    this.physics.world.setBounds(0, 0, MAP_W, MAP_H);
+    this.physics.world.setBounds(0, 0, this.room.state.mapWidth, this.room.state.mapHeight);
 
     // ── Static object groups ─────────────────────────────────────────────────
     this.staticObjectsGroup    = this.physics.add.staticGroup();
@@ -436,7 +434,7 @@ export class GameScene extends Phaser.Scene {
     this.createAnimations();
 
     // ── Local player ────────────────────────────────────────────────────────
-    this.createLocalPlayer(MAP_W / 2, MAP_H / 2);
+    this.createLocalPlayer(this.room.state.mapWidth / 2, this.room.state.mapHeight / 2);
 
     // ── HUD ─────────────────────────────────────────────────────────────────
     this.createHUD();
@@ -474,7 +472,7 @@ export class GameScene extends Phaser.Scene {
     this.createDeathUI();
 
     // ── Camera ──────────────────────────────────────────────────────────────
-    this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
+    this.cameras.main.setBounds(0, 0, this.room.state.mapWidth, this.room.state.mapHeight);
     this.cameras.main.startFollow(this.localSprite, true, 0.08, 0.08);
 
     // NPCs are placed after map_data is received (see setupRoomListeners)
@@ -2881,8 +2879,8 @@ export class GameScene extends Phaser.Scene {
   // ── Pathfinding ────────────────────────────────────────────────────────────
 
   private buildNavGrid(objects: StaticObjectData[]): void {
-    this.navCols = Math.ceil(MAP_W / NAV_CELL);
-    this.navRows = Math.ceil(MAP_H / NAV_CELL);
+    this.navCols = Math.ceil(this.room.state.mapWidth  / NAV_CELL);
+    this.navRows = Math.ceil(this.room.state.mapHeight / NAV_CELL);
     this.navGrid = new Uint8Array(this.navCols * this.navRows);
 
     for (const obj of objects) {

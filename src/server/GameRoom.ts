@@ -55,12 +55,12 @@ export class EnemyState extends Schema {
 export class GameState extends Schema {
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type({ map: EnemyState }) enemies = new MapSchema<EnemyState>();
+  @type("number") mapWidth:  number = 2000;
+  @type("number") mapHeight: number = 2000;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MAP_WIDTH  = 2000;
-const MAP_HEIGHT = 2000;
 const MAX_SPEED_PX_PER_S = 300;
 const SPEED_TOLERANCE    = 1.6;
 
@@ -122,6 +122,8 @@ export class GameRoom extends Room<GameState> {
   maxClients = 50;
 
   private mapName: string = "m1";
+  private mapWidth:  number = 2000;
+  private mapHeight: number = 2000;
   private objectData: Array<{ type: string; x: number; y: number }> = [];
   private npcData: Array<{ type: string; x: number; y: number }> = [];
   private mobData: Array<Record<string, unknown>> = [];
@@ -191,6 +193,8 @@ export class GameRoom extends Room<GameState> {
     // ── Load map JSON ─────────────────────────────────────────────────────────
     const mapFile  = path.resolve(__dirname, `../../public/assets/maps/placement/${this.mapName}.json`);
     const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
+      mapWidth?:     number;
+      mapHeight?:    number;
       defaultTile?:  string;
       spawnPoint?:   { x: number; y: number };
       tiles?:        Array<{ type: string; x: number; y: number }>;
@@ -206,6 +210,10 @@ export class GameRoom extends Room<GameState> {
         this.objectData.push({ type: obj.type, x: obj.x, y: obj.y });
       }
     }
+    this.mapWidth          = mapJson.mapWidth  ?? 2000;
+    this.mapHeight         = mapJson.mapHeight ?? 2000;
+    this.state.mapWidth    = this.mapWidth;
+    this.state.mapHeight   = this.mapHeight;
     this.npcData      = mapJson.npcs  ?? [];
     this.mobData      = mapJson.mobs  ?? [];
     this.neutralZones = mapJson.neutralZones ?? [];
@@ -311,7 +319,7 @@ export class GameRoom extends Room<GameState> {
         }
 
         // Calculate arrival offset: if door is on the left, spawn to the right (+80); if on the right, spawn to the left (-80)
-        // This ensures the player doesn't arrive exactly on top of the door or outside map bounds (MAP_WIDTH=2000).
+        // This ensures the player doesn't arrive exactly on top of the door or outside map bounds.
         const offsetX = targetDoor.x < 1000 ? 80 : -80;
         const offsetY = 60;
 
@@ -379,8 +387,8 @@ export class GameRoom extends Room<GameState> {
         }
       }
 
-      newX = Math.max(32, Math.min(MAP_WIDTH  - 32, newX));
-      newY = Math.max(32, Math.min(MAP_HEIGHT - 32, newY));
+      newX = Math.max(32, Math.min(this.mapWidth  - 32, newX));
+      newY = Math.max(32, Math.min(this.mapHeight - 32, newY));
 
       player.x         = newX;
       player.y         = newY;
@@ -603,8 +611,8 @@ export class GameRoom extends Room<GameState> {
     const rawSpawnY = typeof options.spawnY === "number" && isFinite(options.spawnY) ? options.spawnY : this.spawnPoint.y;
 
     const player = new PlayerState();
-    player.x         = Math.max(32, Math.min(MAP_WIDTH  - 32, rawSpawnX));
-    player.y         = Math.max(32, Math.min(MAP_HEIGHT - 32, rawSpawnY));
+    player.x         = Math.max(32, Math.min(this.mapWidth  - 32, rawSpawnX));
+    player.y         = Math.max(32, Math.min(this.mapHeight - 32, rawSpawnY));
     
     // ── Load Profile or Init Defaults ────────────────────────────────────────
     if (isGMLogin) {
@@ -798,8 +806,8 @@ export class GameRoom extends Room<GameState> {
 
     enemy.id        = id;
     enemy.type      = type;
-    enemy.x         = 80 + Math.random() * (MAP_WIDTH  - 160);
-    enemy.y         = 80 + Math.random() * (MAP_HEIGHT - 160);
+    enemy.x         = 80 + Math.random() * (this.mapWidth  - 160);
+    enemy.y         = 80 + Math.random() * (this.mapHeight - 160);
     enemy.direction = 0;
     enemy.isDead    = false;
     enemy.hp        = regDef.hp;
@@ -914,8 +922,8 @@ export class GameRoom extends Room<GameState> {
           enemy.direction = dy > 0 ? 0 : 2;
         }
         const speed = regDef.speed * dtSec;
-        const newX = Math.max(32, Math.min(MAP_WIDTH  - 32, enemy.x + (dx / nearestDist) * speed));
-        const newY = Math.max(32, Math.min(MAP_HEIGHT - 32, enemy.y + (dy / nearestDist) * speed));
+        const newX = Math.max(32, Math.min(this.mapWidth  - 32, enemy.x + (dx / nearestDist) * speed));
+        const newY = Math.max(32, Math.min(this.mapHeight - 32, enemy.y + (dy / nearestDist) * speed));
         if (!this.isInNeutralZone(newX, newY)) {
           enemy.x = newX;
           enemy.y = newY;
@@ -1256,7 +1264,7 @@ export class GameRoom extends Room<GameState> {
           const x = gmPlayer.x + (Math.random() - 0.5) * 400; // ±200 px
           const y = gmPlayer.y + (Math.random() - 0.5) * 400;
 
-          if (x < 32 || x > MAP_WIDTH - 32 || y < 32 || y > MAP_HEIGHT - 32) continue;
+          if (x < 32 || x > this.mapWidth - 32 || y < 32 || y > this.mapHeight - 32) continue;
           if (this.isInNeutralZone(x, y)) continue;
 
           const id    = `enemy_${++this.enemyCounter}`;

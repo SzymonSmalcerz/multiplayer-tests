@@ -1,4 +1,6 @@
 {
+  "mapWidth": 2200,
+  "mapHeight": 2200,
   "defaultTile": "grass_basic",
   "spawnPoint": {
     "x": 375,

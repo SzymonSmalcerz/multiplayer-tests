@@ -1606,7 +1606,7 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  const data = { defaultTile, spawnPoint, tiles: placedTiles, objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies, neutralZones: placedNeutralZones, doors: placedDoors };
+  const data = { mapWidth, mapHeight, defaultTile, spawnPoint, tiles: placedTiles, objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies, neutralZones: placedNeutralZones, doors: placedDoors };
 
   statusBar.textContent = `Saving ${name}.json…`;
   try {
@@ -1642,6 +1642,8 @@ loadBtn.addEventListener('click', async () => {
       return;
     }
     const data = await res.json();
+    if (typeof data.mapWidth  === 'number') { mapWidth  = data.mapWidth;  mapWidthInput.value  = mapWidth; }
+    if (typeof data.mapHeight === 'number') { mapHeight = data.mapHeight; mapHeightInput.value = mapHeight; }
     defaultTile        = data.defaultTile || 'grass_basic';
     spawnPoint         = (data.spawnPoint && typeof data.spawnPoint.x === 'number') ? data.spawnPoint : { x: 100, y: 100 };
     placedTiles        = Array.isArray(data.tiles)        ? data.tiles        : [];
