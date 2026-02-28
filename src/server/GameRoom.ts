@@ -354,7 +354,7 @@ export class GameRoom extends Room<GameState> {
       const player = this.state.players.get(client.sessionId);
       if (!player?.isGM) return;
       globalBus.startGameSession(this.passcode);
-      this.broadcast("door_travel", { targetMap: "m1", spawnX: 100, spawnY: 100 });
+      this.broadcast("door_travel", { targetMap: "m1" });
       console.log(`[Room] GM started session ${this.passcode} — teleporting all to m1`);
     });
 
@@ -720,7 +720,7 @@ export class GameRoom extends Room<GameState> {
 
     // Late-joiner redirect: if the session already started but player landed in waitingArea, send them to m1
     if (this.mapName === "waitingArea" && globalBus.isSessionStarted(this.passcode)) {
-      setTimeout(() => client.send("door_travel", { targetMap: "m1", spawnX: 100, spawnY: 100 }), 200);
+      setTimeout(() => client.send("door_travel", { targetMap: "m1" }), 200);
     }
 
     this.broadcast("chat", {

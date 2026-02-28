@@ -323,12 +323,17 @@ export class GameScene extends Phaser.Scene {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const token = (data.room as any).reconnectionToken as string | undefined;
     if (token) localStorage.setItem("reconnToken", token);
+    console.log(`[DIAG] init() complete — map=${this.currentMapName} isCreated=${this.isCreated}`);
   }
 
   preload(): void {
+    console.log(`[DIAG] preload() START — map=${this.currentMapName}`);
     // Add loader error tracking
     this.load.on("loaderror", (file: any) => {
       console.error(`[Loader] Failed to load asset: ${file.key} from ${file.url}`);
+    });
+    this.load.once("complete", () => {
+      console.log(`[DIAG] preload() COMPLETE (loader done) — map=${this.currentMapName}`);
     });
 
     // Player sprite sheets
@@ -434,11 +439,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    console.log(`[DIAG] create() START — map=${this.currentMapName} pendingMapData=${!!this.pendingMapData}`);
     // ── Background ─────────────────────────────────────────────────────────
     // Start with grass_basic; updated to the map's defaultTile when map_data arrives
     this.tilesRegistry = (this.cache.json.get("tiles_registry") ?? {}) as Record<string, { type: string; imageWidth: number; imageHeight: number }>;
     const firstTile = Object.keys(this.tilesRegistry)[0] ?? "grass_basic";
     this.bgTileSprite = this.add.tileSprite(0, 0, this.room.state.mapWidth, this.room.state.mapHeight, firstTile).setOrigin(0, 0).setDepth(0);
+    console.log(`[DIAG] bgTileSprite created — texture=${firstTile} mapW=${this.room.state.mapWidth} mapH=${this.room.state.mapHeight} active=${this.bgTileSprite.active}`);
 
     // ── Physics world bounds ────────────────────────────────────────────────
     this.physics.world.setBounds(0, 0, this.room.state.mapWidth, this.room.state.mapHeight);
@@ -478,10 +485,14 @@ export class GameScene extends Phaser.Scene {
 
     // ── Mark created and flush buffers ─────────────────────────────────────
     this.isCreated = true;
+    console.log(`[DIAG] isCreated=true — pendingMapData=${!!this.pendingMapData} pendingPlayers=${this.pendingAddPlayers.length} pendingEnemies=${this.pendingAddEnemies.length}`);
 
     // Apply early network data
     if (this.pendingMapData) {
+      console.log(`[DIAG] Flushing pendingMapData`);
       this.applyMapData(this.pendingMapData);
+    } else {
+      console.log(`[DIAG] No pendingMapData — will wait for get_map response`);
     }
 
     this.pendingAddPlayers.forEach(({ player, sessionId }) => this.doAddPlayer(player, sessionId));
@@ -494,6 +505,7 @@ export class GameScene extends Phaser.Scene {
     this.pendingChatMessages = [];
 
     // Request fresh map data once world is ready
+    console.log(`[DIAG] Sending get_map request`);
     this.room.send("get_map");
 
     // ── Snap to Authoritative Position ─────────────────────────────────────
@@ -1789,7 +1801,28 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyMapData(data: MapDataMessage): void {
-    if (!this.bgTileSprite) return;
+    console.log(`[DIAG] applyMapData() — bgTileSprite exists=${!!this.bgTileSprite} active=${this.bgTileSprite?.active ?? "null"} isCreated=${this.isCreated}`);
+    if (!this.bgTileSprite) { console.warn(`[DIAG] applyMapData() bailed — bgTileSprite is null`); return; }
+
+    // If create() ran before the Colyseus state arrived, mapWidth/mapHeight were 0.
+    // Fix the tile sprite size, physics bounds, and camera bounds now that state is available.
+    const mapW = (this.room.state.mapWidth  as number) || 2000;
+    const mapH = (this.room.state.mapHeight as number) || 2000;
+    console.log(`[DIAG] applyMapData() mapW=${mapW} mapH=${mapH} bgSize=${this.bgTileSprite.width}x${this.bgTileSprite.height}`);
+    if (this.bgTileSprite.width !== mapW || this.bgTileSprite.height !== mapH) {
+      console.log(`[DIAG] Fixing map dimensions from ${this.bgTileSprite.width}x${this.bgTileSprite.height} to ${mapW}x${mapH}`);
+      this.bgTileSprite.setSize(mapW, mapH);
+      this.physics.world.setBounds(0, 0, mapW, mapH);
+      const camW = this.cameras.main.width;
+      const camH = this.cameras.main.height;
+      if (mapW < camW || mapH < camH) {
+        const offsetX = mapW < camW ? -Math.floor((camW - mapW) / 2) : 0;
+        const offsetY = mapH < camH ? -Math.floor((camH - mapH) / 2) : 0;
+        this.cameras.main.setBounds(offsetX, offsetY, Math.max(mapW, camW), Math.max(mapH, camH));
+      } else {
+        this.cameras.main.setBounds(0, 0, mapW, mapH);
+      }
+    }
 
     this.clearMap();
 
@@ -1814,14 +1847,21 @@ export class GameScene extends Phaser.Scene {
 
   private setupRoomListeners(): void {
     this.room.onMessage("map_data", (data: MapDataMessage) => {
-      console.log(`[Network] Received map_data for ${this.currentMapName}. Tiles: ${data.tiles?.length ?? 0}`);
+      console.log(`[DIAG] map_data received — map=${this.currentMapName} isCreated=${this.isCreated} tiles=${data.tiles?.length ?? 0} bgActive=${this.bgTileSprite?.active ?? "null"}`);
       this.pendingMapData = data;
-      // If scene is already active/created, apply immediately
-      if (this.bgTileSprite) this.applyMapData(data);
+      // If scene is already active/created, apply immediately.
+      // Must use isCreated (not bgTileSprite) — bgTileSprite is not nulled in init()
+      // so it still holds a stale destroyed reference during preload, causing a crash.
+      if (this.isCreated) {
+        console.log(`[DIAG] Applying map_data immediately (isCreated=true)`);
+        this.applyMapData(data);
+      } else {
+        console.log(`[DIAG] Stored map_data in pendingMapData (isCreated=false)`);
+      }
     });
 
     // Server confirmed travel — leave current room and join target
-    this.room.onMessage("door_travel", (data: { targetMap: string; spawnX: number; spawnY: number }) => {
+    this.room.onMessage("door_travel", (data: { targetMap: string; spawnX?: number; spawnY?: number }) => {
       void this.travelToMap(data.targetMap, data.spawnX, data.spawnY);
     });
 
@@ -1830,7 +1870,7 @@ export class GameScene extends Phaser.Scene {
       (data: Array<{ nickname: string; level: number; xp: number; partyName: string }>) => {
         console.log(`[Network] Received leaderboard update. Count: ${data.length}`);
         this.globalLeaderboardData = data;
-        this.updateLeaderboard(); // Force refresh
+        if (this.isCreated) this.updateLeaderboard();
       }
     );
 
@@ -1889,17 +1929,17 @@ export class GameScene extends Phaser.Scene {
 
     // Coin drop animation
     this.room.onMessage("coin_drop", (data: { id: string; x: number; y: number }) => {
-      this.spawnCoinAnimation(data.id, data.x, data.y);
+      if (this.isCreated) this.spawnCoinAnimation(data.id, data.x, data.y);
     });
 
     // Coin collected or expired — stop the animation
     this.room.onMessage("coin_collected", (data: { id: string }) => {
-      this.removeCoinAnimation(data.id);
+      if (this.isCreated) this.removeCoinAnimation(data.id);
     });
 
     // Party invite received
     this.room.onMessage("party_invite", (data: { fromId: string; fromNickname: string }) => {
-      this.showPartyInvitePopup(data.fromId, data.fromNickname);
+      if (this.isCreated) this.showPartyInvitePopup(data.fromId, data.fromNickname);
     });
 
     // Track local player's own state changes
@@ -2879,7 +2919,8 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private async travelToMap(targetMap: string, spawnX: number, spawnY: number): Promise<void> {
+  private async travelToMap(targetMap: string, spawnX?: number, spawnY?: number): Promise<void> {
+    console.log(`[DIAG] travelToMap() called — target=${targetMap} spawnX=${spawnX} spawnY=${spawnY} isTeleporting=${this.isTeleporting}`);
     if (this.isTeleporting) return;
     this.isTeleporting = true;
 
