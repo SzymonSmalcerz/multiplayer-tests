@@ -10,6 +10,7 @@ import { ENEMY_REGISTRY, loadEnemyRegistry, EnemyDef } from "../shared/enemies";
 import { WEAPON_REGISTRY, loadWeaponRegistry, WeaponDef } from "../shared/weapons";
 import { TILE_REGISTRY, loadTileRegistry, TileDef } from "../shared/tiles";
 import { GameRoom } from "./GameRoom";
+import { globalBus } from "./GlobalBus";
 
 const PORT = Number(process.env.PORT ?? 3000);
 
@@ -695,6 +696,50 @@ app.post("/design/update-enemy", (req, res) => {
   }
 });
 
+// ── GM session creation ───────────────────────────────────────────────────────
+
+/** Generates a random 6-character uppercase alphanumeric passcode. */
+function generatePasscode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I to avoid confusion
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+app.get("/api/check-session/:passcode", (req, res) => {
+  const passcode = String(req.params.passcode ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  if (!passcode || !globalBus.isValidSession(passcode)) {
+    res.json({ valid: false });
+    return;
+  }
+  res.json({ valid: true, name: globalBus.getSessionName(passcode) });
+});
+
+app.post("/api/create-room", (req, res) => {
+  const { login, password, roomName } = req.body as { login?: string; password?: string; roomName?: string };
+
+  if (login !== "admin" || password !== "admin123") {
+    res.status(401).json({ error: "Invalid credentials" });
+    return;
+  }
+
+  // Generate a unique passcode (retry on the rare collision)
+  let passcode = generatePasscode();
+  let attempts = 0;
+  while (globalBus.isValidSession(passcode) && attempts < 10) {
+    passcode = generatePasscode();
+    attempts++;
+  }
+
+  const name = (typeof roomName === "string" && roomName.trim()) ? roomName.trim().slice(0, 30) : "Unnamed Session";
+  globalBus.createSession(passcode, name);
+
+  console.log(`[Server] GM created session — passcode: ${passcode}, name: "${name}"`);
+  res.json({ passcode, name });
+});
+
 // Catch-all: always serve index.html for unknown routes
 app.get("*", (_req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
@@ -705,8 +750,8 @@ const gameServer = new Server({
   transport: new WebSocketTransport({ server: httpServer }),
 });
 
-// filterBy ensures each mapName gets its own room instance
-gameServer.define("game", GameRoom).filterBy(["mapName"]);
+// filterBy ensures each (passcode + mapName) combination gets its own room instance
+gameServer.define("game", GameRoom).filterBy(["passcode", "mapName"]);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 gameServer

@@ -91,6 +91,10 @@ export class GameScene extends Phaser.Scene {
   private doorSprites = new Map<string, Phaser.GameObjects.Image>();
   private isTeleporting = false;
 
+  // Private session
+  private passcode = "";
+  private isSessionEnded = false;
+
   // Global leaderboard (updated by server every 3 s)
   private globalLeaderboardData: Array<{ nickname: string; level: number; xp: number; partyName: string }> | null = null;
 
@@ -262,12 +266,16 @@ export class GameScene extends Phaser.Scene {
     this.room             = data.room;
     this.localNickname    = data.nickname;
     this.localSkin        = data.skin;
+    this.passcode         = data.passcode ?? "";
     this.mySessionId      = data.room.sessionId as string;
     this.currentMapName   = data.mapName ?? "m1";
     this.isTeleporting    = false;
+    this.isSessionEnded   = false;
     this.isCreated        = false;
     this.localLevel       = 0;
     this.localIsDead      = false;
+    // Keep passcode in localStorage fresh for reconnect
+    if (this.passcode) localStorage.setItem("roomPasscode", this.passcode);
     
     // Clear all tracking maps and buffers
     this.remoteMap.clear();
@@ -440,6 +448,17 @@ export class GameScene extends Phaser.Scene {
     this.createHUD();
     this.createPartyHUD();
     this.createMinimap();
+
+    // ── GM passcode badge ────────────────────────────────────────────────────
+    if (this.localSkin === "gm" && this.passcode) {
+      const w = this.cameras.main.width;
+      this.add.text(w / 2, 10, `Session: ${this.passcode}`, {
+        fontSize:        "13px",
+        color:           "#ff8800",
+        backgroundColor: "rgba(0,0,0,0.55)",
+        padding:         { x: 8, y: 4 },
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(99990);
+    }
 
     // ── Mark created and flush buffers ─────────────────────────────────────
     this.isCreated = true;
@@ -1755,6 +1774,14 @@ export class GameScene extends Phaser.Scene {
       localStorage.removeItem("reconnToken");
     });
 
+    // GM's session ended — all players in the session receive this
+    this.room.onMessage("session_ended", () => {
+      this.isSessionEnded = true;
+      localStorage.removeItem("reconnToken");
+      localStorage.removeItem("roomPasscode");
+      this.showSessionEndedBanner();
+    });
+
     // Coin drop animation
     this.room.onMessage("coin_drop", (data: { id: string; x: number; y: number }) => {
       this.spawnCoinAnimation(data.id, data.x, data.y);
@@ -2781,6 +2808,7 @@ export class GameScene extends Phaser.Scene {
         mapName:     targetMap,
         nickname:    this.localNickname,
         skin:        this.localSkin,
+        passcode:    this.passcode,
         persistentId: localStorage.getItem("playerId") ?? undefined,
         spawnX,
         spawnY,
@@ -2794,6 +2822,7 @@ export class GameScene extends Phaser.Scene {
         room:     newRoom,
         nickname: this.localNickname,
         skin:     this.localSkin,
+        passcode: this.passcode,
         mapName:  targetMap,
         leaderboardData: this.globalLeaderboardData || undefined,
         actionBarState: this.actionBarUI.exportState(),
@@ -3202,7 +3231,15 @@ export class GameScene extends Phaser.Scene {
   // ── Disconnect / reconnect ─────────────────────────────────────────────────
 
   private showDisconnectBanner(): void {
+    if (this.isSessionEnded) return; // session_ended handler already showing its own overlay
     // Transition back to HomeScene — it will auto-reconnect using the saved token
     this.scene.start("HomeScene");
+  }
+
+  private showSessionEndedBanner(): void {
+    // Use isTeleporting to suppress the generic disconnect banner when the socket closes
+    this.isTeleporting = true;
+    const el = document.getElementById("session-ended-overlay");
+    if (el) el.style.display = "flex";
   }
 }

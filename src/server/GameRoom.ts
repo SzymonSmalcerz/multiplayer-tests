@@ -173,6 +173,10 @@ export class GameRoom extends Room<GameState> {
   /** Sessions being force-kicked: skip reconnect grace period and reset their profile */
   private kickedSessions = new Set<string>();
 
+  // ── Session passcode ────────────────────────────────────────────────────────
+  /** Passcode for the private session this room belongs to. */
+  private passcode = "";
+
   // ── Party bookkeeping ──────────────────────────────────────────────────────
   /** targetSessionId → inviterSessionId */
   private pendingInvites = new Map<string, string>();
@@ -186,8 +190,10 @@ export class GameRoom extends Room<GameState> {
   onCreate(options: Record<string, unknown> = {}): void {
     this.setState(new GameState());
     this.setPatchRate(1000 / 20); // 20 Hz state broadcast
+    this.autoDispose = false; // keep alive through door transitions; destroyed by destroySession
 
-    // ── Resolve map name from join options ────────────────────────────────────
+    // ── Resolve passcode and map name from join options ───────────────────────
+    this.passcode = String(options.passcode ?? "").replace(/[^A-Z0-9]/g, "").slice(0, 6);
     this.mapName = String(options.mapName ?? "m1").replace(/[^a-zA-Z0-9_-]/g, "") || "m1";
 
     // ── Load map JSON ─────────────────────────────────────────────────────────
@@ -249,7 +255,8 @@ export class GameRoom extends Room<GameState> {
     // ── Message handlers ──────────────────────────────────────────────────────
 
     // ── Register with GlobalBus for cross-room chat and leaderboard ─────────────
-    globalBus.registerRoom(this.roomId, {
+    globalBus.registerRoom(this.roomId, this.passcode, {
+      passcode:      this.passcode,
       broadcastFn:   (type, msg) => this.broadcast(type, msg),
       onPartyUpdate: (partyId) => this.updatePartyMemberStates(partyId),
       sendToPlayerFn: (pid, type, msg) => {
@@ -268,6 +275,14 @@ export class GameRoom extends Room<GameState> {
           }
         });
         return out;
+      },
+      endSessionFn: () => {
+        // Mark all non-GM players as kicked so onLeave cleans them up without grace period
+        this.state.players.forEach((p, sid) => {
+          if (!p.isGM) this.kickedSessions.add(sid);
+        });
+        this.broadcast("session_ended", {});
+        void this.disconnect();
       },
     });
 
@@ -415,7 +430,7 @@ export class GameRoom extends Room<GameState> {
 
       // If sender already has a party, check it isn't full
       if (sender.partyId !== "") {
-        const party = globalBus.getParty(sender.partyId);
+        const party = globalBus.getParty(this.passcode, sender.partyId);
         if (!party || party.members.size >= 5) return;
       }
 
@@ -452,12 +467,12 @@ export class GameRoom extends Room<GameState> {
 
       let partyId = inviter.partyId;
       if (partyId === "") {
-        partyId = globalBus.createParty(inviterPid, inviter.nickname);
+        partyId = globalBus.createParty(this.passcode, inviterPid, inviter.nickname);
         inviter.partyId      = partyId;
         inviter.isPartyOwner = true;
       }
 
-      const success = globalBus.joinParty(partyId, joinerPid);
+      const success = globalBus.joinParty(this.passcode, partyId, joinerPid);
       if (success) {
         // Schema fields (partyId, isPartyOwner, partyName, partyRoster) are already set
         // for all rooms by the publishPartyUpdate triggered inside joinParty.
@@ -479,7 +494,7 @@ export class GameRoom extends Room<GameState> {
       const name = String(data.name ?? "").trim().slice(0, 20);
       if (name.length === 0) return;
       
-      globalBus.renameParty(sender.partyId, name);
+      globalBus.renameParty(this.passcode, sender.partyId, name);
       this.updatePartyMemberStates(sender.partyId);
     });
 
@@ -500,21 +515,21 @@ export class GameRoom extends Room<GameState> {
       if (!targetPid) return;
 
       const partyId = sender.partyId;
-      const party = globalBus.getParty(partyId);
+      const party = globalBus.getParty(this.passcode, partyId);
       if (!party || !party.members.has(targetPid)) return;
 
       // Fetch nickname from profile if we didn't get it from local state
       if (kickedNickname === "Unknown") {
-        const profile = globalBus.getProfile(targetPid);
+        const profile = globalBus.getProfile(this.passcode, targetPid);
         if (profile) kickedNickname = profile.nickname;
       }
-      
-      globalBus.leaveParty(partyId, targetPid);
+
+      globalBus.leaveParty(this.passcode, partyId, targetPid);
       // publishPartyUpdate is triggered inside leaveParty, so all rooms'
       // updatePartyMemberStates will clear the kicked player's party schema fields.
 
       // Personal notification — works cross-map via GlobalBus.sendToPlayer
-      globalBus.sendToPlayer(targetPid, "chat", {
+      globalBus.sendToPlayer(this.passcode, targetPid, "chat", {
         sessionId: "server",
         nickname:  "Server",
         message:   "You were kicked from the party",
@@ -581,13 +596,18 @@ export class GameRoom extends Room<GameState> {
     });
   }
 
-  onJoin(client: Client, options: { nickname?: string; skin?: string; persistentId?: string; mapName?: string; spawnX?: number; spawnY?: number; login?: string; password?: string }): void {
+  onJoin(client: Client, options: { nickname?: string; skin?: string; persistentId?: string; mapName?: string; spawnX?: number; spawnY?: number; login?: string; password?: string; passcode?: string }): void {
     // ── GM authentication ─────────────────────────────────────────────────────
     const isGMLogin = typeof options.login === "string" || typeof options.password === "string";
     if (isGMLogin) {
       if (options.login !== "admin" || options.password !== "admin123") {
         throw new Error("logging failed");
       }
+    }
+
+    // ── Passcode validation — all joins require a valid session ───────────────
+    if (!globalBus.isValidSession(this.passcode)) {
+      throw new Error("Invalid Room Code");
     }
 
     // ── Multi-window prevention ──────────────────────────────────────────────
@@ -625,7 +645,7 @@ export class GameRoom extends Room<GameState> {
       player.maxHp      = 9999;
       player.attackBonus = 0;
     } else {
-      const profile = pid ? globalBus.getProfile(pid) : undefined;
+      const profile = pid ? globalBus.getProfile(this.passcode, pid) : undefined;
       if (profile) {
         player.nickname            = profile.nickname;
         player.skin                = profile.skin;
@@ -641,7 +661,7 @@ export class GameRoom extends Room<GameState> {
 
         // Validate party still exists in GlobalBus (may have been disbanded in transit)
         if (profile.partyId) {
-          const party = globalBus.getParty(profile.partyId);
+          const party = globalBus.getParty(this.passcode, profile.partyId);
           if (party && party.members.has(pid)) {
             player.partyId      = party.id;
             player.isPartyOwner = profile.isPartyOwner;
@@ -667,7 +687,7 @@ export class GameRoom extends Room<GameState> {
 
     // ── Update Global Profile immediately so party members see us ────────────
     if (pid && !player.isGM) {
-      globalBus.saveProfile(pid, {
+      globalBus.saveProfile(this.passcode, pid, {
         nickname:            player.nickname,
         skin:                player.skin,
         level:               player.level,
@@ -738,6 +758,11 @@ export class GameRoom extends Room<GameState> {
       console.log(`[Room] ${name} reconnected`);
     } catch {
       // Grace period expired — leave party and clean up for real
+      if (player?.isGM) {
+        // GM permanently left — destroy the entire private session
+        console.log(`[Room] GM grace period expired — destroying session ${this.passcode}`);
+        globalBus.destroySession(this.passcode);
+      }
       this.disbandOrLeaveParty(client.sessionId);
       this.cleanupPlayer(client.sessionId);
       console.log(`[Room] ${name} removed (grace period expired). Players: ${this.state.players.size}`);
@@ -755,7 +780,7 @@ export class GameRoom extends Room<GameState> {
     if (pid) {
       if (!player.isGM) {
         if (resetProfile) {
-          globalBus.deleteProfile(pid);
+          globalBus.deleteProfile(this.passcode, pid);
         } else {
           const profile: PlayerProfile = {
             nickname:            player.nickname,
@@ -772,7 +797,7 @@ export class GameRoom extends Room<GameState> {
             isPartyOwner:        player.isPartyOwner,
             partyName:           player.partyName,
           };
-          globalBus.saveProfile(pid, profile);
+          globalBus.saveProfile(this.passcode, pid, profile);
         }
       }
 
@@ -1120,7 +1145,7 @@ export class GameRoom extends Room<GameState> {
    * so the client can do an O(1) look-up instead of a fragile name search.
    */
   private buildRosterJson(partyId: string): string {
-    const party = globalBus.getParty(partyId);
+    const party = globalBus.getParty(this.passcode, partyId);
     if (!party) return "";
 
     const roster: Array<{
@@ -1148,7 +1173,7 @@ export class GameRoom extends Room<GameState> {
         });
       } else {
         // Away member — use profile saved on their last join/sync
-        const profile = globalBus.getProfile(pid);
+        const profile = globalBus.getProfile(this.passcode, pid);
         roster.push({
           pid,
           sessionId: null,
@@ -1165,7 +1190,7 @@ export class GameRoom extends Room<GameState> {
 
   /** Update PlayerState for all local members of a global party. */
   private updatePartyMemberStates(partyId: string): void {
-    const party      = globalBus.getParty(partyId);
+    const party      = globalBus.getParty(this.passcode, partyId);
     const rosterJson = party ? this.buildRosterJson(partyId) : "";
 
     this.state.players.forEach((player, sessionId) => {
@@ -1201,14 +1226,14 @@ export class GameRoom extends Room<GameState> {
       const pid = this.sessionToPersistentId.get(sessionId);
       if (!pid) return;
 
-      const profile = globalBus.getProfile(pid);
+      const profile = globalBus.getProfile(this.passcode, pid);
       if (profile && (profile.hp !== player.hp || profile.maxHp !== player.maxHp)) {
-        globalBus.saveProfile(pid, { ...profile, hp: player.hp, maxHp: player.maxHp });
+        globalBus.saveProfile(this.passcode, pid, { ...profile, hp: player.hp, maxHp: player.maxHp });
         partiesNeedingRefresh.add(player.partyId);
       }
     });
 
-    partiesNeedingRefresh.forEach((partyId) => globalBus.refreshParty(partyId));
+    partiesNeedingRefresh.forEach((partyId) => globalBus.refreshParty(this.passcode, partyId));
   }
 
   private disbandOrLeaveParty(sessionId: string): void {
@@ -1224,9 +1249,9 @@ export class GameRoom extends Room<GameState> {
 
     if (isOwner) {
       this.sendPartyChat(partyId, "Party was disbanded");
-      globalBus.disbandParty(partyId);
+      globalBus.disbandParty(this.passcode, partyId);
     } else {
-      globalBus.leaveParty(partyId, pid);
+      globalBus.leaveParty(this.passcode, partyId, pid);
       this.sendPartyChat(partyId, `${nickname} has left the party`);
     }
     
@@ -1420,7 +1445,7 @@ export class GameRoom extends Room<GameState> {
       return;
     }
 
-    const party = globalBus.getParty(killer.partyId);
+    const party = globalBus.getParty(this.passcode, killer.partyId);
     if (!party) { killer.xp += xpAmount; this.checkLevelUp(killerSessionId); return; }
 
     // Collect ALL members of this party who are currently in THIS room and nearby
@@ -1535,7 +1560,7 @@ export class GameRoom extends Room<GameState> {
       return;
     }
 
-    const party = globalBus.getParty(recipient.partyId);
+    const party = globalBus.getParty(this.passcode, recipient.partyId);
     if (!party) {
       recipient.gold += amount;
       this.sendGoldNotification(recipientId, amount);

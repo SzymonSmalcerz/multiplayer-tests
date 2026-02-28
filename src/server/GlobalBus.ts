@@ -1,5 +1,6 @@
 /**
  * GlobalBus — process-wide singleton that bridges all active GameRoom instances.
+ * All state is scoped by passcode so separate private sessions are fully isolated.
  */
 
 export interface PlayerProfile {
@@ -34,27 +35,79 @@ type GetPlayersFn = () => Array<{
 }>;
 
 interface RoomHandle {
+  passcode:       string;
   broadcastFn:    BroadcastFn;
   getPlayersFn:   GetPlayersFn;
   onPartyUpdate?: (partyId: string) => void;
   /** Try to send a typed message to one specific player (by persistentId). Returns true if found. */
   sendToPlayerFn: (pid: string, type: string, msg: unknown) => boolean;
+  /** Broadcasts "session_ended" to all clients and disconnects the room. */
+  endSessionFn:   () => void;
 }
 
 class GlobalBus {
-  private rooms             = new Map<string, RoomHandle>();
+  private rooms = new Map<string, RoomHandle>();
   private leaderboardTimer: ReturnType<typeof setInterval> | null = null;
 
-  // ── Global State ─────────────────────────────────────────────────────────────
-  /** persistentId -> PlayerProfile */
-  private profiles = new Map<string, PlayerProfile>();
-  /** partyId (owner persistentId) -> GlobalParty */
-  private parties  = new Map<string, GlobalParty>();
+  // ── Session registry ─────────────────────────────────────────────────────────
+  /** passcode → session metadata */
+  private activeSessions = new Map<string, { name: string }>();
+
+  // ── Per-session state ────────────────────────────────────────────────────────
+  /** passcode → persistentId → PlayerProfile */
+  private profiles = new Map<string, Map<string, PlayerProfile>>();
+  /** passcode → partyId (owner persistentId) → GlobalParty */
+  private parties  = new Map<string, Map<string, GlobalParty>>();
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  private getSessionProfiles(passcode: string): Map<string, PlayerProfile> {
+    let m = this.profiles.get(passcode);
+    if (!m) { m = new Map(); this.profiles.set(passcode, m); }
+    return m;
+  }
+
+  private getSessionParties(passcode: string): Map<string, GlobalParty> {
+    let m = this.parties.get(passcode);
+    if (!m) { m = new Map(); this.parties.set(passcode, m); }
+    return m;
+  }
+
+  // ── Session lifecycle ────────────────────────────────────────────────────────
+
+  createSession(passcode: string, name: string): void {
+    this.activeSessions.set(passcode, { name });
+    // Pre-initialize empty maps for this session
+    this.profiles.set(passcode, new Map());
+    this.parties.set(passcode, new Map());
+  }
+
+  destroySession(passcode: string): void {
+    // Notify and disconnect every room in this session
+    this.rooms.forEach((handle) => {
+      if (handle.passcode === passcode) {
+        handle.endSessionFn();
+      }
+    });
+
+    // Purge all session-scoped data
+    this.activeSessions.delete(passcode);
+    this.profiles.delete(passcode);
+    this.parties.delete(passcode);
+  }
+
+  isValidSession(passcode: string): boolean {
+    return this.activeSessions.has(passcode);
+  }
+
+  getSessionName(passcode: string): string {
+    return this.activeSessions.get(passcode)?.name ?? "";
+  }
 
   // ── Room registration ────────────────────────────────────────────────────────
 
-  registerRoom(roomId: string, handle: RoomHandle): void {
-    this.rooms.set(roomId, handle);
+  registerRoom(roomId: string, passcode: string, handle: RoomHandle): void {
+    this.rooms.set(roomId, { ...handle, passcode });
     if (!this.leaderboardTimer) {
       this.leaderboardTimer = setInterval(() => this.broadcastLeaderboard(), 3000);
     }
@@ -72,101 +125,104 @@ class GlobalBus {
 
   // ── Profile Management ───────────────────────────────────────────────────────
 
-  getProfile(persistentId: string): PlayerProfile | undefined {
-    return this.profiles.get(persistentId);
+  getProfile(passcode: string, persistentId: string): PlayerProfile | undefined {
+    return this.getSessionProfiles(passcode).get(persistentId);
   }
 
-  saveProfile(persistentId: string, profile: PlayerProfile): void {
-    this.profiles.set(persistentId, profile);
+  saveProfile(passcode: string, persistentId: string, profile: PlayerProfile): void {
+    this.getSessionProfiles(passcode).set(persistentId, profile);
   }
 
-  deleteProfile(persistentId: string): void {
-    this.profiles.delete(persistentId);
+  deleteProfile(passcode: string, persistentId: string): void {
+    this.getSessionProfiles(passcode).delete(persistentId);
   }
 
   // ── Party Management ─────────────────────────────────────────────────────────
 
-  getParty(partyId: string): GlobalParty | undefined {
-    return this.parties.get(partyId);
+  getParty(passcode: string, partyId: string): GlobalParty | undefined {
+    return this.getSessionParties(passcode).get(partyId);
   }
 
-  createParty(ownerPid: string, ownerNickname: string): string {
+  createParty(passcode: string, ownerPid: string, ownerNickname: string): string {
     const partyId = ownerPid;
     const name = `${ownerNickname.slice(0, 10)}'s party`;
-    this.parties.set(partyId, {
+    this.getSessionParties(passcode).set(partyId, {
       id: partyId,
       name: name,
       members: new Set([ownerPid]),
     });
-    this.publishPartyUpdate(partyId);
+    this.publishPartyUpdate(passcode, partyId);
     return partyId;
   }
 
-  disbandParty(partyId: string): void {
-    this.parties.delete(partyId);
-    this.publishPartyUpdate(partyId);
+  disbandParty(passcode: string, partyId: string): void {
+    this.getSessionParties(passcode).delete(partyId);
+    this.publishPartyUpdate(passcode, partyId);
   }
 
-  joinParty(partyId: string, memberPid: string): boolean {
-    const party = this.parties.get(partyId);
+  joinParty(passcode: string, partyId: string, memberPid: string): boolean {
+    const party = this.getSessionParties(passcode).get(partyId);
     if (party && party.members.size < 5) {
       party.members.add(memberPid);
-      this.publishPartyUpdate(partyId);
+      this.publishPartyUpdate(passcode, partyId);
       return true;
     }
     return false;
   }
 
-  leaveParty(partyId: string, memberPid: string): void {
-    const party = this.parties.get(partyId);
+  leaveParty(passcode: string, partyId: string, memberPid: string): void {
+    const party = this.getSessionParties(passcode).get(partyId);
     if (party) {
       party.members.delete(memberPid);
       if (party.members.size <= 1) {
-        this.disbandParty(partyId);
+        this.disbandParty(passcode, partyId);
       } else {
-        this.publishPartyUpdate(partyId);
+        this.publishPartyUpdate(passcode, partyId);
       }
     }
   }
 
-  renameParty(partyId: string, newName: string): void {
-    const party = this.parties.get(partyId);
+  renameParty(passcode: string, partyId: string, newName: string): void {
+    const party = this.getSessionParties(passcode).get(partyId);
     if (party) {
       party.name = newName;
-      this.publishPartyUpdate(partyId);
+      this.publishPartyUpdate(passcode, partyId);
     }
   }
 
-  private publishPartyUpdate(partyId: string): void {
+  private publishPartyUpdate(passcode: string, partyId: string): void {
     this.rooms.forEach((handle) => {
-      if (handle.onPartyUpdate) {
+      if (handle.passcode === passcode && handle.onPartyUpdate) {
         handle.onPartyUpdate(partyId);
       }
     });
   }
 
   /** Force a cross-room roster refresh for an active party (e.g. after live HP sync). */
-  refreshParty(partyId: string): void {
-    this.publishPartyUpdate(partyId);
+  refreshParty(passcode: string, partyId: string): void {
+    this.publishPartyUpdate(passcode, partyId);
   }
 
   /**
-   * Send a typed message to a specific player identified by persistentId.
-   * Iterates all rooms until one finds the active session and delivers the message.
+   * Send a typed message to a specific player identified by persistentId,
+   * searching only rooms in the same passcode session.
    */
-  sendToPlayer(targetPid: string, type: string, msg: unknown): void {
+  sendToPlayer(passcode: string, targetPid: string, type: string, msg: unknown): void {
     for (const handle of this.rooms.values()) {
-      if (handle.sendToPlayerFn(targetPid, type, msg)) return;
+      if (handle.passcode === passcode) {
+        if (handle.sendToPlayerFn(targetPid, type, msg)) return;
+      }
     }
   }
 
-  getPartyRoster(partyId: string): Array<{ pid: string; nickname: string; level: number; hp: number; maxHp: number }> {
-    const party = this.parties.get(partyId);
+  getPartyRoster(passcode: string, partyId: string): Array<{ pid: string; nickname: string; level: number; hp: number; maxHp: number }> {
+    const party = this.getSessionParties(passcode).get(partyId);
     if (!party) return [];
 
+    const sessionProfiles = this.getSessionProfiles(passcode);
     const roster: Array<{ pid: string; nickname: string; level: number; hp: number; maxHp: number }> = [];
     party.members.forEach((pid) => {
-      const profile = this.profiles.get(pid);
+      const profile = sessionProfiles.get(pid);
       if (profile) {
         roster.push({
           pid,
@@ -191,45 +247,53 @@ class GlobalBus {
   // ── Cross-room chat ──────────────────────────────────────────────────────────
 
   /**
-   * Relay a chat payload to every room except the one that originally sent it.
+   * Relay a chat payload to every room in the same session except the source.
    */
   publishChat(
     payload: { sessionId: string; nickname: string; message: string },
     sourceRoomId: string,
   ): void {
+    const sourceHandle = this.rooms.get(sourceRoomId);
+    if (!sourceHandle) return;
+    const passcode = sourceHandle.passcode;
+
     this.rooms.forEach((handle, id) => {
-      if (id !== sourceRoomId) {
+      if (id !== sourceRoomId && handle.passcode === passcode) {
         handle.broadcastFn("chat", payload);
       }
     });
   }
 
-  // ── Global leaderboard ───────────────────────────────────────────────────────
+  // ── Per-session leaderboard ──────────────────────────────────────────────────
 
   broadcastLeaderboard(): void {
-    const allPlayers: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
-
+    // Group rooms by passcode
+    const byPasscode = new Map<string, RoomHandle[]>();
     this.rooms.forEach((handle) => {
-      for (const p of handle.getPlayersFn()) {
-        if (!p.isDead) {
-          allPlayers.push({
-            nickname:  p.nickname,
-            level:     p.level,
-            xp:        p.xp,
-            partyName: p.partyName,
-          });
-        }
-      }
+      const pc = handle.passcode;
+      if (!byPasscode.has(pc)) byPasscode.set(pc, []);
+      byPasscode.get(pc)!.push(handle);
     });
 
-    allPlayers.sort((a, b) => b.level !== a.level ? b.level - a.level : b.xp - a.xp);
-    const top5 = allPlayers.slice(0, 5);
+    byPasscode.forEach((handles) => {
+      const allPlayers: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
 
-    // Skip broadcast if empty to prevent overwriting client state during map transitions
-    if (top5.length === 0) return;
+      for (const handle of handles) {
+        for (const p of handle.getPlayersFn()) {
+          if (!p.isDead) {
+            allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName });
+          }
+        }
+      }
 
-    this.rooms.forEach((handle) => {
-      handle.broadcastFn("global_leaderboard", top5);
+      allPlayers.sort((a, b) => b.level !== a.level ? b.level - a.level : b.xp - a.xp);
+      const top5 = allPlayers.slice(0, 5);
+
+      if (top5.length === 0) return;
+
+      for (const handle of handles) {
+        handle.broadcastFn("global_leaderboard", top5);
+      }
     });
   }
 }

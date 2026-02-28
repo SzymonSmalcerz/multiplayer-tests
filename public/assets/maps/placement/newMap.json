@@ -1,0 +1,23 @@
+{
+  "mapWidth": 300,
+  "mapHeight": 300,
+  "defaultTile": "dirt",
+  "spawnPoint": {
+    "x": 100,
+    "y": 100
+  },
+  "tiles": [],
+  "objects": [],
+  "npcs": [],
+  "mobs": [],
+  "enemies": [],
+  "neutralZones": [
+    {
+      "x": -30,
+      "y": -13,
+      "width": 379,
+      "height": 345
+    }
+  ],
+  "doors": []
+}

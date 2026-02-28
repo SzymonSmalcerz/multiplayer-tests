@@ -116,6 +116,7 @@ export interface GameSceneData {
   room:      any; // Colyseus.Room<any>
   nickname:  string;
   skin:      string;
+  passcode?: string;
   mapName?:  string;
   leaderboardData?: Array<{ nickname: string; level: number; xp: number; partyName: string }>;
   actionBarState?: any;
