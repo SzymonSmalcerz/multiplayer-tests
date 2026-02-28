@@ -16,7 +16,9 @@ interface PlayerSnapshot {
 /**
  * Always-visible 4-slot action bar at the bottom-centre of the screen.
  * Slots are assigned by dragging items from the Equipment panel.
- * Keys 1–4 (handled in GameScene) and right-click consume the item in that slot.
+ * Right-click on a filled slot → consume the item.
+ * Left-drag on a filled slot → move it to another slot or drop anywhere to remove.
+ * Keys 1–4 (handled in GameScene) also consume the item in that slot.
  */
 export class ActionBarUI {
   private scene: Phaser.Scene;
@@ -25,31 +27,41 @@ export class ActionBarUI {
   ];
 
   // Per-slot display objects
-  private slotBg:     Phaser.GameObjects.Graphics[]          = [];
-  private slotIcons:  Array<Phaser.GameObjects.Image | null> = [null, null, null, null];
-  private slotCounts: Phaser.GameObjects.Text[]              = [];
-  private slotLabels: Phaser.GameObjects.Text[]              = [];
+  private slotBg:       Phaser.GameObjects.Graphics[]          = [];
+  private slotIcons:    Array<Phaser.GameObjects.Image | null> = [null, null, null, null];
+  private slotCounts:   Phaser.GameObjects.Text[]              = [];
+  private slotLabels:   Phaser.GameObjects.Text[]              = [];
+  private slotHitAreas: Phaser.GameObjects.Rectangle[]         = [];
 
   // Screen-space bounds for each slot (used by EquipmentUI drag-drop)
   private bounds: Array<{ x: number; y: number; w: number; h: number }> = [];
 
+  // Drag state
+  private dragGhost:       Phaser.GameObjects.Image | null            = null;
+  private dragSourceIdx:   number | null                              = null;
+  private dragMoveHandler: ((ptr: Phaser.Input.Pointer) => void) | null = null;
+  private dragUpHandler:   ((ptr: Phaser.Input.Pointer) => void) | null = null;
+
   private getPlayerState: () => PlayerSnapshot | null;
   private onActivate:     (itemType: ItemType) => void;
+  private onPointerDown:  () => void;
 
   private lastSnapshot: PlayerSnapshot = { potions: 0, potionHealRemaining: 0, hp: 0, maxHp: 100 };
 
-  static readonly SLOT_W  = 60;
-  static readonly SLOT_H  = 60;
+  static readonly SLOT_W   = 60;
+  static readonly SLOT_H   = 60;
   static readonly SLOT_GAP = 8;
 
   constructor(
     scene:          Phaser.Scene,
     getPlayerState: () => PlayerSnapshot | null,
     onActivate:     (itemType: ItemType) => void,
+    onPointerDown:  () => void,
   ) {
     this.scene          = scene;
     this.getPlayerState = getPlayerState;
     this.onActivate     = onActivate;
+    this.onPointerDown  = onPointerDown;
 
     // Load from localStorage if available
     const saved = localStorage.getItem("actionBarState");
@@ -101,16 +113,20 @@ export class ActionBarUI {
         }).setOrigin(1, 0).setScrollFactor(0).setDepth(D + 3).setVisible(false),
       );
 
-      this.slotIcons.push(null);
-
-      // Hit area — handles right-click
+      // Hit area — right-click to use, left-drag to reorder/remove
       const idx = i;
       const hitArea = s.add.rectangle(cx + SLOT_W / 2, cy + SLOT_H / 2, SLOT_W, SLOT_H, 0, 0)
         .setScrollFactor(0).setDepth(D + 4)
         .setInteractive({ useHandCursor: true });
+      this.slotHitAreas.push(hitArea);
 
       hitArea.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
-        if (ptr.rightButtonDown()) this.activateSlot(idx);
+        this.onPointerDown();
+        if (ptr.rightButtonDown()) {
+          this.activateSlot(idx);
+        } else if (this.slots[idx].item) {
+          this.beginDrag(ptr, idx);
+        }
       });
       hitArea.on("pointerover", () => this.drawSlotBg(idx, true));
       hitArea.on("pointerout",  () => this.drawSlotBg(idx, false));
@@ -137,6 +153,7 @@ export class ActionBarUI {
   /** Called every frame by GameScene to refresh counts and availability. */
   update(potions: number, potionHealRemaining: number, hp: number, maxHp: number): void {
     this.lastSnapshot = { potions, potionHealRemaining, hp, maxHp };
+    this.reposition();
 
     for (let i = 0; i < 4; i++) {
       const item = this.slots[i].item;
@@ -176,7 +193,65 @@ export class ActionBarUI {
     this.onActivate(item);
   }
 
-  // ── Private helpers ──────────────────────────────────────────────────────────
+  // ── Drag ─────────────────────────────────────────────────────────────────────
+
+  private beginDrag(ptr: Phaser.Input.Pointer, sourceIdx: number): void {
+    const item = this.slots[sourceIdx].item;
+    if (!item) return;
+
+    this.dragSourceIdx = sourceIdx;
+
+    const ghost = this.scene.add.image(ptr.x, ptr.y, item)
+      .setScrollFactor(0).setDepth(999999).setAlpha(0.75);
+    ghost.setDisplaySize(36, 36);
+    this.dragGhost = ghost;
+
+    this.dragMoveHandler = (p: Phaser.Input.Pointer) => {
+      this.dragGhost?.setPosition(p.x, p.y);
+    };
+    this.dragUpHandler = (p: Phaser.Input.Pointer) => {
+      this.endDrag(p);
+    };
+
+    this.scene.input.on("pointermove", this.dragMoveHandler);
+    this.scene.input.on("pointerup",   this.dragUpHandler);
+  }
+
+  private endDrag(ptr: Phaser.Input.Pointer): void {
+    const s = this.scene;
+
+    if (this.dragMoveHandler) { s.input.off("pointermove", this.dragMoveHandler); this.dragMoveHandler = null; }
+    if (this.dragUpHandler)   { s.input.off("pointerup",   this.dragUpHandler);   this.dragUpHandler   = null; }
+    if (this.dragGhost)       { this.dragGhost.destroy(); this.dragGhost = null; }
+
+    const sourceIdx = this.dragSourceIdx;
+    this.dragSourceIdx = null;
+    if (sourceIdx === null) return;
+
+    // Check if dropped onto another action bar slot
+    for (let i = 0; i < this.bounds.length; i++) {
+      const b = this.bounds[i];
+      if (ptr.x >= b.x && ptr.x <= b.x + b.w && ptr.y >= b.y && ptr.y <= b.y + b.h) {
+        if (i !== sourceIdx) {
+          // Swap
+          const temp           = this.slots[i].item;
+          this.slots[i].item   = this.slots[sourceIdx].item;
+          this.slots[sourceIdx].item = temp;
+          this.rebuildSlotIcon(i);
+          this.rebuildSlotIcon(sourceIdx);
+          localStorage.setItem("actionBarState", JSON.stringify(this.exportState()));
+        }
+        return;
+      }
+    }
+
+    // Dropped outside all slots → remove item
+    this.slots[sourceIdx].item = null;
+    this.rebuildSlotIcon(sourceIdx);
+    localStorage.setItem("actionBarState", JSON.stringify(this.exportState()));
+  }
+
+  // ── Private helpers ───────────────────────────────────────────────────────────
 
   private canUse(item: ItemType): boolean {
     const s = this.lastSnapshot;
@@ -214,13 +289,33 @@ export class ActionBarUI {
       return;
     }
 
-    const texKey  = item; // texture key matches item type
     const MAX_ICO = SLOT_W - 12;
-    const icon = s.add.image(cx + SLOT_W / 2, cy + SLOT_H / 2 - 4, texKey)
+    const icon = s.add.image(cx + SLOT_W / 2, cy + SLOT_H / 2 - 4, item)
       .setScrollFactor(0).setDepth(D + 2);
     const sc = Math.min(MAX_ICO / icon.width, MAX_ICO / icon.height);
     icon.setDisplaySize(Math.round(icon.width * sc), Math.round(icon.height * sc));
     this.slotIcons[slotIndex] = icon;
+  }
+
+  private reposition(): void {
+    if (this.slotBg.length === 0) return;
+    const { SLOT_W, SLOT_H, SLOT_GAP } = ActionBarUI;
+    const { width, height } = this.scene.scale;
+    const totalW = 4 * SLOT_W + 3 * SLOT_GAP;
+    const startX = Math.round((width - totalW) / 2);
+    const startY = height - SLOT_H - 14;
+
+    for (let i = 0; i < 4; i++) {
+      const cx = startX + i * (SLOT_W + SLOT_GAP);
+      const cy = startY;
+      this.bounds[i] = { x: cx, y: cy, w: SLOT_W, h: SLOT_H };
+      this.drawSlotBg(i, false);
+      this.slotLabels[i].setPosition(cx + 4, cy + SLOT_H - 14);
+      this.slotCounts[i].setPosition(cx + SLOT_W - 4, cy + SLOT_H - 14);
+      this.slotHitAreas[i].setPosition(cx + SLOT_W / 2, cy + SLOT_H / 2);
+      const icon = this.slotIcons[i];
+      if (icon) icon.setPosition(cx + SLOT_W / 2, cy + SLOT_H / 2 - 4);
+    }
   }
 
   private drawSlotBg(index: number, hovered: boolean): void {
@@ -239,13 +334,13 @@ export class ActionBarUI {
       .strokeRect(cx, cy, SLOT_W, SLOT_H)
       // Corner accents
       .lineStyle(1, 0xffd770, 0.6)
-      .lineBetween(cx,          cy,          cx + 8,       cy)
-      .lineBetween(cx,          cy,          cx,            cy + 8)
+      .lineBetween(cx,          cy,          cx + 8,          cy)
+      .lineBetween(cx,          cy,          cx,              cy + 8)
       .lineBetween(cx + SLOT_W, cy,          cx + SLOT_W - 8, cy)
-      .lineBetween(cx + SLOT_W, cy,          cx + SLOT_W,  cy + 8)
-      .lineBetween(cx,          cy + SLOT_H, cx + 8,       cy + SLOT_H)
-      .lineBetween(cx,          cy + SLOT_H, cx,            cy + SLOT_H - 8)
+      .lineBetween(cx + SLOT_W, cy,          cx + SLOT_W,     cy + 8)
+      .lineBetween(cx,          cy + SLOT_H, cx + 8,          cy + SLOT_H)
+      .lineBetween(cx,          cy + SLOT_H, cx,              cy + SLOT_H - 8)
       .lineBetween(cx + SLOT_W, cy + SLOT_H, cx + SLOT_W - 8, cy + SLOT_H)
-      .lineBetween(cx + SLOT_W, cy + SLOT_H, cx + SLOT_W,  cy + SLOT_H - 8);
+      .lineBetween(cx + SLOT_W, cy + SLOT_H, cx + SLOT_W,     cy + SLOT_H - 8);
   }
 }

@@ -102,7 +102,7 @@ export class GameScene extends Phaser.Scene {
 
   // Local death state
   private localGrave?: Phaser.GameObjects.Image;
-  private diedOverlay?: Phaser.GameObjects.Graphics;
+  private diedOverlay?: Phaser.GameObjects.Rectangle;
   private diedText?: Phaser.GameObjects.Text;
   private countdownText?: Phaser.GameObjects.Text;
   private localIsDead    = false;
@@ -509,6 +509,7 @@ export class GameScene extends Phaser.Scene {
       (itemType) => {
         if (itemType === "health_potion") this.room.send("use_potion");
       },
+      () => { this.ignoreNextMapClick = true; },
     );
     if (this.pendingActionBarState) this.actionBarUI.importState(this.pendingActionBarState);
     this.actionBarUI.build();
@@ -663,7 +664,10 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.input.keyboard!.on("keydown-ESC", () => {
-      if (this.isTyping) this.stopTyping(false);
+      if (this.isTyping) { this.stopTyping(false); return; }
+      this.shopUI?.close();
+      this.healerShopUI?.close();
+      this.equipmentUI?.close();
     });
   }
 
@@ -737,6 +741,7 @@ export class GameScene extends Phaser.Scene {
     this.updatePartyHUD();
     this.updateLeaderboard();
     
+    this.repositionMinimapUI();
     if (this.minimapOpen) {
       this.updateMinimap();
     }
@@ -1150,11 +1155,12 @@ export class GameScene extends Phaser.Scene {
     const mmY = 8;
     this.minimapBg = this.add.graphics()
       .fillStyle(0x111111, 0.85)
-      .fillRect(mmX, mmY, MINIMAP_SIZE, MINIMAP_SIZE)
+      .fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE)
       .lineStyle(1, 0x334433, 1)
-      .strokeRect(mmX, mmY, MINIMAP_SIZE, MINIMAP_SIZE)
+      .strokeRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE)
       .setScrollFactor(0)
       .setDepth(D)
+      .setPosition(mmX, mmY)
       .setVisible(false);
 
     // 3. Dots
@@ -1222,6 +1228,18 @@ export class GameScene extends Phaser.Scene {
   private toggleMinimap(): void {
     if (this.minimapOpen) this.closeMinimap();
     else this.openMinimap();
+  }
+
+  private repositionMinimapUI(): void {
+    const camW = this.cameras.main.width;
+    const mmX = camW - 208;
+    const mmY = 8;
+    this.minimapIcon.setPosition(camW - 56, 8);
+    if (this.minimapOpen) {
+      this.minimapBg.setPosition(mmX, mmY);
+      this.minimapCloseBtn.setPosition(camW - 16, 12);
+      this.minimapNorthLabel.setPosition(mmX + MINIMAP_SIZE / 2, mmY + 4);
+    }
   }
 
   private updateMinimap(): void {
@@ -1414,9 +1432,8 @@ export class GameScene extends Phaser.Scene {
     const w = this.cameras.main.width;
     const h = this.cameras.main.height;
 
-    this.diedOverlay = this.add.graphics()
-      .fillStyle(0x000000, 0.7)
-      .fillRect(0, 0, w, h)
+    this.diedOverlay = this.add.rectangle(0, 0, w, h, 0x000000, 0.7)
+      .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(100010)
       .setVisible(false);
@@ -1496,6 +1513,12 @@ export class GameScene extends Phaser.Scene {
     this.localDeathTimer -= delta / 1000;
     const secs = Math.max(1, Math.ceil(this.localDeathTimer));
     this.countdownText?.setText(String(secs));
+
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    this.diedOverlay?.setSize(w, h);
+    this.diedText?.setPosition(w / 2, h / 2 - 50);
+    this.countdownText?.setPosition(w / 2, h / 2 + 24);
   }
 
   // ── Setup helpers ──────────────────────────────────────────────────────────
