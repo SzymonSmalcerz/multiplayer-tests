@@ -6,6 +6,8 @@ interface ScrollItem {
   baseY: number;
 }
 
+interface SavedPos { rightOffset: number; topOffset: number; }
+
 /**
  * Self-contained shop panel UI.
  * All weapon rows are scene-level objects (NOT inside a Container) so that
@@ -31,6 +33,13 @@ export class ShopUI {
   private scrollThumb: Phaser.GameObjects.Graphics | null = null;
   private scrollThumbCfg: { trackY: number; trackH: number; thumbH: number; thumbW: number; barX: number } | null = null;
 
+  // ── Drag-to-reposition ────────────────────────────────────────────────────
+  private static readonly LS_KEY = "shop_pos";
+  private savedPos: SavedPos | null = null;
+  private dragPreview:     Phaser.GameObjects.Graphics | null            = null;
+  private dragMoveHandler: ((ptr: Phaser.Input.Pointer) => void) | null = null;
+  private dragUpHandler:   ((ptr: Phaser.Input.Pointer) => void) | null = null;
+
   /** Returns current player gold and equipped weapon from live game state. */
   private getPlayerState: () => { gold: number; weapon: string } | null;
   /** Called when the player confirms a purchase. */
@@ -50,6 +59,9 @@ export class ShopUI {
     this.getPlayerState = getPlayerState;
     this.onBuy          = onBuy;
     this.onInteract     = onInteract;
+
+    const raw = localStorage.getItem(ShopUI.LS_KEY);
+    if (raw) { try { this.savedPos = JSON.parse(raw); } catch (e) { /* ignore */ } }
   }
 
   get isShopOpen(): boolean { return this.isOpen; }
@@ -80,8 +92,7 @@ export class ShopUI {
     const visibleH      = panelH - HEADER_H - PADDING_B;
     const isScrollable  = totalH > visibleH;
 
-    const px  = Math.round((width  - PANEL_W) / 2);
-    const py  = Math.round((height - panelH)  / 2);
+    const { px, py } = this.getPanelOrigin(width, height, PANEL_W, panelH);
     const D   = 200000;
     const scrollY = py + HEADER_H;   // top of the scrollable content area
 
@@ -133,6 +144,18 @@ export class ShopUI {
     closeBtn.on("pointerover", () => closeBtn.setColor("#ff4444"));
     closeBtn.on("pointerout",  () => closeBtn.setColor("#ffffff"));
     closeBtn.on("pointerdown", () => { this.onInteract(); this.close(); });
+
+    // ── Drag handle (title bar left of close button) ─────────────────────────
+    const dragHandle = add(s.add.rectangle(
+      px + (PANEL_W - 32) / 2, py + HEADER_H / 2,
+      PANEL_W - 32, HEADER_H,
+      0x000000, 0,
+    ).setScrollFactor(0).setDepth(D + 2).setInteractive({ useHandCursor: true })) as Phaser.GameObjects.Rectangle;
+
+    dragHandle.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
+      this.onInteract();
+      this.beginPanelDrag(ptr, px, py, PANEL_W, panelH);
+    });
 
     // ── Divider ──────────────────────────────────────────────────────────────
     add(s.add.graphics())
@@ -270,6 +293,59 @@ export class ShopUI {
     }
   }
 
+  private getPanelOrigin(width: number, height: number, panelW: number, panelH: number): { px: number; py: number } {
+    if (this.savedPos) {
+      const px = Math.max(0, Math.min(width  - panelW, width  - this.savedPos.rightOffset));
+      const py = Math.max(0, Math.min(height - panelH, this.savedPos.topOffset));
+      return { px, py };
+    }
+    return {
+      px: Math.round((width  - panelW) / 2),
+      py: Math.round((height - panelH) / 2),
+    };
+  }
+
+  private beginPanelDrag(ptr: Phaser.Input.Pointer, panelX: number, panelY: number, panelW: number, panelH: number): void {
+    const { width, height } = this.scene.scale;
+    const startX = ptr.x;
+    const startY = ptr.y;
+
+    const preview = this.scene.add.graphics()
+      .lineStyle(2, 0x998844, 0.8)
+      .strokeRoundedRect(panelX, panelY, panelW, panelH, 8)
+      .setScrollFactor(0).setDepth(300000);
+    this.dragPreview = preview;
+
+    this.dragMoveHandler = (p: Phaser.Input.Pointer) => {
+      const newPx = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
+      const newPy = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
+      preview.clear()
+        .lineStyle(2, 0x998844, 0.8)
+        .strokeRoundedRect(newPx, newPy, panelW, panelH, 8);
+    };
+
+    this.dragUpHandler = (p: Phaser.Input.Pointer) => {
+      const newPx = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
+      const newPy = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
+
+      this.savedPos = { rightOffset: width - newPx, topOffset: newPy };
+      localStorage.setItem(ShopUI.LS_KEY, JSON.stringify(this.savedPos));
+
+      this.cleanupDrag();
+      this.close();
+      this.open();
+    };
+
+    this.scene.input.on("pointermove", this.dragMoveHandler);
+    this.scene.input.on("pointerup",   this.dragUpHandler);
+  }
+
+  private cleanupDrag(): void {
+    if (this.dragMoveHandler) { this.scene.input.off("pointermove", this.dragMoveHandler); this.dragMoveHandler = null; }
+    if (this.dragUpHandler)   { this.scene.input.off("pointerup",   this.dragUpHandler);   this.dragUpHandler   = null; }
+    if (this.dragPreview)     { this.dragPreview.destroy(); this.dragPreview = null; }
+  }
+
   private applyScroll(): void {
     for (const { obj, baseY } of this.scrollItems) {
       obj.setY(baseY - this.scrollOffset);
@@ -288,6 +364,8 @@ export class ShopUI {
   close(): void {
     if (!this.isOpen) return;
     this.isOpen = false;
+
+    this.cleanupDrag();
 
     if (this.wheelHandler) {
       this.scene.input.off("wheel", this.wheelHandler);

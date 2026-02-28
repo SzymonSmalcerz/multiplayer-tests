@@ -10,6 +10,8 @@ interface PlayerSnapshot {
   maxHp: number;
 }
 
+interface SavedPos { rightOffset: number; topOffset: number; }
+
 /**
  * Self-contained equipment panel UI.
  * Upper section: eq_background.png with an overlay weapon slot.
@@ -41,11 +43,18 @@ export class EquipmentUI {
   // Tracked separately so the whole cell can be destroyed when count hits 0
   private potionCellObjects: Phaser.GameObjects.GameObject[] = [];
 
-  // Drag state
+  // Item drag state (inventory → action bar)
   private dragGhost:        Phaser.GameObjects.Image | null = null;
   private dragSourceIdx:    number | null = null;
   private dragMoveHandler:  ((ptr: Phaser.Input.Pointer) => void) | null = null;
   private dragUpHandler:    ((ptr: Phaser.Input.Pointer) => void) | null = null;
+
+  // Panel drag-to-reposition state
+  private static readonly LS_KEY = "equipment_pos";
+  private savedPos:              SavedPos | null                              = null;
+  private panelDragPreview:      Phaser.GameObjects.Graphics | null          = null;
+  private panelDragMoveHandler:  ((ptr: Phaser.Input.Pointer) => void) | null = null;
+  private panelDragUpHandler:    ((ptr: Phaser.Input.Pointer) => void) | null = null;
 
   private getPlayerState: () => PlayerSnapshot | null;
   private onUsePotion:    () => void;
@@ -66,7 +75,7 @@ export class EquipmentUI {
     this.onInteract      = onInteract;
     this.actionBarUI     = actionBarUI;
 
-    // Load from localStorage if available
+    // Load inventory state from localStorage
     const saved = localStorage.getItem("equipmentState");
     if (saved) {
       try {
@@ -74,6 +83,10 @@ export class EquipmentUI {
         if (Array.isArray(state)) this.inventory = [...state];
       } catch (e) { /* ignore */ }
     }
+
+    // Load saved panel position
+    const rawPos = localStorage.getItem(EquipmentUI.LS_KEY);
+    if (rawPos) { try { this.savedPos = JSON.parse(rawPos); } catch (e) { /* ignore */ } }
   }
 
   get isEquipmentOpen(): boolean { return this.isOpen; }
@@ -134,8 +147,7 @@ export class EquipmentUI {
     const BOT_PAD   = 14;
     const PANEL_H   = HEADER_H + BG_H + DIV_GAP + INV_LBL_H + GRID_H + BOT_PAD;
 
-    const px = Math.round((width  - PANEL_W) / 2);
-    const py = Math.round((height - PANEL_H) / 2);
+    const { px, py } = this.getPanelOrigin(width, height, PANEL_W, PANEL_H);
 
     const add = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
       this.objects.push(obj);
@@ -176,6 +188,18 @@ export class EquipmentUI {
     closeBtn.on("pointerover", () => closeBtn.setColor("#ff6644"));
     closeBtn.on("pointerout",  () => closeBtn.setColor("#c8a84b"));
     closeBtn.on("pointerdown", () => { this.onInteract(); this.close(); });
+
+    // ── Drag handle (title bar left of close button) ──────────────────────────
+    const dragHandle = add(s.add.rectangle(
+      px + (PANEL_W - 32) / 2, py + HEADER_H / 2,
+      PANEL_W - 32, HEADER_H,
+      0x000000, 0,
+    ).setScrollFactor(0).setDepth(D + 3).setInteractive({ useHandCursor: true })) as Phaser.GameObjects.Rectangle;
+
+    dragHandle.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
+      this.onInteract();
+      this.beginPanelDrag(ptr, px, py, PANEL_W, PANEL_H);
+    });
 
     add(s.add.graphics()
       .lineStyle(1, 0x7a5c1e, 0.9)
@@ -514,10 +538,12 @@ export class EquipmentUI {
     if (!this.isOpen) return;
     this.isOpen = false;
 
-    // Clean up drag listeners if panel closed mid-drag
+    // Clean up item-drag listeners if closed mid-drag
     if (this.dragMoveHandler) { this.scene.input.off("pointermove", this.dragMoveHandler); this.dragMoveHandler = null; }
     if (this.dragUpHandler)   { this.scene.input.off("pointerup",   this.dragUpHandler);   this.dragUpHandler   = null; }
     this.dragGhost = null;
+
+    this.cleanupPanelDrag();
 
     this.potionCountText = null;
     this.potionIconObj   = null;
@@ -526,5 +552,60 @@ export class EquipmentUI {
     this.potionCellObjects = [];
     for (const obj of this.objects) obj.destroy();
     this.objects = [];
+  }
+
+  // ── Panel drag-to-reposition ───────────────────────────────────────────────
+
+  private getPanelOrigin(width: number, height: number, panelW: number, panelH: number): { px: number; py: number } {
+    if (this.savedPos) {
+      const px = Math.max(0, Math.min(width  - panelW, width  - this.savedPos.rightOffset));
+      const py = Math.max(0, Math.min(height - panelH, this.savedPos.topOffset));
+      return { px, py };
+    }
+    return {
+      px: Math.round((width  - panelW) / 2),
+      py: Math.round((height - panelH) / 2),
+    };
+  }
+
+  private beginPanelDrag(ptr: Phaser.Input.Pointer, panelX: number, panelY: number, panelW: number, panelH: number): void {
+    const { width, height } = this.scene.scale;
+    const startX = ptr.x;
+    const startY = ptr.y;
+
+    const preview = this.scene.add.graphics()
+      .lineStyle(2, 0xc8a84b, 0.8)
+      .strokeRoundedRect(panelX, panelY, panelW, panelH, 10)
+      .setScrollFactor(0).setDepth(300000);
+    this.panelDragPreview = preview;
+
+    this.panelDragMoveHandler = (p: Phaser.Input.Pointer) => {
+      const newPx = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
+      const newPy = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
+      preview.clear()
+        .lineStyle(2, 0xc8a84b, 0.8)
+        .strokeRoundedRect(newPx, newPy, panelW, panelH, 10);
+    };
+
+    this.panelDragUpHandler = (p: Phaser.Input.Pointer) => {
+      const newPx = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
+      const newPy = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
+
+      this.savedPos = { rightOffset: width - newPx, topOffset: newPy };
+      localStorage.setItem(EquipmentUI.LS_KEY, JSON.stringify(this.savedPos));
+
+      this.cleanupPanelDrag();
+      this.close();
+      this.open();
+    };
+
+    this.scene.input.on("pointermove", this.panelDragMoveHandler);
+    this.scene.input.on("pointerup",   this.panelDragUpHandler);
+  }
+
+  private cleanupPanelDrag(): void {
+    if (this.panelDragMoveHandler) { this.scene.input.off("pointermove", this.panelDragMoveHandler); this.panelDragMoveHandler = null; }
+    if (this.panelDragUpHandler)   { this.scene.input.off("pointerup",   this.panelDragUpHandler);   this.panelDragUpHandler   = null; }
+    if (this.panelDragPreview)     { this.panelDragPreview.destroy(); this.panelDragPreview = null; }
   }
 }

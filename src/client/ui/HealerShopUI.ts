@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 
+interface SavedPos { rightOffset: number; topOffset: number; }
+
 /**
  * Self-contained shop panel for the Healer NPC.
  * Sells a single item: Health Potion (20 gold each).
@@ -13,6 +15,13 @@ export class HealerShopUI {
   private buyBtn:    Phaser.GameObjects.Text | null = null;
   private localGold    = 0;
   private localPotions = 0;
+
+  // ── Drag-to-reposition ────────────────────────────────────────────────────
+  private static readonly LS_KEY = "healer_shop_pos";
+  private savedPos:            SavedPos | null                              = null;
+  private dragPreview:         Phaser.GameObjects.Graphics | null          = null;
+  private dragMoveHandler:     ((ptr: Phaser.Input.Pointer) => void) | null = null;
+  private dragUpHandler:       ((ptr: Phaser.Input.Pointer) => void) | null = null;
 
   private getPlayerState: () => { gold: number; potions: number } | null;
   private onBuy:      () => void;
@@ -28,6 +37,9 @@ export class HealerShopUI {
     this.getPlayerState = getPlayerState;
     this.onBuy          = onBuy;
     this.onInteract     = onInteract;
+
+    const raw = localStorage.getItem(HealerShopUI.LS_KEY);
+    if (raw) { try { this.savedPos = JSON.parse(raw); } catch (e) { /* ignore */ } }
   }
 
   get isHealerShopOpen(): boolean { return this.isOpen; }
@@ -42,10 +54,11 @@ export class HealerShopUI {
     const { width, height } = s.scale;
     const D = 200000;
 
-    const PANEL_W = 280;
-    const PANEL_H = 200;
-    const px = Math.round((width  - PANEL_W) / 2);
-    const py = Math.round((height - PANEL_H) / 2);
+    const PANEL_W  = 280;
+    const PANEL_H  = 200;
+    const HEADER_H = 36;
+
+    const { px, py } = this.getPanelOrigin(width, height, PANEL_W, PANEL_H);
 
     const add = <T extends Phaser.GameObjects.GameObject>(obj: T): T => {
       this.objects.push(obj);
@@ -87,10 +100,22 @@ export class HealerShopUI {
     closeBtn.on("pointerout",  () => closeBtn.setColor("#88ffcc"));
     closeBtn.on("pointerdown", () => { this.onInteract(); this.close(); });
 
+    // ── Drag handle (title bar left of close button) ───────────────────────────
+    const dragHandle = add(s.add.rectangle(
+      px + (PANEL_W - 32) / 2, py + HEADER_H / 2,
+      PANEL_W - 32, HEADER_H,
+      0x000000, 0,
+    ).setScrollFactor(0).setDepth(D + 3).setInteractive({ useHandCursor: true })) as Phaser.GameObjects.Rectangle;
+
+    dragHandle.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
+      this.onInteract();
+      this.beginPanelDrag(ptr, px, py, PANEL_W, PANEL_H);
+    });
+
     // Header divider
     add(s.add.graphics()
       .lineStyle(1, 0x3a7a5a, 0.9)
-      .lineBetween(px + 10, py + 36, px + PANEL_W - 10, py + 36)
+      .lineBetween(px + 10, py + HEADER_H, px + PANEL_W - 10, py + HEADER_H)
       .setScrollFactor(0).setDepth(D + 1));
 
     // ── Potion row ────────────────────────────────────────────────────────────
@@ -160,9 +185,65 @@ export class HealerShopUI {
     }
   }
 
+  // ── Panel drag-to-reposition ───────────────────────────────────────────────
+
+  private getPanelOrigin(width: number, height: number, panelW: number, panelH: number): { px: number; py: number } {
+    if (this.savedPos) {
+      const px = Math.max(0, Math.min(width  - panelW, width  - this.savedPos.rightOffset));
+      const py = Math.max(0, Math.min(height - panelH, this.savedPos.topOffset));
+      return { px, py };
+    }
+    return {
+      px: Math.round((width  - panelW) / 2),
+      py: Math.round((height - panelH) / 2),
+    };
+  }
+
+  private beginPanelDrag(ptr: Phaser.Input.Pointer, panelX: number, panelY: number, panelW: number, panelH: number): void {
+    const { width, height } = this.scene.scale;
+    const startX = ptr.x;
+    const startY = ptr.y;
+
+    const preview = this.scene.add.graphics()
+      .lineStyle(2, 0x88ffcc, 0.8)
+      .strokeRoundedRect(panelX, panelY, panelW, panelH, 10)
+      .setScrollFactor(0).setDepth(300000);
+    this.dragPreview = preview;
+
+    this.dragMoveHandler = (p: Phaser.Input.Pointer) => {
+      const newPx = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
+      const newPy = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
+      preview.clear()
+        .lineStyle(2, 0x88ffcc, 0.8)
+        .strokeRoundedRect(newPx, newPy, panelW, panelH, 10);
+    };
+
+    this.dragUpHandler = (p: Phaser.Input.Pointer) => {
+      const newPx = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
+      const newPy = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
+
+      this.savedPos = { rightOffset: width - newPx, topOffset: newPy };
+      localStorage.setItem(HealerShopUI.LS_KEY, JSON.stringify(this.savedPos));
+
+      this.cleanupDrag();
+      this.close();
+      this.open();
+    };
+
+    this.scene.input.on("pointermove", this.dragMoveHandler);
+    this.scene.input.on("pointerup",   this.dragUpHandler);
+  }
+
+  private cleanupDrag(): void {
+    if (this.dragMoveHandler) { this.scene.input.off("pointermove", this.dragMoveHandler); this.dragMoveHandler = null; }
+    if (this.dragUpHandler)   { this.scene.input.off("pointerup",   this.dragUpHandler);   this.dragUpHandler   = null; }
+    if (this.dragPreview)     { this.dragPreview.destroy(); this.dragPreview = null; }
+  }
+
   close(): void {
     if (!this.isOpen) return;
     this.isOpen = false;
+    this.cleanupDrag();
     for (const obj of this.objects) obj.destroy();
     this.objects   = [];
     this.ownedText = null;
