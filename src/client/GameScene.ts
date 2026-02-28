@@ -96,9 +96,6 @@ export class GameScene extends Phaser.Scene {
   private sessionName = "";
   private isSessionEnded = false;
 
-  // Waiting room UI
-  private waitingRoomDots!: Phaser.GameObjects.Graphics;
-
   // Global leaderboard (updated by server every 3 s)
   private globalLeaderboardData: Array<{ nickname: string; level: number; xp: number; partyName: string }> | null = null;
 
@@ -345,12 +342,22 @@ export class GameScene extends Phaser.Scene {
       frameWidth: FRAME_SIZE, frameHeight: FRAME_SIZE,
     });
 
+    // Helper: executes callback immediately if JSON already cached (scene restart),
+    // otherwise loads the JSON then fires the callback on completion.
+    const loadRegistry = (key: string, url: string, callback: () => void) => {
+      if (this.cache.json.exists(key)) {
+        callback();
+      } else {
+        this.load.json(key, url);
+        this.load.once(`filecomplete-json-${key}`, callback);
+      }
+    };
+
     // Background tiles — loaded dynamically from tiles registry
-    this.load.json("tiles_registry", "/design/tiles");
-    this.load.once("filecomplete-json-tiles_registry", () => {
+    loadRegistry("tiles_registry", "/design/tiles", () => {
       const defs = (this.cache.json.get("tiles_registry") ?? {}) as Record<string, { type: string; imageWidth: number; imageHeight: number }>;
       for (const def of Object.values(defs)) {
-        this.load.image(def.type, `/assets/tiles/${def.type}.png`);
+        if (!this.textures.exists(def.type)) this.load.image(def.type, `/assets/tiles/${def.type}.png`);
       }
     });
     this.load.image("minimap_icon",  "/assets/maps/minimap_icon.png");
@@ -362,10 +369,10 @@ export class GameScene extends Phaser.Scene {
 
     // All static object images — loaded from objects.json (built-ins + user-added).
     // Animated objects (frameCount > 1) are loaded as spritesheets so Phaser can slice frames.
-    this.load.json("objects_registry", "/assets/entities/objects.json");
-    this.load.once("filecomplete-json-objects_registry", () => {
+    loadRegistry("objects_registry", "/assets/entities/objects.json", () => {
       const defs = (this.cache.json.get("objects_registry") ?? {}) as Record<string, StaticObjectDef>;
       for (const [key, def] of Object.entries(defs)) {
+        if (this.textures.exists(key)) continue;
         const spritePath = def.spritePath ?? `/assets/entities/${key}.png`;
         if ((def.frameCount ?? 1) > 1) {
           this.load.spritesheet(key, spritePath, { frameWidth: def.imageWidth, frameHeight: def.imageHeight });
@@ -377,18 +384,19 @@ export class GameScene extends Phaser.Scene {
 
     // Mob sprite sheets (client-side only, no server logic)
     for (const [key, def] of Object.entries(MOB_REGISTRY)) {
-      this.load.spritesheet(key, `/assets/mobs/${key}.png`, {
-        frameWidth:  def.frameWidth,
-        frameHeight: def.frameHeight,
-      });
+      if (!this.textures.exists(key)) {
+        this.load.spritesheet(key, `/assets/mobs/${key}.png`, {
+          frameWidth:  def.frameWidth,
+          frameHeight: def.frameHeight,
+        });
+      }
     }
 
     // Weapon sprites — loaded dynamically from weapons.json (texture key = weapon.type)
-    this.load.json("weapons_registry", "/assets/weapons/weapons.json");
-    this.load.once("filecomplete-json-weapons_registry", () => {
+    loadRegistry("weapons_registry", "/assets/weapons/weapons.json", () => {
       const defs = (this.cache.json.get("weapons_registry") ?? {}) as Record<string, WeaponDef>;
       for (const def of Object.values(defs)) {
-        this.load.image(def.type, def.spritePath);
+        if (!this.textures.exists(def.type)) this.load.image(def.type, def.spritePath);
       }
     });
 
@@ -403,16 +411,16 @@ export class GameScene extends Phaser.Scene {
     this.load.image("healer", "/assets/npcs/healer.png");
 
     // Enemy spritesheets — loaded dynamically from enemies.json
-    this.load.json("enemies_registry", "/assets/enemies/enemies.json");
-    // Queue individual spritesheets once the JSON is parsed (still within the same load pass)
-    this.load.once("filecomplete-json-enemies_registry", () => {
+    loadRegistry("enemies_registry", "/assets/enemies/enemies.json", () => {
       const defs = this.cache.json.get("enemies_registry") as
         Record<string, { frameWidth: number; frameHeight: number; spritePath: string }>;
       for (const [type, def] of Object.entries(defs)) {
-        this.load.spritesheet(`enemy_${type}`, def.spritePath, {
-          frameWidth:  def.frameWidth,
-          frameHeight: def.frameHeight,
-        });
+        if (!this.textures.exists(`enemy_${type}`)) {
+          this.load.spritesheet(`enemy_${type}`, def.spritePath, {
+            frameWidth:  def.frameWidth,
+            frameHeight: def.frameHeight,
+          });
+        }
       }
     });
 
@@ -499,7 +507,20 @@ export class GameScene extends Phaser.Scene {
     this.createDeathUI();
 
     // ── Camera ──────────────────────────────────────────────────────────────
-    this.cameras.main.setBounds(0, 0, this.room.state.mapWidth, this.room.state.mapHeight);
+    {
+      const mapW = (this.room.state.mapWidth  as number) || 2000;
+      const mapH = (this.room.state.mapHeight as number) || 2000;
+      const camW = this.cameras.main.width;
+      const camH = this.cameras.main.height;
+      // Center small maps (e.g. waitingArea 300×300) inside the viewport
+      if (mapW < camW || mapH < camH) {
+        const offsetX = mapW < camW ? -Math.floor((camW - mapW) / 2) : 0;
+        const offsetY = mapH < camH ? -Math.floor((camH - mapH) / 2) : 0;
+        this.cameras.main.setBounds(offsetX, offsetY, Math.max(mapW, camW), Math.max(mapH, camH));
+      } else {
+        this.cameras.main.setBounds(0, 0, mapW, mapH);
+      }
+    }
     this.cameras.main.startFollow(this.localSprite, true, 0.08, 0.08);
 
     // NPCs are placed after map_data is received (see setupRoomListeners)
@@ -767,7 +788,6 @@ export class GameScene extends Phaser.Scene {
     this.mobSystem.update();
 
     if (this.currentMapName === "waitingArea") {
-      this.updateWaitingRoomDots();
       this.sendPositionIfNeeded(time);
       return;
     }
@@ -802,14 +822,8 @@ export class GameScene extends Phaser.Scene {
 
   private createWaitingRoomUI(): void {
     const D = 99990;
-    const { width, height } = this.cameras.main;
-    const cx = width  / 2;
-    const cy = height / 2;
-    const MAP_SIZE = 200;
-
-    // Position the minimap centered; labels / button sit above it
-    const mmX = cx - MAP_SIZE / 2;
-    const mmY = cy - 86;
+    const { width } = this.cameras.main;
+    const cx = width / 2;
 
     if (this.localSkin === "gm") {
       // ── GM view ──────────────────────────────────────────────────────────
@@ -817,13 +831,13 @@ export class GameScene extends Phaser.Scene {
       // Dark panel behind button + session code
       this.add.graphics()
         .fillStyle(0x000000, 0.65)
-        .fillRoundedRect(cx - 140, cy - 260, 280, 120, 10)
+        .fillRoundedRect(cx - 140, 20, 280, 100, 10)
         .setScrollFactor(0).setDepth(D);
 
       // "Enter World" button
-      const btnBg = this.add.rectangle(cx, cy - 210, 240, 52, 0x2d7a2d)
+      const btnBg = this.add.rectangle(cx, 60, 240, 40, 0x2d7a2d)
         .setScrollFactor(0).setDepth(D + 1).setInteractive({ useHandCursor: true });
-      const btnText = this.add.text(cx, cy - 210, "Enter World", {
+      const btnText = this.add.text(cx, 60, "Enter World", {
         fontSize: "20px", color: "#ffffff", fontStyle: "bold",
       }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 2);
 
@@ -837,7 +851,7 @@ export class GameScene extends Phaser.Scene {
 
       // Session code badge
       if (this.passcode) {
-        this.add.text(cx, cy - 168, `Session: ${this.passcode}`, {
+        this.add.text(cx, 100, `Session: ${this.passcode}`, {
           fontSize: "14px", color: "#ff8800",
         }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 2);
       }
@@ -851,61 +865,17 @@ export class GameScene extends Phaser.Scene {
       // Dark panel behind text
       this.add.graphics()
         .fillStyle(0x000000, 0.65)
-        .fillRoundedRect(cx - 200, cy - 260, 400, 110, 10)
+        .fillRoundedRect(cx - 200, 20, 400, 80, 10)
         .setScrollFactor(0).setDepth(D);
 
-      this.add.text(cx, cy - 225, label, {
+      this.add.text(cx, 45, label, {
         fontSize: "22px", color: "#ffffff", fontStyle: "bold",
       }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1);
 
-      this.add.text(cx, cy - 183, "Waiting for host to start the session…", {
+      this.add.text(cx, 80, "Waiting for host to start the session…", {
         fontSize: "14px", color: "#aaaaaa",
       }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1);
     }
-
-    // Minimap background (centered below labels / button)
-    this.add.graphics()
-      .fillStyle(0x111111, 0.85)
-      .fillRect(mmX, mmY, MAP_SIZE, MAP_SIZE)
-      .lineStyle(1, 0x334433, 1)
-      .strokeRect(mmX, mmY, MAP_SIZE, MAP_SIZE)
-      .setScrollFactor(0).setDepth(D);
-
-    // Minimap "Waiting Room" label above the panel
-    this.add.text(cx, mmY - 18, "Waiting Room", {
-      fontSize: "12px", color: "#888888",
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1);
-
-    // Dots layer (redrawn every frame)
-    this.waitingRoomDots = this.add.graphics()
-      .setScrollFactor(0).setDepth(D + 1);
-  }
-
-  private updateWaitingRoomDots(): void {
-    if (!this.waitingRoomDots || !this.waitingRoomDots.active) return;
-    this.waitingRoomDots.clear();
-
-    const MAP_SIZE = 200;
-    const { width, height } = this.cameras.main;
-    const cx   = width  / 2;
-    const cy   = height / 2;
-    const mmX  = cx - MAP_SIZE / 2;
-    const mmY  = cy - 56;
-
-    const mapW = (this.room.state.mapWidth  as number) || 300;
-    const mapH = (this.room.state.mapHeight as number) || 300;
-    const scaleX = MAP_SIZE / mapW;
-    const scaleY = MAP_SIZE / mapH;
-
-    this.room.state.players.forEach((p: { x: number; y: number; isGM: boolean }, sessionId: string) => {
-      const isMe = sessionId === this.mySessionId;
-      this.waitingRoomDots.fillStyle(isMe ? 0x00ff44 : (p.isGM ? 0xff8800 : 0x44aaff), 1);
-      this.waitingRoomDots.fillCircle(
-        mmX + p.x * scaleX,
-        mmY + p.y * scaleY,
-        isMe ? 5 : 4,
-      );
-    });
   }
 
   // ── HUD ─────────────────────────────────────────────────────────────────────
