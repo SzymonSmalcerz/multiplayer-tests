@@ -121,6 +121,7 @@ export class HomeScene extends Phaser.Scene {
           nickname: localStorage.getItem(LS_NICKNAME) ?? "Player",
           skin:     localStorage.getItem(LS_SKIN)     ?? MALE_SKINS[0],
           passcode: localStorage.getItem(LS_PASSCODE) ?? "",
+          mapName:  localStorage.getItem("mapName")   ?? "m1",
         };
         this.scene.start("GameScene", data);
         return;

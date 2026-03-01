@@ -630,6 +630,25 @@
     </div>
   </div>
 
+  <!-- Waiting room overlay -->
+  <div id="waiting-room-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:100;">
+    <div style="position:absolute; top:8%; left:50%; transform:translateX(-50%); pointer-events:auto; text-align:center; font-family:sans-serif;">
+
+      <div id="wr-gm-ui" style="display:none; background:rgba(0,0,0,0.7); padding:20px 40px; border-radius:10px; border:1px solid #444;">
+        <button id="wr-start-btn" style="padding:12px 24px; font-size:20px; font-weight:bold; background:#2d7a2d; color:white; border:none; border-radius:6px; cursor:pointer;">
+          Enter World
+        </button>
+        <div id="wr-passcode" style="margin-top:15px; font-size:16px; color:#ff8800; font-weight:bold;"></div>
+      </div>
+
+      <div id="wr-player-ui" style="display:none; background:rgba(0,0,0,0.7); padding:20px 40px; border-radius:10px; border:1px solid #444;">
+        <div id="wr-title" style="font-size:22px; color:white; font-weight:bold; margin-bottom:10px;"></div>
+        <div style="font-size:14px; color:#aaaaaa;">Waiting for host to start the session…</div>
+      </div>
+
+    </div>
+  </div>
+
   <script src="bundle.js"></script>
 </body>
 </html>

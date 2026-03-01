@@ -276,8 +276,9 @@ export class GameScene extends Phaser.Scene {
     this.isCreated        = false;
     this.localLevel       = 0;
     this.localIsDead      = false;
-    // Keep passcode in localStorage fresh for reconnect
+    // Keep passcode and current map name in localStorage fresh for reconnect
     if (this.passcode) localStorage.setItem("roomPasscode", this.passcode);
+    localStorage.setItem("mapName", this.currentMapName);
     
     // Clear all tracking maps and buffers
     this.remoteMap.clear();
@@ -323,6 +324,11 @@ export class GameScene extends Phaser.Scene {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const token = (data.room as any).reconnectionToken as string | undefined;
     if (token) localStorage.setItem("reconnToken", token);
+
+    // Ensure waiting-room overlay is hidden on every scene restart
+    const wrOverlay = document.getElementById("waiting-room-overlay");
+    if (wrOverlay) wrOverlay.style.display = "none";
+
     console.log(`[DIAG] init() complete — map=${this.currentMapName} isCreated=${this.isCreated}`);
   }
 
@@ -444,11 +450,14 @@ export class GameScene extends Phaser.Scene {
     // Start with grass_basic; updated to the map's defaultTile when map_data arrives
     this.tilesRegistry = (this.cache.json.get("tiles_registry") ?? {}) as Record<string, { type: string; imageWidth: number; imageHeight: number }>;
     const firstTile = Object.keys(this.tilesRegistry)[0] ?? "grass_basic";
-    this.bgTileSprite = this.add.tileSprite(0, 0, this.room.state.mapWidth, this.room.state.mapHeight, firstTile).setOrigin(0, 0).setDepth(0);
-    console.log(`[DIAG] bgTileSprite created — texture=${firstTile} mapW=${this.room.state.mapWidth} mapH=${this.room.state.mapHeight} active=${this.bgTileSprite.active}`);
+    // Use || 2000 fallback: room.state may not be synced yet when the scene starts after travelToMap
+    const initMapW = (this.room.state.mapWidth  as number) || 2000;
+    const initMapH = (this.room.state.mapHeight as number) || 2000;
+    this.bgTileSprite = this.add.tileSprite(0, 0, initMapW, initMapH, firstTile).setOrigin(0, 0).setDepth(0);
+    console.log(`[DIAG] bgTileSprite created — texture=${firstTile} mapW=${initMapW} (stateW=${this.room.state.mapWidth}) mapH=${initMapH} (stateH=${this.room.state.mapHeight}) active=${this.bgTileSprite.active}`);
 
     // ── Physics world bounds ────────────────────────────────────────────────
-    this.physics.world.setBounds(0, 0, this.room.state.mapWidth, this.room.state.mapHeight);
+    this.physics.world.setBounds(0, 0, initMapW, initMapH);
 
     // ── Static object groups ─────────────────────────────────────────────────
     this.staticObjectsGroup    = this.physics.add.staticGroup();
@@ -462,7 +471,7 @@ export class GameScene extends Phaser.Scene {
     this.createAnimations();
 
     // ── Local player ────────────────────────────────────────────────────────
-    this.createLocalPlayer(this.room.state.mapWidth / 2, this.room.state.mapHeight / 2);
+    this.createLocalPlayer(initMapW / 2, initMapH / 2);
 
     // ── HUD ─────────────────────────────────────────────────────────────────
     this.createHUD();
@@ -833,60 +842,41 @@ export class GameScene extends Phaser.Scene {
   // ── Waiting Room UI ─────────────────────────────────────────────────────────
 
   private createWaitingRoomUI(): void {
-    const D = 99990;
-    const { width } = this.cameras.main;
-    const cx = width / 2;
+    const overlay = document.getElementById("waiting-room-overlay");
+    const gmUi    = document.getElementById("wr-gm-ui");
+    const plUi    = document.getElementById("wr-player-ui");
+    if (!overlay || !gmUi || !plUi) return;
+
+    overlay.style.display = "block";
 
     if (this.localSkin === "gm") {
-      // ── GM view ──────────────────────────────────────────────────────────
+      gmUi.style.display = "block";
+      plUi.style.display = "none";
 
-      // Dark panel behind button + session code
-      this.add.graphics()
-        .fillStyle(0x000000, 0.65)
-        .fillRoundedRect(cx - 140, 20, 280, 100, 10)
-        .setScrollFactor(0).setDepth(D);
+      const passEl = document.getElementById("wr-passcode");
+      if (passEl) passEl.textContent = `Session Code: ${this.passcode}`;
 
-      // "Enter World" button
-      const btnBg = this.add.rectangle(cx, 60, 240, 40, 0x2d7a2d)
-        .setScrollFactor(0).setDepth(D + 1).setInteractive({ useHandCursor: true });
-      const btnText = this.add.text(cx, 60, "Enter World", {
-        fontSize: "20px", color: "#ffffff", fontStyle: "bold",
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 2);
-
-      btnBg.on("pointerover",  () => btnBg.setFillStyle(0x3fa83f));
-      btnBg.on("pointerout",   () => btnBg.setFillStyle(0x2d7a2d));
-      btnBg.on("pointerdown",  () => {
-        this.room.send("start_session");
-        btnBg.destroy();
-        btnText.destroy();
-      });
-
-      // Session code badge
-      if (this.passcode) {
-        this.add.text(cx, 100, `Session: ${this.passcode}`, {
-          fontSize: "14px", color: "#ff8800",
-        }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 2);
+      // Clone the button to clear any stale listeners from a previous session
+      const btn = document.getElementById("wr-start-btn");
+      if (btn) {
+        const freshBtn = btn.cloneNode(true) as HTMLButtonElement;
+        btn.parentNode?.replaceChild(freshBtn, btn);
+        freshBtn.addEventListener("click", () => {
+          this.room.send("start_session");
+          freshBtn.disabled = true;
+          freshBtn.textContent = "Starting…";
+        });
       }
     } else {
-      // ── Player view ──────────────────────────────────────────────────────
+      gmUi.style.display = "none";
+      plUi.style.display = "block";
 
-      const label = this.sessionName && this.sessionName !== "Unnamed Session"
-        ? `Welcome to "${this.sessionName}"`
-        : "Welcome to the Waiting Room";
-
-      // Dark panel behind text
-      this.add.graphics()
-        .fillStyle(0x000000, 0.65)
-        .fillRoundedRect(cx - 200, 20, 400, 80, 10)
-        .setScrollFactor(0).setDepth(D);
-
-      this.add.text(cx, 45, label, {
-        fontSize: "22px", color: "#ffffff", fontStyle: "bold",
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1);
-
-      this.add.text(cx, 80, "Waiting for host to start the session…", {
-        fontSize: "14px", color: "#aaaaaa",
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(D + 1);
+      const titleEl = document.getElementById("wr-title");
+      if (titleEl) {
+        titleEl.textContent = this.sessionName && this.sessionName !== "Unnamed Session"
+          ? `Welcome to "${this.sessionName}"`
+          : "Welcome to the Waiting Room";
+      }
     }
   }
 
@@ -1983,6 +1973,10 @@ export class GameScene extends Phaser.Scene {
       if (this.localSprite) {
         console.log(`[Scene] Identified local player ${sessionId}. Snapping to ${player.x}, ${player.y}`);
         this.localSprite.setPosition(player.x, player.y);
+        // Immediately center the camera to avoid NaN scroll propagation when state
+        // arrived after create() placed the sprite at the default (non-authoritative) position.
+        this.cameras.main.scrollX = player.x - this.cameras.main.width  / 2;
+        this.cameras.main.scrollY = player.y - this.cameras.main.height / 2;
       }
       this.updateLeaderboard();
       return;
@@ -2921,6 +2915,10 @@ export class GameScene extends Phaser.Scene {
     console.log(`[DIAG] travelToMap() called — target=${targetMap} spawnX=${spawnX} spawnY=${spawnY} isTeleporting=${this.isTeleporting}`);
     if (this.isTeleporting) return;
     this.isTeleporting = true;
+
+    // Hide the waiting-room HTML overlay so it doesn't bleed through the loading screen
+    const wrOverlay = document.getElementById("waiting-room-overlay");
+    if (wrOverlay) wrOverlay.style.display = "none";
 
     // Show loading overlay
     const w = this.cameras.main.width;
