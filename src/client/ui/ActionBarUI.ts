@@ -152,6 +152,7 @@ export class ActionBarUI {
 
   /** Called every frame by GameScene to refresh counts and availability. */
   update(potions: number, potionHealRemaining: number, hp: number, maxHp: number): void {
+    if (this.slotBg.length === 0) return; // not built (e.g. waiting area)
     this.lastSnapshot = { potions, potionHealRemaining, hp, maxHp };
     this.reposition();
 

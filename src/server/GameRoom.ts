@@ -230,7 +230,7 @@ export class GameRoom extends Room<GameState> {
 
     // ── Spawn enemies from map definition (or fall back to random placement) ──
     const rawEnemies = mapJson.enemies;
-    if (rawEnemies && rawEnemies.length > 0) {
+    if (rawEnemies) {
       rawEnemies.forEach((e, i) => {
         const def: EnemySpawnDef = {
           id:          `map_enemy_${i}`,

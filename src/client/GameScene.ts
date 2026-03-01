@@ -581,7 +581,7 @@ export class GameScene extends Phaser.Scene {
       () => { this.ignoreNextMapClick = true; },
     );
     if (this.pendingActionBarState) this.actionBarUI.importState(this.pendingActionBarState);
-    this.actionBarUI.build();
+    if (this.currentMapName !== "waitingArea") this.actionBarUI.build();
 
     // ── Equipment UI ─────────────────────────────────────────────────────────
     this.equipmentUI = new EquipmentUI(
