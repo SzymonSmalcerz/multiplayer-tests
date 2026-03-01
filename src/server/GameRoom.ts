@@ -645,8 +645,44 @@ export class GameRoom extends Room<GameState> {
     player.y         = Math.max(32, Math.min(this.mapHeight - 32, rawSpawnY));
     
     // ── Load Profile or Init Defaults ────────────────────────────────────────
+    const profile = pid ? globalBus.getProfile(this.passcode, pid) : undefined;
+    if (profile) {
+      player.nickname            = profile.nickname;
+      player.skin                = profile.skin;
+      player.hp                  = profile.hp;
+      player.maxHp               = profile.maxHp;
+      player.level               = profile.level;
+      player.xp                  = profile.xp;
+      player.gold                = profile.gold;
+      player.weapon              = profile.weapon;
+      player.potions             = profile.potions;
+      player.potionHealRemaining = profile.potionHealRemaining;
+      player.attackBonus         = (player.level - 1) * 0.5; // recalculate bonus
+
+      // Validate party still exists in GlobalBus (may have been disbanded in transit)
+      if (profile.partyId && !isGMLogin) {
+        const party = globalBus.getParty(this.passcode, profile.partyId);
+        if (party && party.members.has(pid)) {
+          player.partyId      = party.id;
+          player.isPartyOwner = profile.isPartyOwner;
+          player.partyName    = party.name; // live name in case it was renamed
+        }
+        // else: party gone or player removed — leave partyId as "" (default)
+      }
+    } else {
+      player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
+      player.skin      = String(options.skin ?? "male/grey");
+      player.hp        = 100;
+      player.maxHp     = 100;
+      player.level     = 1;
+      player.xp        = 0;
+      player.attackBonus = 0;
+      player.gold      = 1000;
+    }
+
+    // Apply GM overrides AFTER profile load — preserves saved weapon, but enforces
+    // the admin nickname/skin/level/hp regardless of what the profile says
     if (isGMLogin) {
-      // GM setup — hardcoded state, no profile loading
       player.isGM       = true;
       player.nickname   = "admin";
       player.level      = 99;
@@ -654,41 +690,7 @@ export class GameRoom extends Room<GameState> {
       player.hp         = 9999;
       player.maxHp      = 9999;
       player.attackBonus = 0;
-    } else {
-      const profile = pid ? globalBus.getProfile(this.passcode, pid) : undefined;
-      if (profile) {
-        player.nickname            = profile.nickname;
-        player.skin                = profile.skin;
-        player.hp                  = profile.hp;
-        player.maxHp               = profile.maxHp;
-        player.level               = profile.level;
-        player.xp                  = profile.xp;
-        player.gold                = profile.gold;
-        player.weapon              = profile.weapon;
-        player.potions             = profile.potions;
-        player.potionHealRemaining = profile.potionHealRemaining;
-        player.attackBonus         = (player.level - 1) * 0.5; // recalculate bonus
-
-        // Validate party still exists in GlobalBus (may have been disbanded in transit)
-        if (profile.partyId) {
-          const party = globalBus.getParty(this.passcode, profile.partyId);
-          if (party && party.members.has(pid)) {
-            player.partyId      = party.id;
-            player.isPartyOwner = profile.isPartyOwner;
-            player.partyName    = party.name; // live name in case it was renamed
-          }
-          // else: party gone or player removed — leave partyId as "" (default)
-        }
-      } else {
-        player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
-        player.skin      = String(options.skin ?? "male/grey");
-        player.hp        = 100;
-        player.maxHp     = 100;
-        player.level     = 1;
-        player.xp        = 0;
-        player.attackBonus = 0;
-        player.gold      = 1000;
-      }
+      // player.weapon intentionally NOT overridden — GMs keep their saved weapon
     }
 
     this.state.players.set(client.sessionId, player);
@@ -790,30 +792,28 @@ export class GameRoom extends Room<GameState> {
     const player = this.state.players.get(sessionId);
     if (!player) return;
 
-    // ── Save / reset profile before deleting (skip entirely for GM) ─────────
+    // ── Save / reset profile before deleting ────────────────────────────────
     const pid = this.sessionToPersistentId.get(sessionId);
     if (pid) {
-      if (!player.isGM) {
-        if (resetProfile) {
-          globalBus.deleteProfile(this.passcode, pid);
-        } else {
-          const profile: PlayerProfile = {
-            nickname:            player.nickname,
-            skin:                player.skin,
-            level:               player.level,
-            xp:                  player.xp,
-            gold:                player.gold,
-            hp:                  player.hp,
-            maxHp:               player.maxHp,
-            weapon:              player.weapon,
-            potions:             player.potions,
-            potionHealRemaining: player.potionHealRemaining,
-            partyId:             player.partyId,
-            isPartyOwner:        player.isPartyOwner,
-            partyName:           player.partyName,
-          };
-          globalBus.saveProfile(this.passcode, pid, profile);
-        }
+      if (resetProfile) {
+        globalBus.deleteProfile(this.passcode, pid);
+      } else {
+        const profile: PlayerProfile = {
+          nickname:            player.nickname,
+          skin:                player.skin,
+          level:               player.level,
+          xp:                  player.xp,
+          gold:                player.gold,
+          hp:                  player.hp,
+          maxHp:               player.maxHp,
+          weapon:              player.weapon,
+          potions:             player.potions,
+          potionHealRemaining: player.potionHealRemaining,
+          partyId:             player.partyId,
+          isPartyOwner:        player.isPartyOwner,
+          partyName:           player.partyName,
+        };
+        globalBus.saveProfile(this.passcode, pid, profile);
       }
 
       if (this.persistentIdToSession.get(pid) === sessionId) {
@@ -1237,15 +1237,27 @@ export class GameRoom extends Room<GameState> {
     const partiesNeedingRefresh = new Set<string>();
 
     this.state.players.forEach((player, sessionId) => {
-      if (!player.partyId) return;
       const pid = this.sessionToPersistentId.get(sessionId);
       if (!pid) return;
 
-      const profile = globalBus.getProfile(this.passcode, pid);
-      if (profile && (profile.hp !== player.hp || profile.maxHp !== player.maxHp)) {
-        globalBus.saveProfile(this.passcode, pid, { ...profile, hp: player.hp, maxHp: player.maxHp });
-        partiesNeedingRefresh.add(player.partyId);
-      }
+      // Flush full profile every 5 s — protects against data loss on browser reload
+      globalBus.saveProfile(this.passcode, pid, {
+        nickname:            player.nickname,
+        skin:                player.skin,
+        level:               player.level,
+        xp:                  player.xp,
+        gold:                player.gold,
+        hp:                  player.hp,
+        maxHp:               player.maxHp,
+        weapon:              player.weapon,
+        potions:             player.potions,
+        potionHealRemaining: player.potionHealRemaining,
+        partyId:             player.partyId,
+        isPartyOwner:        player.isPartyOwner,
+        partyName:           player.partyName,
+      });
+
+      if (player.partyId) partiesNeedingRefresh.add(player.partyId);
     });
 
     partiesNeedingRefresh.forEach((partyId) => globalBus.refreshParty(this.passcode, partyId));
@@ -1511,12 +1523,12 @@ export class GameRoom extends Room<GameState> {
     }
   }
 
-  /** Returns true if any living player is within the 20 px collect radius. */
+  /** Returns true if any living, non-GM player is within the 20 px collect radius. */
   private coinHasNearbyPlayer(coin: PendingCoin): boolean {
     const COLLECT_RANGE = 20;
     let found = false;
     this.state.players.forEach((p) => {
-      if (found || p.isDead) return;
+      if (found || p.isDead || p.isGM) return;
       const dx = p.x - coin.x;
       const dy = p.y - coin.y;
       if (Math.sqrt(dx * dx + dy * dy) <= COLLECT_RANGE) found = true;
@@ -1535,7 +1547,7 @@ export class GameRoom extends Room<GameState> {
 
     const allPlayers: PositionedPlayer[] = [];
     this.state.players.forEach((p, id) => {
-      if (!p.isDead) allPlayers.push({ id, x: p.x, y: p.y, partyId: p.partyId });
+      if (!p.isDead && !p.isGM) allPlayers.push({ id, x: p.x, y: p.y, partyId: p.partyId });
     });
 
     const nearest = findNearestPlayers(coinX, coinY, allPlayers, COLLECT_RANGE);
