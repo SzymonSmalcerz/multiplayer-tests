@@ -1801,38 +1801,36 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyMapData(data: MapDataMessage): void {
-    console.log(`[DIAG] applyMapData() — bgTileSprite exists=${!!this.bgTileSprite} active=${this.bgTileSprite?.active ?? "null"} isCreated=${this.isCreated}`);
-    if (!this.bgTileSprite) { console.warn(`[DIAG] applyMapData() bailed — bgTileSprite is null`); return; }
+    if (!this.bgTileSprite) return;
 
-    // If create() ran before the Colyseus state arrived, mapWidth/mapHeight were 0.
-    // Fix the tile sprite size, physics bounds, and camera bounds now that state is available.
-    const mapW = (this.room.state.mapWidth  as number) || 2000;
-    const mapH = (this.room.state.mapHeight as number) || 2000;
-    console.log(`[DIAG] applyMapData() mapW=${mapW} mapH=${mapH} bgSize=${this.bgTileSprite.width}x${this.bgTileSprite.height}`);
-    if (this.bgTileSprite.width !== mapW || this.bgTileSprite.height !== mapH) {
-      console.log(`[DIAG] Fixing map dimensions from ${this.bgTileSprite.width}x${this.bgTileSprite.height} to ${mapW}x${mapH}`);
-      this.bgTileSprite.setSize(mapW, mapH);
-      this.physics.world.setBounds(0, 0, mapW, mapH);
-      const camW = this.cameras.main.width;
-      const camH = this.cameras.main.height;
-      if (mapW < camW || mapH < camH) {
-        const offsetX = mapW < camW ? -Math.floor((camW - mapW) / 2) : 0;
-        const offsetY = mapH < camH ? -Math.floor((camH - mapH) / 2) : 0;
-        this.cameras.main.setBounds(offsetX, offsetY, Math.max(mapW, camW), Math.max(mapH, camH));
-      } else {
-        this.cameras.main.setBounds(0, 0, mapW, mapH);
-      }
-    }
+    // Dimensions come directly from the payload — never rely on room.state which may lag
+    const mapW = data.mapWidth  || 2000;
+    const mapH = data.mapHeight || 2000;
 
     this.clearMap();
 
+    // Destroy the initial TileSprite and recreate with correct size to guarantee the
+    // WebGL buffer is allocated properly (setSize() is unreliable for large rescales)
+    this.bgTileSprite.destroy();
+    const defaultTile = data.defaultTile && this.textures.exists(data.defaultTile)
+      ? data.defaultTile
+      : "grass_basic";
+    this.bgTileSprite = this.add.tileSprite(0, 0, mapW, mapH, defaultTile).setOrigin(0, 0).setDepth(0);
+
+    // Fix physics and camera bounds using the authoritative dimensions from the payload
+    this.physics.world.setBounds(0, 0, mapW, mapH);
+    const camW = this.cameras.main.width;
+    const camH = this.cameras.main.height;
+    if (mapW < camW || mapH < camH) {
+      const offsetX = mapW < camW ? -Math.floor((camW - mapW) / 2) : 0;
+      const offsetY = mapH < camH ? -Math.floor((camH - mapH) / 2) : 0;
+      this.cameras.main.setBounds(offsetX, offsetY, Math.max(mapW, camW), Math.max(mapH, camH));
+    } else {
+      this.cameras.main.setBounds(0, 0, mapW, mapH);
+    }
+
     console.log(`[Map] Applying map data. Tiles: ${data.tiles?.length ?? 0}, Objects: ${data.objects.length}`);
 
-    // Apply map default tile to the background
-    if (data.defaultTile && this.textures.exists(data.defaultTile)) {
-      this.bgTileSprite.setTexture(data.defaultTile);
-    }
-    // Render individually placed tiles (depth 0.5 = above background, below objects)
     this.placeTiles(data.tiles ?? []);
     this.placeStaticObjects(data.objects);
     this.buildNavGrid(data.objects);

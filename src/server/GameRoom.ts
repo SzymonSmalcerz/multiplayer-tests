@@ -288,6 +288,8 @@ export class GameRoom extends Room<GameState> {
 
     this.onMessage("get_map", (client) => {
       client.send("map_data", {
+        mapWidth:    this.mapWidth,
+        mapHeight:   this.mapHeight,
         defaultTile: this.defaultTile,
         spawnPoint:  this.spawnPoint,
         tiles:       this.tileData,
