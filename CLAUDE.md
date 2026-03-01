@@ -37,6 +37,7 @@ Pure modules with no Phaser or Colyseus dependencies — imported by both client
 - **`main.ts`** — Phaser 3 game config, registers scenes
 - **`HomeScene.ts`** — Avatar picker (skin selection) + nickname input UI before joining
 - **`GameScene.ts`** — Main game scene: connects to Colyseus room, handles WASD/arrow input, client-side movement prediction, renders and interpolates remote players (LERP factor 0.18), manages animations and combat visuals. **Split threshold: open a refactor issue when this file exceeds ~3 000 lines.**
+- **`managers/UIManager.ts`** — All HUD rendering: HP/XP/gold bars, party roster panel, leaderboard, death screen, weapon cooldown HUD. Instantiated as `this.ui` in `GameScene.create()`; GameScene delegates all HUD calls to it.
 - **`logic.ts`** — Pure functions extracted for testability: XP formula (re-exported from shared), minimap coordinate transforms, leaderboard sort, A* pathfinding
 - **`types.ts`** — Shared TypeScript interfaces
 - **`skins.ts`** — Player skin/avatar definitions (7 male × 5 variants, 6 female × 5 variants)
@@ -46,6 +47,7 @@ Pure modules with no Phaser or Colyseus dependencies — imported by both client
 - **`logic.test.ts`** — XP progression, minimap transforms, leaderboard sorting, A* pathfinding
 - **`combat.test.ts`** — `getHitbox` all four directions + expand, `isInsideHitbox` boundary cases
 - **`economy.test.ts`** — `findNearestPlayers` range/epsilon/tie-break, `getShareRecipients` range/dead-filter
+- **`GlobalBus.test.ts`** — Session isolation: party scoping, chat broadcast boundaries, `destroySession` cleanup
 
 ### Build output
 - `dist/` — compiled server (TypeScript → CommonJS, excluded from git)

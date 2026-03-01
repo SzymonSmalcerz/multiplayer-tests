@@ -12,11 +12,10 @@ import { ShopUI } from "./ui/ShopUI";
 import { EquipmentUI } from "./ui/EquipmentUI";
 import { HealerShopUI } from "./ui/HealerShopUI";
 import { ActionBarUI } from "./ui/ActionBarUI";
+import { UIManager } from "./managers/UIManager";
 import { SKINS_TO_LOAD, getSkinForLevel, isTierBoundary, FRAME_W as FRAME_SIZE } from "./skins";
 import {
-  xpForNextLevel,
   worldToMinimapOffset,
-  sortLeaderboard,
   findPath as findPathLogic,
   MINIMAP_SIZE,
   VIEW_RADIUS,
@@ -106,10 +105,6 @@ export class GameScene extends Phaser.Scene {
   private localAttackCooldownTimer = 0;
 
   // Local death state
-  private localGrave?: Phaser.GameObjects.Image;
-  private diedOverlay?: Phaser.GameObjects.Rectangle;
-  private diedText?: Phaser.GameObjects.Text;
-  private countdownText?: Phaser.GameObjects.Text;
   private localIsDead    = false;
   private localDeathTimer = 0;
 
@@ -147,25 +142,8 @@ export class GameScene extends Phaser.Scene {
   private bgTileSprite!: Phaser.GameObjects.TileSprite;
   private tilesRegistry: Record<string, { type: string; imageWidth: number; imageHeight: number }> = {};
 
-  // HUD
-  private hudHpBar!:     Phaser.GameObjects.Graphics;
-  private hudPotionBar!: Phaser.GameObjects.Graphics; // green incoming-heal overlay on HP bar
-  private hudXpBar!:     Phaser.GameObjects.Graphics;
-  private hudHpText!:    Phaser.GameObjects.Text;
-  private hudXpText!:    Phaser.GameObjects.Text;
-  private hudGoldText!:  Phaser.GameObjects.Text;
-
-  // HUD dirty-flag cache — avoids redundant Graphics redraws each frame
-  private hudLastHpFillW   = -1;
-  private hudLastHpText    = "";
-  private hudLastPotionKey = "";
-  private hudLastXpFillW   = -1;
-  private hudLastXpText    = "";
-  private hudLastGoldText  = "";
-
-  // Party roster parse cache — only re-parse when the JSON string changes
-  private cachedRosterJson = "";
-  private cachedRoster: Array<{ pid: string; sessionId: string | null; nickname: string; level: number; hp: number; maxHp: number }> = [];
+  // UI manager (HUD, party panel, leaderboard, death screen, weapon HUD)
+  private ui!: UIManager;
 
   // Party state
   private myPartyId      = "";
@@ -180,18 +158,7 @@ export class GameScene extends Phaser.Scene {
     refuseBtn: Phaser.GameObjects.Text;
   };
   private partyInviteFromId?: string;
-  private partyHudRows: Array<{
-    bg: Phaser.GameObjects.Graphics;
-    hpBar: Phaser.GameObjects.Graphics;
-    xpBar: Phaser.GameObjects.Graphics;
-    nameText: Phaser.GameObjects.Text;
-    kickBtn: Phaser.GameObjects.Text;
-  }> = [];
   private localPartyLabel?: Phaser.GameObjects.Text;
-  private partyHudHeaderBg!: Phaser.GameObjects.Graphics;
-  private partyHudHeaderText!: Phaser.GameObjects.Text;
-  private partyHudLeaveBtn!: Phaser.GameObjects.Text;
-  private partyHudRenameBtn!: Phaser.GameObjects.Text;
 
   // Minimap
   private minimapOpen       = false;
@@ -212,10 +179,6 @@ export class GameScene extends Phaser.Scene {
   private pendingChatMessages: Array<{ sessionId: string; nickname: string; message: string }> = [];
   private isCreated = false;
 
-  // Leaderboard
-  private leaderboardBg!:     Phaser.GameObjects.Graphics;
-  private leaderboardHeader!: Phaser.GameObjects.Text;
-  private leaderboardRows:    Phaser.GameObjects.Text[] = [];
 
   // Nav grid for click-to-move
   private navGrid = new Uint8Array(0);
@@ -246,12 +209,6 @@ export class GameScene extends Phaser.Scene {
   // Mobs (client-side only, purely decorative)
   private mobSystem!: MobSystem;
 
-  // Weapon HUD (bottom-right)
-  private weaponHudBg!:      Phaser.GameObjects.Graphics;
-  private weaponHudIcon!:    Phaser.GameObjects.Image;
-  private weaponHudOverlay!: Phaser.GameObjects.Graphics;
-  private weaponHudBorder!:  Phaser.GameObjects.Graphics;
-  private weaponHudHitArea!: Phaser.GameObjects.Rectangle;
 
   // Timing
   private lastSendTime = 0;
@@ -289,8 +246,6 @@ export class GameScene extends Phaser.Scene {
     this.pendingMapData = null;
     this.doors = [];
     this.doorSprites.clear();
-    this.partyHudRows = [];
-
     // Keep globalLeaderboardData across map changes — it's cross-map data and stays valid.
     if (data.leaderboardData) {
       this.globalLeaderboardData = data.leaderboardData;
@@ -309,16 +264,6 @@ export class GameScene extends Phaser.Scene {
     this.setupRoomListeners();
 
     this.localWeaponKey   = "";   // force texture sync on first update frame of new scene
-
-    // Reset HUD dirty-flag cache so bars are fully redrawn on first frame of new scene
-    this.hudLastHpFillW   = -1;
-    this.hudLastHpText    = "";
-    this.hudLastPotionKey = "";
-    this.hudLastXpFillW   = -1;
-    this.hudLastXpText    = "";
-    this.hudLastGoldText  = "";
-    this.cachedRosterJson = "";
-    this.cachedRoster     = [];
 
     // Keep reconnection token fresh — it may change after a reconnect
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -447,6 +392,8 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     console.log(`[DIAG] create() START — map=${this.currentMapName} pendingMapData=${!!this.pendingMapData}`);
+    // ── UI Manager ───────────────────────────────────────────────────────────
+    this.ui = new UIManager(this);
     // ── Background ─────────────────────────────────────────────────────────
     // Start with grass_basic; updated to the map's defaultTile when map_data arrives
     this.tilesRegistry = (this.cache.json.get("tiles_registry") ?? {}) as Record<string, { type: string; imageWidth: number; imageHeight: number }>;
@@ -475,8 +422,8 @@ export class GameScene extends Phaser.Scene {
     this.createLocalPlayer(initMapW / 2, initMapH / 2);
 
     // ── HUD ─────────────────────────────────────────────────────────────────
-    this.createHUD();
-    this.createPartyHUD();
+    this.ui.createHUD();
+    this.ui.createPartyHUD();
     this.createMinimap();
 
     // ── Waiting room UI (replaces all HUD / minimap for waitingArea) ────────────
@@ -526,7 +473,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // ── Death UI (hidden by default) ─────────────────────────────────────────
-    this.createDeathUI();
+    this.ui.createDeathUI();
 
     // ── Camera ──────────────────────────────────────────────────────────────
     {
@@ -617,7 +564,12 @@ export class GameScene extends Phaser.Scene {
     );
 
     // ── Weapon HUD ───────────────────────────────────────────────────────────
-    this.createWeaponHUD();
+    this.ui.createWeaponHUD();
+
+    // ── Leaderboard throttle (200 ms) ────────────────────────────────────────
+    this.time.addEvent({ delay: 200, loop: true, callback: () => {
+      if (this.currentMapName !== "waitingArea") this.ui.updateLeaderboard();
+    }});
 
     // ── Mob system ───────────────────────────────────────────────────────────
     this.mobSystem = new MobSystem(this);
@@ -814,17 +766,16 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.updateHUD();
-    this.updatePartyHUD();
-    this.updateLeaderboard();
+    this.ui.updateHUD();
+    this.ui.updatePartyHUD();
 
     this.repositionMinimapUI();
     if (this.minimapOpen) {
       this.updateMinimap();
     }
 
-    this.tickDeathTimer(delta);
-    this.updateWeaponHUD();
+    this.ui.tickDeathTimer(delta);
+    this.ui.updateWeaponHUD();
 
     // ── Consumable UI live updates ────────────────────────────────────────────
     const potions     = (myState?.potions             as number) ?? 0;
@@ -880,377 +831,6 @@ export class GameScene extends Phaser.Scene {
           : "Welcome to the Waiting Room";
       }
     }
-  }
-
-  // ── HUD ─────────────────────────────────────────────────────────────────────
-
-  private createHUD(): void {
-    if (this.currentMapName === "waitingArea") return;
-    const D = 99998;
-
-    // Dark background panel
-    this.add.graphics()
-      .fillStyle(0x000000, 0.55)
-      .fillRect(8, 8, 204, 50)
-      .setScrollFactor(0)
-      .setDepth(D);
-
-    // HP bar background (dark red)
-    this.add.graphics()
-      .fillStyle(0x660000, 1)
-      .fillRect(12, 14, 192, 13)
-      .setScrollFactor(0)
-      .setDepth(D + 1);
-
-    // XP bar background (dark blue)
-    this.add.graphics()
-      .fillStyle(0x000066, 1)
-      .fillRect(12, 32, 192, 13)
-      .setScrollFactor(0)
-      .setDepth(D + 1);
-
-    // HP fill bar (redrawn each frame)
-    this.hudHpBar = this.add.graphics()
-      .setScrollFactor(0)
-      .setDepth(D + 2);
-
-    // Potion incoming-heal overlay on HP bar (green segment, redrawn each frame)
-    this.hudPotionBar = this.add.graphics()
-      .setScrollFactor(0)
-      .setDepth(D + 2);
-
-    // XP fill bar (redrawn each frame)
-    this.hudXpBar = this.add.graphics()
-      .setScrollFactor(0)
-      .setDepth(D + 2);
-
-    // HP text
-    this.hudHpText = this.add.text(14, 14, "HP: 100/100", {
-      fontSize: "11px",
-      color: "#ffffff",
-      stroke: "#000000",
-      strokeThickness: 2,
-      resolution: 2,
-    }).setScrollFactor(0).setDepth(D + 3);
-
-    // XP text
-    this.hudXpText = this.add.text(14, 32, "XP: 0/100", {
-      fontSize: "11px",
-      color: "#ffffff",
-      stroke: "#000000",
-      strokeThickness: 2,
-      resolution: 2,
-    }).setScrollFactor(0).setDepth(D + 3);
-
-    // Gold panel (to the right of HP/XP panel)
-    this.add.graphics()
-      .fillStyle(0x000000, 0.55)
-      .fillRect(218, 8, 80, 20)
-      .setScrollFactor(0)
-      .setDepth(D);
-
-    this.hudGoldText = this.add.text(222, 12, "Gold: 0", {
-      fontSize: "11px",
-      color: "#ffd700",
-      stroke: "#000000",
-      strokeThickness: 2,
-      resolution: 2,
-    }).setScrollFactor(0).setDepth(D + 1);
-  }
-
-  private updateHUD(): void {
-    if (this.currentMapName === "waitingArea") return;
-    const p = this.room.state.players.get(this.mySessionId);
-    if (!p) return;
-
-    // Detect death / respawn transitions
-    const isDead = !!p.isDead;
-    if (isDead !== this.localIsDead) {
-      this.localIsDead = isDead;
-      if (isDead) {
-        this.onLocalPlayerDied();
-      } else {
-        this.onLocalPlayerRespawned();
-      }
-    }
-
-    const maxBarW = 192;
-
-    // HP bar — only redraw when the fill width changes
-    const hpRatio  = Math.max(0, Math.min(1, p.hp / p.maxHp));
-    const hpFillW  = Math.floor(maxBarW * hpRatio);
-    if (hpFillW !== this.hudLastHpFillW) {
-      this.hudLastHpFillW = hpFillW;
-      this.hudHpBar.clear();
-      this.hudHpBar.fillStyle(0xff3333, 1);
-      this.hudHpBar.fillRect(12, 14, hpFillW, 13);
-    }
-    const hpText = `HP: ${Math.floor(p.hp)}/${p.maxHp}`;
-    if (hpText !== this.hudLastHpText) {
-      this.hudLastHpText = hpText;
-      this.hudHpText.setText(hpText);
-    }
-
-    // Potion incoming-heal overlay — only redraw when overlay geometry changes
-    const potionRemaining = (p.potionHealRemaining as number) ?? 0;
-    const poolCapped = potionRemaining > 0 ? Math.min(potionRemaining, p.maxHp - p.hp) : 0;
-    const poolW      = Math.floor(maxBarW * Math.max(0, poolCapped / (p.maxHp || 1)));
-    const potionKey  = `${hpFillW}:${poolW}`;
-    if (potionKey !== this.hudLastPotionKey) {
-      this.hudLastPotionKey = potionKey;
-      this.hudPotionBar.clear();
-      if (poolW > 0) {
-        this.hudPotionBar.fillStyle(0x44ff88, 0.8);
-        this.hudPotionBar.fillRect(12 + hpFillW, 14, poolW, 13);
-      }
-    }
-
-    // XP bar — only redraw when fill width changes
-    const xpNeeded = xpForNextLevel(p.level);
-    const xpFillW  = Math.floor(maxBarW * Math.max(0, Math.min(1, p.xp / xpNeeded)));
-    if (xpFillW !== this.hudLastXpFillW) {
-      this.hudLastXpFillW = xpFillW;
-      this.hudXpBar.clear();
-      this.hudXpBar.fillStyle(0x3399ff, 1);
-      this.hudXpBar.fillRect(12, 32, xpFillW, 13);
-    }
-    const xpText = `XP: ${Math.floor(p.xp)}/${xpNeeded}  Lv.${p.level}`;
-    if (xpText !== this.hudLastXpText) {
-      this.hudLastXpText = xpText;
-      this.hudXpText.setText(xpText);
-    }
-
-    // Gold display
-    const goldText = `Gold: ${p.gold ?? 0}`;
-    if (goldText !== this.hudLastGoldText) {
-      this.hudLastGoldText = goldText;
-      this.hudGoldText.setText(goldText);
-    }
-
-    // Update nickname label and sprite when level changes
-    if (p.level !== this.localLevel) {
-      this.localLevel = p.level;
-      if (p.isGM) {
-        this.localLabel.setText(`${this.localNickname} [GM]`);
-      } else {
-        this.localLabel.setText(`${this.localNickname} [Lv.${p.level}]`);
-        // Swap spritesheet when crossing a tier boundary (5, 10, 15, …)
-        if (isTierBoundary(p.level)) {
-          const newKey = skinKey(getSkinForLevel(this.localSkin, p.level));
-          if (this.textures.exists(newKey) && this.localSprite.texture.key !== newKey) {
-            this.localSprite.setTexture(newKey, DIR_TO_ROW[this.localDirection] * 9);
-          }
-        }
-      }
-    }
-  }
-
-  // ── Party HUD ──────────────────────────────────────────────────────────────
-
-  private createPartyHUD(): void {
-    if (this.currentMapName === "waitingArea") return;
-    const D       = 99998;
-    const ROW_H   = 32;
-    const ROW_GAP = 4;
-    const HEADER_H = 18;
-    const START_Y = 66 + HEADER_H + 2; // member rows below header
-
-    // Party header (hidden when not in party)
-    this.partyHudHeaderBg = this.add.graphics().setScrollFactor(0).setDepth(D);
-
-    this.partyHudHeaderText = this.add.text(12, 68, "◆ Party", {
-      fontSize: "11px",
-      color: "#77aaff",
-      stroke: "#000000",
-      strokeThickness: 2,
-      resolution: 2,
-    }).setScrollFactor(0).setDepth(D + 1).setVisible(false);
-
-    this.partyHudLeaveBtn = this.add.text(210, 68, "Leave", {
-      fontSize: "11px",
-      color: "#ff9966",
-      stroke: "#000000",
-      strokeThickness: 2,
-      resolution: 2,
-    }).setOrigin(1, 0).setScrollFactor(0).setDepth(D + 1)
-      .setVisible(false)
-      .setInteractive({ useHandCursor: true });
-
-    this.partyHudLeaveBtn.on("pointerover", () => this.partyHudLeaveBtn.setColor("#ff5533"));
-    this.partyHudLeaveBtn.on("pointerout",  () => this.partyHudLeaveBtn.setColor("#ff9966"));
-    this.partyHudLeaveBtn.on("pointerdown", () => {
-      this.ignoreNextMapClick = true;
-      this.room.send("party_leave");
-    });
-
-    this.partyHudRenameBtn = this.add.text(150, 68, "✎", {
-      fontSize: "12px",
-      color: "#aaaaaa",
-      stroke: "#000000",
-      strokeThickness: 2,
-      resolution: 2,
-    }).setOrigin(1, 0).setScrollFactor(0).setDepth(D + 1)
-      .setVisible(false)
-      .setInteractive({ useHandCursor: true });
-
-    this.partyHudRenameBtn.on("pointerover", () => this.partyHudRenameBtn.setColor("#ffffff"));
-    this.partyHudRenameBtn.on("pointerout",  () => this.partyHudRenameBtn.setColor("#aaaaaa"));
-    this.partyHudRenameBtn.on("pointerdown", () => {
-      this.ignoreNextMapClick = true;
-      const current = this.room.state.players.get(this.mySessionId)?.partyName ?? "";
-      const newName = window.prompt("Party name (max 20 characters):", current);
-      if (newName !== null) {
-        const trimmed = newName.trim().slice(0, 20);
-        if (trimmed.length > 0) this.room.send("party_rename", { name: trimmed });
-      }
-    });
-
-    for (let i = 0; i < 4; i++) {
-      const y = START_Y + i * (ROW_H + ROW_GAP);
-
-      const bg    = this.add.graphics().setScrollFactor(0).setDepth(D);
-      const hpBar = this.add.graphics().setScrollFactor(0).setDepth(D + 2);
-      const xpBar = this.add.graphics().setScrollFactor(0).setDepth(D + 2);
-
-      const nameText = this.add.text(14, y + 4, "", {
-        fontSize: "11px",
-        color: "#77aaff",
-        stroke: "#000000",
-        strokeThickness: 2,
-        resolution: 2,
-      }).setScrollFactor(0).setDepth(D + 3).setVisible(false);
-
-      const kickBtn = this.add.text(210, y + 4, "Kick", {
-        fontSize: "10px",
-        color: "#ff9966",
-        stroke: "#000000",
-        strokeThickness: 2,
-        resolution: 2,
-      }).setOrigin(1, 0).setScrollFactor(0).setDepth(D + 3).setVisible(false)
-        .setInteractive({ useHandCursor: true });
-
-      kickBtn.on("pointerover", () => kickBtn.setColor("#ff5533"));
-      kickBtn.on("pointerout",  () => kickBtn.setColor("#ff9966"));
-      kickBtn.on("pointerdown", () => {
-        this.ignoreNextMapClick = true;
-        const targetPid = kickBtn.getData("targetPid") as string;
-        if (targetPid) this.room.send("party_kick", { targetPid });
-      });
-
-      this.partyHudRows.push({ bg, hpBar, xpBar, nameText, kickBtn });
-    }
-  }
-
-  private updatePartyHUD(): void {
-    if (this.currentMapName === "waitingArea") return;
-    const ROW_H    = 32;
-    const ROW_GAP  = 4;
-    const HEADER_H = 18;
-    const START_Y  = 66 + HEADER_H + 2;
-    const PANEL_W  = 204;
-    const BAR_W   = 192;
-
-    // Collect other party members in stable order (with sessionId for kick)
-    const members: Array<{ targetPid: string; nickname: string; level: number; hp: number; maxHp: number; isAway: boolean }> = [];
-    const inParty = this.myPartyId !== "";
-
-    // Show/hide party header
-    this.partyHudHeaderBg.clear();
-    if (inParty) {
-      this.partyHudHeaderBg.fillStyle(0x000000, 0.55).fillRect(8, 66, PANEL_W, HEADER_H);
-    }
-    const myPartyName = this.room.state.players.get(this.mySessionId)?.partyName ?? "Party";
-    this.partyHudHeaderText
-      .setText(`◆ ${myPartyName}`)
-      .setVisible(inParty);
-    this.partyHudLeaveBtn
-      .setText(this.myIsPartyOwner ? "Disband" : "Leave")
-      .setVisible(inParty);
-    this.partyHudRenameBtn.setVisible(inParty && this.myIsPartyOwner);
-
-    if (inParty) {
-      const myState = this.room.state.players.get(this.mySessionId);
-      if (myState && myState.partyRoster) {
-        try {
-          // Reparse only when the JSON string changes (not every frame)
-          if (myState.partyRoster !== this.cachedRosterJson) {
-            this.cachedRosterJson = myState.partyRoster;
-            this.cachedRoster = JSON.parse(myState.partyRoster);
-          }
-          const roster = this.cachedRoster;
-
-          roster.forEach((m) => {
-            if (m.sessionId === this.mySessionId) return; // Skip self
-
-            // Look up live state by sessionId (O(1), collision-proof)
-            const liveState: RemotePlayer | undefined = m.sessionId
-              ? this.room.state.players.get(m.sessionId) ?? undefined
-              : undefined;
-
-            members.push({
-              targetPid: m.pid,
-              nickname:  m.nickname,
-              level:     m.level,
-              hp:        liveState ? liveState.hp : m.hp,
-              maxHp:     liveState ? liveState.maxHp : m.maxHp,
-              isAway:    !liveState,
-            });
-          });
-        } catch (e) {
-          console.error("Failed to parse party roster", e);
-        }
-      }
-    }
-
-    for (let i = 0; i < 4; i++) {
-      const row = this.partyHudRows[i];
-      const y   = START_Y + i * (ROW_H + ROW_GAP);
-
-      row.bg.clear();
-      row.hpBar.clear();
-      row.xpBar.clear();
-
-      if (i < members.length) {
-        const m      = members[i];
-        const hpRatio = Math.max(0, Math.min(1, m.hp / m.maxHp));
-
-        // Panel background
-        row.bg.fillStyle(0x000000, 0.55).fillRect(8, y, PANEL_W, ROW_H);
-        // HP bar track
-        row.bg.fillStyle(0x660000, 1).fillRect(12, y + 20, BAR_W, 8);
-
-        if (m.isAway) {
-          // Full solid grey bar for away players
-          row.hpBar.fillStyle(0x666666, 1).fillRect(12, y + 20, BAR_W, 8);
-        } else {
-          // Standard HP bar for local players
-          row.hpBar.fillStyle(0xff3333, 1).fillRect(12, y + 20, Math.floor(BAR_W * hpRatio), 8);
-        }
-
-        const nameLabel = m.isAway ? `${m.nickname} (Away)` : m.nickname;
-        row.nameText
-          .setText(nameLabel)
-          .setPosition(14, y + 4)
-          .setVisible(true);
-
-        row.kickBtn
-          .setData("targetPid", m.targetPid)
-          .setVisible(this.myIsPartyOwner);
-      } else {
-        row.nameText.setVisible(false);
-        row.kickBtn.setVisible(false);
-      }
-    }
-
-    // Refresh remote player label + partyLabel colors every frame (avoids stale onChange timing)
-    this.remoteMap.forEach((entity, sessionId) => {
-      const rp = this.room.state.players.get(sessionId);
-      if (!rp) return;
-      const inParty = this.myPartyId !== "" && rp.partyId === this.myPartyId;
-      const color = inParty ? "#77aaff" : "#ffff44";
-      entity.label.setColor(color);
-      if (entity.partyLabel) entity.partyLabel.setColor(color);
-    });
   }
 
   // ── Minimap ────────────────────────────────────────────────────────────────
@@ -1325,11 +905,11 @@ export class GameScene extends Phaser.Scene {
     .setDepth(D + 2)
     .setVisible(false);
 
-    this.createLeaderboard();
-    
+    this.ui.createLeaderboard();
+
     // If we already have global data (restored in init), show it immediately
     if (this.globalLeaderboardData && this.globalLeaderboardData.length > 0) {
-      this.updateLeaderboard();
+      this.ui.updateLeaderboard();
     }
   }
 
@@ -1429,224 +1009,6 @@ export class GameScene extends Phaser.Scene {
     // 4. Local Player (Green dot at center)
     this.minimapDots.fillStyle(0x44ff44, 1);
     this.minimapDots.fillCircle(mmCenterX, mmCenterY, 4);
-  }
-
-  // ── Leaderboard ────────────────────────────────────────────────────────────
-
-  private createLeaderboard(): void {
-    const D = 99990;
-    const camW = this.cameras.main.width;
-    const lbX = camW - 208;
-    const lbY = 216;
-
-    this.leaderboardRows = [];
-
-    this.leaderboardBg = this.add.graphics()
-      .fillStyle(0x111111, 0.85)
-      .fillRect(0, 0, MINIMAP_SIZE, 120)
-      .lineStyle(1, 0x334433, 1)
-      .strokeRect(0, 0, MINIMAP_SIZE, 120)
-      .setScrollFactor(0)
-      .setDepth(D)
-      .setPosition(lbX, lbY)
-      .setVisible(true);
-
-    this.leaderboardHeader = this.add.text(lbX + MINIMAP_SIZE / 2, lbY + 8, "🏆 Top Players", {
-      fontSize: "13px",
-      color: "#ffcc44",
-      stroke: "#000000",
-      strokeThickness: 2,
-    })
-    .setOrigin(0.5, 0)
-    .setScrollFactor(0)
-    .setDepth(D + 1)
-    .setVisible(true);
-
-    for (let i = 0; i < 5; i++) {
-      const row = this.add.text(lbX + 8, lbY + 32 + i * 16, "", {
-        fontSize: "11px",
-        color: i === 0 ? "#ffcc44" : "#cccccc",
-        stroke: "#000000",
-        strokeThickness: 1,
-      })
-      .setScrollFactor(0)
-      .setDepth(D + 1)
-      .setVisible(true);
-
-      this.leaderboardRows.push(row);
-    }
-  }
-
-  private updateLeaderboard(): void {
-    if (this.currentMapName === "waitingArea") return;
-    // Safety check: skip if UI is destroyed
-    if (!this.leaderboardBg || !this.leaderboardBg.active) {
-      return;
-    }
-
-    const camW = this.cameras.main.width;
-    const lbX = camW - 208;
-    const lbY = this.minimapOpen ? 216 : 64;
-
-    this.leaderboardBg.setPosition(lbX, lbY);
-    this.leaderboardHeader.setPosition(lbX + MINIMAP_SIZE / 2, lbY + 8);
-
-    // Prefer cross-map global data; fall back to local room players until first broadcast
-    let top5: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
-    if (this.globalLeaderboardData && this.globalLeaderboardData.length > 0) {
-      top5 = this.globalLeaderboardData.slice(0, 5);
-    } else {
-      const allPlayers: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
-      this.room.state.players.forEach((p: RemotePlayer) => {
-        if (!p.isDead) {
-          allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName });
-        }
-      });
-      top5 = sortLeaderboard(allPlayers).slice(0, 5);
-    }
-
-    // Diagnostic log for data presence
-    if (top5.length > 0 && this.leaderboardRows.length > 0) {
-      // console.log(`[Leaderboard] Rendering ${top5.length} entries at ${lbX},${lbY}. Rows ready: ${this.leaderboardRows.length}`);
-    }
-
-    // If we truly have NO players (even local), keep the existing rows visible if they were already there.
-    if (top5.length === 0 && this.leaderboardRows.some(r => r.visible)) {
-      return;
-    }
-
-    let currentY = lbY + 32;
-
-    for (let i = 0; i < 5; i++) {
-      const row = this.leaderboardRows[i];
-      if (!row || !row.active) continue;
-
-      if (i < top5.length) {
-        row.setPosition(lbX + 8, currentY);
-        const p = top5[i];
-        const partyTag = p.partyName ? ` [${p.partyName}]` : "";
-        const rawContent = `${p.nickname}${partyTag} Lv.${p.level}`;
-        
-        let text = `${i + 1}. ${rawContent}`;
-        if (rawContent.length > 20) {
-          text = `${i + 1}. ${rawContent.slice(0, 20)}\n   ${rawContent.slice(20)}`;
-        }
-
-        row.setText(text);
-        row.setVisible(true);
-
-        // Advance Y for the next row — fallback to 20px if height is 0
-        const h = row.height > 0 ? row.height : 18;
-        currentY += h + 4; 
-      } else {
-        row.setVisible(false);
-      }
-    }
-
-    // Dynamic background height
-    const totalHeight = Math.max(120, (currentY - lbY) + 4);
-    if (this.leaderboardBg && this.leaderboardBg.active) {
-      this.leaderboardBg.clear();
-      this.leaderboardBg.fillStyle(0x111111, 0.85);
-      this.leaderboardBg.fillRect(0, 0, MINIMAP_SIZE, totalHeight);
-      this.leaderboardBg.lineStyle(1, 0x334433, 1);
-      this.leaderboardBg.strokeRect(0, 0, MINIMAP_SIZE, totalHeight);
-    }
-  }
-
-  // ── Death UI ───────────────────────────────────────────────────────────────
-
-  private createDeathUI(): void {
-    const w = this.cameras.main.width;
-    const h = this.cameras.main.height;
-
-    this.diedOverlay = this.add.rectangle(0, 0, w, h, 0x000000, 0.7)
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(100010)
-      .setVisible(false);
-
-    this.diedText = this.add.text(w / 2, h / 2 - 50, "YOU DIED", {
-      fontSize: "56px",
-      color: "#cc0000",
-      stroke: "#000000",
-      strokeThickness: 6,
-      resolution: 2,
-    })
-    .setOrigin(0.5)
-    .setScrollFactor(0)
-    .setDepth(100011)
-    .setVisible(false);
-
-    this.countdownText = this.add.text(w / 2, h / 2 + 24, "10", {
-      fontSize: "38px",
-      color: "#ffffff",
-      stroke: "#000000",
-      strokeThickness: 4,
-      resolution: 2,
-    })
-    .setOrigin(0.5)
-    .setScrollFactor(0)
-    .setDepth(100011)
-    .setVisible(false);
-  }
-
-  private onLocalPlayerDied(): void {
-    // Place grave at death position in world space
-    this.localGrave = this.add.image(this.localSprite.x, this.localSprite.y, "grave");
-    this.localGrave.setDisplaySize(32, 32);
-    this.localGrave.setDepth(this.localSprite.y + FRAME_SIZE / 2);
-
-    // Keep label above the grave
-    this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 42);
-    this.localPartyLabel?.setVisible(false);
-
-    // Hide player visuals
-    this.localSprite.setVisible(false);
-    this.localWeapon.setVisible(false);
-    this.localSprite.setVelocity(0, 0);
-    this.localIsAttacking = false;
-
-    // Show death screen
-    this.diedOverlay?.setVisible(true);
-    this.diedText?.setVisible(true);
-    this.countdownText?.setText("10").setVisible(true);
-    this.localDeathTimer = 10;
-  }
-
-  private onLocalPlayerRespawned(): void {
-    // Remove grave
-    this.localGrave?.destroy();
-    this.localGrave = undefined;
-
-    // Teleport sprite to server-authoritative respawn position
-    const p = this.room.state.players.get(this.mySessionId);
-    if (p) {
-      this.localSprite.setPosition(p.x, p.y);
-    }
-
-    // Restore player visuals
-    this.localSprite.setVisible(true);
-
-    // Hide death screen
-    this.diedOverlay?.setVisible(false);
-    this.diedText?.setVisible(false);
-    this.countdownText?.setVisible(false);
-
-    this.localDeathTimer = 0;
-  }
-
-  private tickDeathTimer(delta: number): void {
-    if (!this.localIsDead || this.localDeathTimer <= 0) return;
-    this.localDeathTimer -= delta / 1000;
-    const secs = Math.max(1, Math.ceil(this.localDeathTimer));
-    this.countdownText?.setText(String(secs));
-
-    const w = this.cameras.main.width;
-    const h = this.cameras.main.height;
-    this.diedOverlay?.setSize(w, h);
-    this.diedText?.setPosition(w / 2, h / 2 - 50);
-    this.countdownText?.setPosition(w / 2, h / 2 + 24);
   }
 
   // ── Setup helpers ──────────────────────────────────────────────────────────
@@ -1860,7 +1222,7 @@ export class GameScene extends Phaser.Scene {
       (data: Array<{ nickname: string; level: number; xp: number; partyName: string }>) => {
         console.log(`[Network] Received leaderboard update. Count: ${data.length}`);
         this.globalLeaderboardData = data;
-        if (this.isCreated) this.updateLeaderboard();
+        if (this.isCreated) this.ui.updateLeaderboard();
       }
     );
 
@@ -1878,7 +1240,7 @@ export class GameScene extends Phaser.Scene {
       console.log(`[Network] onRemove player: ${sessionId}`);
       this.pendingAddPlayers = this.pendingAddPlayers.filter(p => p.sessionId !== sessionId);
       this.removeRemotePlayer(sessionId);
-      if (this.isCreated) this.updateLeaderboard();
+      if (this.isCreated) this.ui.updateLeaderboard();
     });
 
     // Enemy added
@@ -1980,7 +1342,7 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.scrollX = player.x - this.cameras.main.width  / 2;
         this.cameras.main.scrollY = player.y - this.cameras.main.height / 2;
       }
-      this.updateLeaderboard();
+      this.ui.updateLeaderboard();
       return;
     }
 
@@ -1991,7 +1353,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.addRemotePlayer(player, sessionId);
-    this.updateLeaderboard();
+    this.ui.updateLeaderboard();
   }
 
   // ── Remote player management ───────────────────────────────────────────────
@@ -3192,102 +2554,6 @@ export class GameScene extends Phaser.Scene {
       duration: 300,
       onComplete: () => anim.sprite.destroy(),
     });
-  }
-
-  // ── Weapon HUD ─────────────────────────────────────────────────────────────
-
-  private createWeaponHUD(): void {
-    const D = 99994;
-    const R = 32;
-
-    this.weaponHudBg      = this.add.graphics().setScrollFactor(0).setDepth(D);
-    this.weaponHudIcon    = this.add.image(0, 0, "sword")
-      .setScrollFactor(0).setDepth(D + 1);
-    { // initial scale
-      const MAX_H = 64;
-      const natW  = this.weaponHudIcon.width;
-      const natH  = this.weaponHudIcon.height;
-      if (natH > MAX_H) {
-        this.weaponHudIcon.setDisplaySize(Math.round(natW * MAX_H / natH), MAX_H);
-      }
-    }
-    this.weaponHudOverlay = this.add.graphics().setScrollFactor(0).setDepth(D + 2);
-    this.weaponHudBorder  = this.add.graphics().setScrollFactor(0).setDepth(D + 3);
-
-    const { width, height } = this.scale;
-    const cx = width  - R - 12;
-    const cy = height - R - 12;
-
-    this.weaponHudHitArea = this.add.rectangle(cx, cy, R * 2, R * 2, 0x000000, 0)
-      .setScrollFactor(0).setDepth(D + 4)
-      .setInteractive({ useHandCursor: true });
-
-    this.weaponHudHitArea.on("pointerover", () => {
-      if (this.localAttackCooldownTimer <= 0 && !this.localIsAttacking) {
-        this.weaponHudIcon.setTint(0xaaffaa);
-      }
-    });
-    this.weaponHudHitArea.on("pointerout",  () => this.weaponHudIcon.clearTint());
-    this.weaponHudHitArea.on("pointerdown", () => {
-      this.ignoreNextMapClick = true;
-      this.triggerAttack();
-    });
-  }
-
-  private updateWeaponHUD(): void {
-    const R  = 32;
-    const { width, height } = this.scale;
-    const cx = width  - R - 12;
-    const cy = height - R - 12;
-
-    // Keep hit area aligned (handles window resize)
-    this.weaponHudHitArea.setPosition(cx, cy);
-
-    // Sync icon texture to current weapon
-    if (this.weaponHudIcon.texture.key !== this.localWeaponKey) {
-      this.weaponHudIcon.setTexture(this.localWeaponKey);
-      // Scale down to max 64 px tall, preserving aspect ratio
-      const MAX_H = 64;
-      const natW  = this.weaponHudIcon.width;
-      const natH  = this.weaponHudIcon.height;
-      if (natH > MAX_H) {
-        this.weaponHudIcon.setDisplaySize(Math.round(natW * MAX_H / natH), MAX_H);
-      } else {
-        this.weaponHudIcon.setDisplaySize(natW, natH);
-      }
-    }
-    this.weaponHudIcon.setPosition(cx, cy);
-
-    const progress = Math.min(1, Math.max(0, this.localAttackCooldownTimer) / ATTACK_COOLDOWN_MS);
-    const ready    = progress === 0 && !this.localIsAttacking;
-
-    // Background circle
-    this.weaponHudBg.clear()
-      .fillStyle(0x111111, 0.85)
-      .fillCircle(cx, cy, R);
-
-    // Icon alpha: full when ready, dimmed on cooldown
-    this.weaponHudIcon.setAlpha(ready ? 1 : 0.4);
-
-    // Radial cooldown overlay — the dark wedge shrinks clockwise as cooldown expires
-    this.weaponHudOverlay.clear();
-    if (progress > 0.01) {
-      // The "cleared" (elapsed) arc grows clockwise from 12 o'clock.
-      // The dark wedge is the remaining portion: from the current hand to 12 o'clock.
-      const clearedAngle = Math.PI * 2 * (1 - progress);
-      const darkStart    = -Math.PI / 2 + clearedAngle; // leading edge of dark region
-      const darkEnd      = Math.PI * 3 / 2;             // 12 o'clock (end of full cycle)
-      this.weaponHudOverlay
-        .fillStyle(0x000000, 0.72)
-        .slice(cx, cy, R - 1, darkStart, darkEnd, false)
-        .fillPath();
-    }
-
-    // Border — gold when ready, grey on cooldown
-    const borderColor = ready ? 0xbbaa44 : 0x555544;
-    this.weaponHudBorder.clear()
-      .lineStyle(2, borderColor, 1)
-      .strokeCircle(cx, cy, R);
   }
 
   // ── NPCs & Shop ────────────────────────────────────────────────────────────
