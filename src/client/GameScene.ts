@@ -328,6 +328,7 @@ export class GameScene extends Phaser.Scene {
     // Ensure waiting-room overlay is hidden on every scene restart
     const wrOverlay = document.getElementById("waiting-room-overlay");
     if (wrOverlay) wrOverlay.style.display = "none";
+    document.body.classList.remove("waiting-area-bg");
 
     console.log(`[DIAG] init() complete — map=${this.currentMapName} isCreated=${this.isCreated}`);
   }
@@ -847,6 +848,7 @@ export class GameScene extends Phaser.Scene {
     const plUi    = document.getElementById("wr-player-ui");
     if (!overlay || !gmUi || !plUi) return;
 
+    document.body.classList.add("waiting-area-bg");
     overlay.style.display = "block";
 
     if (this.localSkin === "gm") {
@@ -2919,6 +2921,7 @@ export class GameScene extends Phaser.Scene {
     // Hide the waiting-room HTML overlay so it doesn't bleed through the loading screen
     const wrOverlay = document.getElementById("waiting-room-overlay");
     if (wrOverlay) wrOverlay.style.display = "none";
+    document.body.classList.remove("waiting-area-bg");
 
     // Show loading overlay
     const w = this.cameras.main.width;
