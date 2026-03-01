@@ -65,6 +65,8 @@ export interface DoorData {
 
 /** Map initialisation message payload */
 export interface MapDataMessage {
+  mapWidth:     number;
+  mapHeight:    number;
   defaultTile?: string;
   spawnPoint?:  { x: number; y: number };
   tiles?:       TilePlacement[];
@@ -113,11 +115,12 @@ export interface RemotePlayer {
 /** Scene init data passed from HomeScene → GameScene (or GameScene → GameScene on teleport) */
 export interface GameSceneData {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  room:      any; // Colyseus.Room<any>
-  nickname:  string;
-  skin:      string;
-  passcode?: string;
-  mapName?:  string;
+  room:         any; // Colyseus.Room<any>
+  nickname:     string;
+  skin:         string;
+  passcode?:    string;
+  mapName?:     string;
+  sessionName?: string;
   leaderboardData?: Array<{ nickname: string; level: number; xp: number; partyName: string }>;
   actionBarState?: any;
   equipmentState?: any;

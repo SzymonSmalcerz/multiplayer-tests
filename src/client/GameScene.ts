@@ -93,6 +93,7 @@ export class GameScene extends Phaser.Scene {
 
   // Private session
   private passcode = "";
+  private sessionName = "";
   private isSessionEnded = false;
 
   // Global leaderboard (updated by server every 3 s)
@@ -267,6 +268,7 @@ export class GameScene extends Phaser.Scene {
     this.localNickname    = data.nickname;
     this.localSkin        = data.skin;
     this.passcode         = data.passcode ?? "";
+    this.sessionName      = data.sessionName ?? "";
     this.mySessionId      = data.room.sessionId as string;
     this.currentMapName   = data.mapName ?? "m1";
     this.isTeleporting    = false;
@@ -274,8 +276,9 @@ export class GameScene extends Phaser.Scene {
     this.isCreated        = false;
     this.localLevel       = 0;
     this.localIsDead      = false;
-    // Keep passcode in localStorage fresh for reconnect
+    // Keep passcode and current map name in localStorage fresh for reconnect
     if (this.passcode) localStorage.setItem("roomPasscode", this.passcode);
+    localStorage.setItem("mapName", this.currentMapName);
     
     // Clear all tracking maps and buffers
     this.remoteMap.clear();
@@ -321,12 +324,22 @@ export class GameScene extends Phaser.Scene {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const token = (data.room as any).reconnectionToken as string | undefined;
     if (token) localStorage.setItem("reconnToken", token);
+
+    // Ensure waiting-room overlay is hidden on every scene restart
+    const wrOverlay = document.getElementById("waiting-room-overlay");
+    if (wrOverlay) wrOverlay.style.display = "none";
+
+    console.log(`[DIAG] init() complete — map=${this.currentMapName} isCreated=${this.isCreated}`);
   }
 
   preload(): void {
+    console.log(`[DIAG] preload() START — map=${this.currentMapName}`);
     // Add loader error tracking
     this.load.on("loaderror", (file: any) => {
       console.error(`[Loader] Failed to load asset: ${file.key} from ${file.url}`);
+    });
+    this.load.once("complete", () => {
+      console.log(`[DIAG] preload() COMPLETE (loader done) — map=${this.currentMapName}`);
     });
 
     // Player sprite sheets
@@ -340,12 +353,22 @@ export class GameScene extends Phaser.Scene {
       frameWidth: FRAME_SIZE, frameHeight: FRAME_SIZE,
     });
 
+    // Helper: executes callback immediately if JSON already cached (scene restart),
+    // otherwise loads the JSON then fires the callback on completion.
+    const loadRegistry = (key: string, url: string, callback: () => void) => {
+      if (this.cache.json.exists(key)) {
+        callback();
+      } else {
+        this.load.json(key, url);
+        this.load.once(`filecomplete-json-${key}`, callback);
+      }
+    };
+
     // Background tiles — loaded dynamically from tiles registry
-    this.load.json("tiles_registry", "/design/tiles");
-    this.load.once("filecomplete-json-tiles_registry", () => {
+    loadRegistry("tiles_registry", "/design/tiles", () => {
       const defs = (this.cache.json.get("tiles_registry") ?? {}) as Record<string, { type: string; imageWidth: number; imageHeight: number }>;
       for (const def of Object.values(defs)) {
-        this.load.image(def.type, `/assets/tiles/${def.type}.png`);
+        if (!this.textures.exists(def.type)) this.load.image(def.type, `/assets/tiles/${def.type}.png`);
       }
     });
     this.load.image("minimap_icon",  "/assets/maps/minimap_icon.png");
@@ -357,10 +380,10 @@ export class GameScene extends Phaser.Scene {
 
     // All static object images — loaded from objects.json (built-ins + user-added).
     // Animated objects (frameCount > 1) are loaded as spritesheets so Phaser can slice frames.
-    this.load.json("objects_registry", "/assets/entities/objects.json");
-    this.load.once("filecomplete-json-objects_registry", () => {
+    loadRegistry("objects_registry", "/assets/entities/objects.json", () => {
       const defs = (this.cache.json.get("objects_registry") ?? {}) as Record<string, StaticObjectDef>;
       for (const [key, def] of Object.entries(defs)) {
+        if (this.textures.exists(key)) continue;
         const spritePath = def.spritePath ?? `/assets/entities/${key}.png`;
         if ((def.frameCount ?? 1) > 1) {
           this.load.spritesheet(key, spritePath, { frameWidth: def.imageWidth, frameHeight: def.imageHeight });
@@ -372,18 +395,19 @@ export class GameScene extends Phaser.Scene {
 
     // Mob sprite sheets (client-side only, no server logic)
     for (const [key, def] of Object.entries(MOB_REGISTRY)) {
-      this.load.spritesheet(key, `/assets/mobs/${key}.png`, {
-        frameWidth:  def.frameWidth,
-        frameHeight: def.frameHeight,
-      });
+      if (!this.textures.exists(key)) {
+        this.load.spritesheet(key, `/assets/mobs/${key}.png`, {
+          frameWidth:  def.frameWidth,
+          frameHeight: def.frameHeight,
+        });
+      }
     }
 
     // Weapon sprites — loaded dynamically from weapons.json (texture key = weapon.type)
-    this.load.json("weapons_registry", "/assets/weapons/weapons.json");
-    this.load.once("filecomplete-json-weapons_registry", () => {
+    loadRegistry("weapons_registry", "/assets/weapons/weapons.json", () => {
       const defs = (this.cache.json.get("weapons_registry") ?? {}) as Record<string, WeaponDef>;
       for (const def of Object.values(defs)) {
-        this.load.image(def.type, def.spritePath);
+        if (!this.textures.exists(def.type)) this.load.image(def.type, def.spritePath);
       }
     });
 
@@ -398,16 +422,16 @@ export class GameScene extends Phaser.Scene {
     this.load.image("healer", "/assets/npcs/healer.png");
 
     // Enemy spritesheets — loaded dynamically from enemies.json
-    this.load.json("enemies_registry", "/assets/enemies/enemies.json");
-    // Queue individual spritesheets once the JSON is parsed (still within the same load pass)
-    this.load.once("filecomplete-json-enemies_registry", () => {
+    loadRegistry("enemies_registry", "/assets/enemies/enemies.json", () => {
       const defs = this.cache.json.get("enemies_registry") as
         Record<string, { frameWidth: number; frameHeight: number; spritePath: string }>;
       for (const [type, def] of Object.entries(defs)) {
-        this.load.spritesheet(`enemy_${type}`, def.spritePath, {
-          frameWidth:  def.frameWidth,
-          frameHeight: def.frameHeight,
-        });
+        if (!this.textures.exists(`enemy_${type}`)) {
+          this.load.spritesheet(`enemy_${type}`, def.spritePath, {
+            frameWidth:  def.frameWidth,
+            frameHeight: def.frameHeight,
+          });
+        }
       }
     });
 
@@ -421,14 +445,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    console.log(`[DIAG] create() START — map=${this.currentMapName} pendingMapData=${!!this.pendingMapData}`);
     // ── Background ─────────────────────────────────────────────────────────
     // Start with grass_basic; updated to the map's defaultTile when map_data arrives
     this.tilesRegistry = (this.cache.json.get("tiles_registry") ?? {}) as Record<string, { type: string; imageWidth: number; imageHeight: number }>;
     const firstTile = Object.keys(this.tilesRegistry)[0] ?? "grass_basic";
-    this.bgTileSprite = this.add.tileSprite(0, 0, this.room.state.mapWidth, this.room.state.mapHeight, firstTile).setOrigin(0, 0).setDepth(0);
+    // Use || 2000 fallback: room.state may not be synced yet when the scene starts after travelToMap
+    const initMapW = (this.room.state.mapWidth  as number) || 2000;
+    const initMapH = (this.room.state.mapHeight as number) || 2000;
+    this.bgTileSprite = this.add.tileSprite(0, 0, initMapW, initMapH, firstTile).setOrigin(0, 0).setDepth(0);
+    console.log(`[DIAG] bgTileSprite created — texture=${firstTile} mapW=${initMapW} (stateW=${this.room.state.mapWidth}) mapH=${initMapH} (stateH=${this.room.state.mapHeight}) active=${this.bgTileSprite.active}`);
 
     // ── Physics world bounds ────────────────────────────────────────────────
-    this.physics.world.setBounds(0, 0, this.room.state.mapWidth, this.room.state.mapHeight);
+    this.physics.world.setBounds(0, 0, initMapW, initMapH);
 
     // ── Static object groups ─────────────────────────────────────────────────
     this.staticObjectsGroup    = this.physics.add.staticGroup();
@@ -442,15 +471,18 @@ export class GameScene extends Phaser.Scene {
     this.createAnimations();
 
     // ── Local player ────────────────────────────────────────────────────────
-    this.createLocalPlayer(this.room.state.mapWidth / 2, this.room.state.mapHeight / 2);
+    this.createLocalPlayer(initMapW / 2, initMapH / 2);
 
     // ── HUD ─────────────────────────────────────────────────────────────────
     this.createHUD();
     this.createPartyHUD();
     this.createMinimap();
 
-    // ── GM passcode badge ────────────────────────────────────────────────────
-    if (this.localSkin === "gm" && this.passcode) {
+    // ── Waiting room UI (replaces all HUD / minimap for waitingArea) ────────────
+    if (this.currentMapName === "waitingArea") {
+      this.createWaitingRoomUI();
+    } else if (this.localSkin === "gm" && this.passcode) {
+      // GM passcode badge (shown on normal maps only)
       const w = this.cameras.main.width;
       this.add.text(w / 2, 10, `Session: ${this.passcode}`, {
         fontSize:        "13px",
@@ -462,10 +494,14 @@ export class GameScene extends Phaser.Scene {
 
     // ── Mark created and flush buffers ─────────────────────────────────────
     this.isCreated = true;
+    console.log(`[DIAG] isCreated=true — pendingMapData=${!!this.pendingMapData} pendingPlayers=${this.pendingAddPlayers.length} pendingEnemies=${this.pendingAddEnemies.length}`);
 
     // Apply early network data
     if (this.pendingMapData) {
+      console.log(`[DIAG] Flushing pendingMapData`);
       this.applyMapData(this.pendingMapData);
+    } else {
+      console.log(`[DIAG] No pendingMapData — will wait for get_map response`);
     }
 
     this.pendingAddPlayers.forEach(({ player, sessionId }) => this.doAddPlayer(player, sessionId));
@@ -478,6 +514,7 @@ export class GameScene extends Phaser.Scene {
     this.pendingChatMessages = [];
 
     // Request fresh map data once world is ready
+    console.log(`[DIAG] Sending get_map request`);
     this.room.send("get_map");
 
     // ── Snap to Authoritative Position ─────────────────────────────────────
@@ -491,7 +528,20 @@ export class GameScene extends Phaser.Scene {
     this.createDeathUI();
 
     // ── Camera ──────────────────────────────────────────────────────────────
-    this.cameras.main.setBounds(0, 0, this.room.state.mapWidth, this.room.state.mapHeight);
+    {
+      const mapW = (this.room.state.mapWidth  as number) || 2000;
+      const mapH = (this.room.state.mapHeight as number) || 2000;
+      const camW = this.cameras.main.width;
+      const camH = this.cameras.main.height;
+      // Center small maps (e.g. waitingArea 300×300) inside the viewport
+      if (mapW < camW || mapH < camH) {
+        const offsetX = mapW < camW ? -Math.floor((camW - mapW) / 2) : 0;
+        const offsetY = mapH < camH ? -Math.floor((camH - mapH) / 2) : 0;
+        this.cameras.main.setBounds(offsetX, offsetY, Math.max(mapW, camW), Math.max(mapH, camH));
+      } else {
+        this.cameras.main.setBounds(0, 0, mapW, mapH);
+      }
+    }
     this.cameras.main.startFollow(this.localSprite, true, 0.08, 0.08);
 
     // NPCs are placed after map_data is received (see setupRoomListeners)
@@ -531,7 +581,7 @@ export class GameScene extends Phaser.Scene {
       () => { this.ignoreNextMapClick = true; },
     );
     if (this.pendingActionBarState) this.actionBarUI.importState(this.pendingActionBarState);
-    this.actionBarUI.build();
+    if (this.currentMapName !== "waitingArea") this.actionBarUI.build();
 
     // ── Equipment UI ─────────────────────────────────────────────────────────
     this.equipmentUI = new EquipmentUI(
@@ -656,6 +706,7 @@ export class GameScene extends Phaser.Scene {
   // ── Attack ─────────────────────────────────────────────────────────────────
 
   private triggerAttack(): void {
+    if (this.currentMapName === "waitingArea") return;
     if (this.localIsAttacking) return;          // already mid-swing
     if (this.localIsDead) return;
     if (this.localAttackCooldownTimer > 0) return; // still on cooldown
@@ -756,10 +807,16 @@ export class GameScene extends Phaser.Scene {
     this.interpolateRemotePlayers(delta);
     this.updateEnemies();
     this.mobSystem.update();
+
+    if (this.currentMapName === "waitingArea") {
+      this.sendPositionIfNeeded(time);
+      return;
+    }
+
     this.updateHUD();
     this.updatePartyHUD();
     this.updateLeaderboard();
-    
+
     this.repositionMinimapUI();
     if (this.minimapOpen) {
       this.updateMinimap();
@@ -782,7 +839,51 @@ export class GameScene extends Phaser.Scene {
 
   // ── HUD ────────────────────────────────────────────────────────────────────
 
+  // ── Waiting Room UI ─────────────────────────────────────────────────────────
+
+  private createWaitingRoomUI(): void {
+    const overlay = document.getElementById("waiting-room-overlay");
+    const gmUi    = document.getElementById("wr-gm-ui");
+    const plUi    = document.getElementById("wr-player-ui");
+    if (!overlay || !gmUi || !plUi) return;
+
+    overlay.style.display = "block";
+
+    if (this.localSkin === "gm") {
+      gmUi.style.display = "block";
+      plUi.style.display = "none";
+
+      const passEl = document.getElementById("wr-passcode");
+      if (passEl) passEl.textContent = `Session Code: ${this.passcode}`;
+
+      // Clone the button to clear any stale listeners from a previous session
+      const btn = document.getElementById("wr-start-btn");
+      if (btn) {
+        const freshBtn = btn.cloneNode(true) as HTMLButtonElement;
+        btn.parentNode?.replaceChild(freshBtn, btn);
+        freshBtn.addEventListener("click", () => {
+          this.room.send("start_session");
+          freshBtn.disabled = true;
+          freshBtn.textContent = "Starting…";
+        });
+      }
+    } else {
+      gmUi.style.display = "none";
+      plUi.style.display = "block";
+
+      const titleEl = document.getElementById("wr-title");
+      if (titleEl) {
+        titleEl.textContent = this.sessionName && this.sessionName !== "Unnamed Session"
+          ? `Welcome to "${this.sessionName}"`
+          : "Welcome to the Waiting Room";
+      }
+    }
+  }
+
+  // ── HUD ─────────────────────────────────────────────────────────────────────
+
   private createHUD(): void {
+    if (this.currentMapName === "waitingArea") return;
     const D = 99998;
 
     // Dark background panel
@@ -856,6 +957,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateHUD(): void {
+    if (this.currentMapName === "waitingArea") return;
     const p = this.room.state.players.get(this.mySessionId);
     if (!p) return;
 
@@ -944,6 +1046,7 @@ export class GameScene extends Phaser.Scene {
   // ── Party HUD ──────────────────────────────────────────────────────────────
 
   private createPartyHUD(): void {
+    if (this.currentMapName === "waitingArea") return;
     const D       = 99998;
     const ROW_H   = 32;
     const ROW_GAP = 4;
@@ -1037,6 +1140,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updatePartyHUD(): void {
+    if (this.currentMapName === "waitingArea") return;
     const ROW_H    = 32;
     const ROW_GAP  = 4;
     const HEADER_H = 18;
@@ -1150,6 +1254,7 @@ export class GameScene extends Phaser.Scene {
   // ── Minimap ────────────────────────────────────────────────────────────────
 
   private createMinimap(): void {
+    if (this.currentMapName === "waitingArea") return;
     const D = 99990;
     const camW = this.cameras.main.width;
 
@@ -1262,6 +1367,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateMinimap(): void {
+    if (this.currentMapName === "waitingArea") return;
     if (!this.scene.isActive() || !this.minimapBg || !this.minimapBg.active) return;
     this.minimapDots.clear();
     const camW = this.cameras.main.width;
@@ -1370,6 +1476,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateLeaderboard(): void {
+    if (this.currentMapName === "waitingArea") return;
     // Safety check: skip if UI is destroyed
     if (!this.leaderboardBg || !this.leaderboardBg.active) {
       return;
@@ -1686,15 +1793,34 @@ export class GameScene extends Phaser.Scene {
   private applyMapData(data: MapDataMessage): void {
     if (!this.bgTileSprite) return;
 
+    // Dimensions come directly from the payload — never rely on room.state which may lag
+    const mapW = data.mapWidth  || 2000;
+    const mapH = data.mapHeight || 2000;
+
     this.clearMap();
+
+    // Destroy the initial TileSprite and recreate with correct size to guarantee the
+    // WebGL buffer is allocated properly (setSize() is unreliable for large rescales)
+    this.bgTileSprite.destroy();
+    const defaultTile = data.defaultTile && this.textures.exists(data.defaultTile)
+      ? data.defaultTile
+      : "grass_basic";
+    this.bgTileSprite = this.add.tileSprite(0, 0, mapW, mapH, defaultTile).setOrigin(0, 0).setDepth(0);
+
+    // Fix physics and camera bounds using the authoritative dimensions from the payload
+    this.physics.world.setBounds(0, 0, mapW, mapH);
+    const camW = this.cameras.main.width;
+    const camH = this.cameras.main.height;
+    if (mapW < camW || mapH < camH) {
+      const offsetX = mapW < camW ? -Math.floor((camW - mapW) / 2) : 0;
+      const offsetY = mapH < camH ? -Math.floor((camH - mapH) / 2) : 0;
+      this.cameras.main.setBounds(offsetX, offsetY, Math.max(mapW, camW), Math.max(mapH, camH));
+    } else {
+      this.cameras.main.setBounds(0, 0, mapW, mapH);
+    }
 
     console.log(`[Map] Applying map data. Tiles: ${data.tiles?.length ?? 0}, Objects: ${data.objects.length}`);
 
-    // Apply map default tile to the background
-    if (data.defaultTile && this.textures.exists(data.defaultTile)) {
-      this.bgTileSprite.setTexture(data.defaultTile);
-    }
-    // Render individually placed tiles (depth 0.5 = above background, below objects)
     this.placeTiles(data.tiles ?? []);
     this.placeStaticObjects(data.objects);
     this.buildNavGrid(data.objects);
@@ -1709,14 +1835,21 @@ export class GameScene extends Phaser.Scene {
 
   private setupRoomListeners(): void {
     this.room.onMessage("map_data", (data: MapDataMessage) => {
-      console.log(`[Network] Received map_data for ${this.currentMapName}. Tiles: ${data.tiles?.length ?? 0}`);
+      console.log(`[DIAG] map_data received — map=${this.currentMapName} isCreated=${this.isCreated} tiles=${data.tiles?.length ?? 0} bgActive=${this.bgTileSprite?.active ?? "null"}`);
       this.pendingMapData = data;
-      // If scene is already active/created, apply immediately
-      if (this.bgTileSprite) this.applyMapData(data);
+      // If scene is already active/created, apply immediately.
+      // Must use isCreated (not bgTileSprite) — bgTileSprite is not nulled in init()
+      // so it still holds a stale destroyed reference during preload, causing a crash.
+      if (this.isCreated) {
+        console.log(`[DIAG] Applying map_data immediately (isCreated=true)`);
+        this.applyMapData(data);
+      } else {
+        console.log(`[DIAG] Stored map_data in pendingMapData (isCreated=false)`);
+      }
     });
 
     // Server confirmed travel — leave current room and join target
-    this.room.onMessage("door_travel", (data: { targetMap: string; spawnX: number; spawnY: number }) => {
+    this.room.onMessage("door_travel", (data: { targetMap: string; spawnX?: number; spawnY?: number }) => {
       void this.travelToMap(data.targetMap, data.spawnX, data.spawnY);
     });
 
@@ -1725,7 +1858,7 @@ export class GameScene extends Phaser.Scene {
       (data: Array<{ nickname: string; level: number; xp: number; partyName: string }>) => {
         console.log(`[Network] Received leaderboard update. Count: ${data.length}`);
         this.globalLeaderboardData = data;
-        this.updateLeaderboard(); // Force refresh
+        if (this.isCreated) this.updateLeaderboard();
       }
     );
 
@@ -1784,17 +1917,17 @@ export class GameScene extends Phaser.Scene {
 
     // Coin drop animation
     this.room.onMessage("coin_drop", (data: { id: string; x: number; y: number }) => {
-      this.spawnCoinAnimation(data.id, data.x, data.y);
+      if (this.isCreated) this.spawnCoinAnimation(data.id, data.x, data.y);
     });
 
     // Coin collected or expired — stop the animation
     this.room.onMessage("coin_collected", (data: { id: string }) => {
-      this.removeCoinAnimation(data.id);
+      if (this.isCreated) this.removeCoinAnimation(data.id);
     });
 
     // Party invite received
     this.room.onMessage("party_invite", (data: { fromId: string; fromNickname: string }) => {
-      this.showPartyInvitePopup(data.fromId, data.fromNickname);
+      if (this.isCreated) this.showPartyInvitePopup(data.fromId, data.fromNickname);
     });
 
     // Track local player's own state changes
@@ -1840,6 +1973,10 @@ export class GameScene extends Phaser.Scene {
       if (this.localSprite) {
         console.log(`[Scene] Identified local player ${sessionId}. Snapping to ${player.x}, ${player.y}`);
         this.localSprite.setPosition(player.x, player.y);
+        // Immediately center the camera to avoid NaN scroll propagation when state
+        // arrived after create() placed the sprite at the default (non-authoritative) position.
+        this.cameras.main.scrollX = player.x - this.cameras.main.width  / 2;
+        this.cameras.main.scrollY = player.y - this.cameras.main.height / 2;
       }
       this.updateLeaderboard();
       return;
@@ -2774,9 +2911,14 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private async travelToMap(targetMap: string, spawnX: number, spawnY: number): Promise<void> {
+  private async travelToMap(targetMap: string, spawnX?: number, spawnY?: number): Promise<void> {
+    console.log(`[DIAG] travelToMap() called — target=${targetMap} spawnX=${spawnX} spawnY=${spawnY} isTeleporting=${this.isTeleporting}`);
     if (this.isTeleporting) return;
     this.isTeleporting = true;
+
+    // Hide the waiting-room HTML overlay so it doesn't bleed through the loading screen
+    const wrOverlay = document.getElementById("waiting-room-overlay");
+    if (wrOverlay) wrOverlay.style.display = "none";
 
     // Show loading overlay
     const w = this.cameras.main.width;
@@ -2804,7 +2946,7 @@ export class GameScene extends Phaser.Scene {
 
       const protocol = window.location.protocol === "https:" ? "wss" : "ws";
       const client   = new Client(`${protocol}://${window.location.host}`);
-      const newRoom  = await client.joinOrCreate("game", {
+      const joinOptions: Record<string, unknown> = {
         mapName:     targetMap,
         nickname:    this.localNickname,
         skin:        this.localSkin,
@@ -2812,7 +2954,13 @@ export class GameScene extends Phaser.Scene {
         persistentId: localStorage.getItem("playerId") ?? undefined,
         spawnX,
         spawnY,
-      });
+      };
+      // Re-authenticate as GM so the server restores isGM status
+      if (this.localSkin === "gm") {
+        joinOptions.login    = "admin";
+        joinOptions.password = "admin123";
+      }
+      const newRoom  = await client.joinOrCreate("game", joinOptions);
 
       localStorage.setItem("reconnToken", newRoom.reconnectionToken);
 

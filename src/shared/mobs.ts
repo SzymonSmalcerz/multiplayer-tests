@@ -91,7 +91,7 @@ export const MOB_REGISTRY: Record<string, MobDef> = {
       goDown:        [12, 13, 14, 15],
       specialAction: [16, 17, 18, 19],
     },
-    defaultSpeed: 2,
+    defaultSpeed: 1,
     defaultChangeTime: 2000,
     defaultChanceOfSpecialAction: 0.4,
     defaultSpecialTime: 10000,

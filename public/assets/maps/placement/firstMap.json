@@ -1,10 +1,98 @@
 {
+  "mapWidth": 2100,
+  "mapHeight": 2100,
   "defaultTile": "grass_basic",
   "spawnPoint": {
     "x": 100,
     "y": 100
   },
-  "tiles": [],
+  "tiles": [
+    {
+      "type": "dirt",
+      "x": 32,
+      "y": 2080
+    },
+    {
+      "type": "dirt",
+      "x": 64,
+      "y": 2080
+    },
+    {
+      "type": "dirt",
+      "x": 128,
+      "y": 2080
+    },
+    {
+      "type": "dirt",
+      "x": 160,
+      "y": 2080
+    },
+    {
+      "type": "dirt",
+      "x": 192,
+      "y": 2080
+    },
+    {
+      "type": "dirt",
+      "x": 224,
+      "y": 2080
+    },
+    {
+      "type": "dirt",
+      "x": 256,
+      "y": 2080
+    },
+    {
+      "type": "dirt",
+      "x": 288,
+      "y": 2080
+    },
+    {
+      "type": "dirt",
+      "x": 288,
+      "y": 2048
+    },
+    {
+      "type": "dirt",
+      "x": 256,
+      "y": 2048
+    },
+    {
+      "type": "dirt",
+      "x": 224,
+      "y": 2048
+    },
+    {
+      "type": "dirt",
+      "x": 192,
+      "y": 2048
+    },
+    {
+      "type": "dirt",
+      "x": 160,
+      "y": 2048
+    },
+    {
+      "type": "dirt",
+      "x": 160,
+      "y": 2016
+    },
+    {
+      "type": "dirt",
+      "x": 128,
+      "y": 2016
+    },
+    {
+      "type": "dirt",
+      "x": 96,
+      "y": 2016
+    },
+    {
+      "type": "dirt",
+      "x": 64,
+      "y": 2016
+    }
+  ],
   "objects": [
     {
       "type": "tree1",

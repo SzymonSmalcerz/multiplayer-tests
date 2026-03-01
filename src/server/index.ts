@@ -714,7 +714,7 @@ app.get("/api/check-session/:passcode", (req, res) => {
     res.json({ valid: false });
     return;
   }
-  res.json({ valid: true, name: globalBus.getSessionName(passcode) });
+  res.json({ valid: true, name: globalBus.getSessionName(passcode), isStarted: globalBus.isSessionStarted(passcode) });
 });
 
 app.post("/api/create-room", (req, res) => {
