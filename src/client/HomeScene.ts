@@ -132,7 +132,23 @@ export class HomeScene extends Phaser.Scene {
       }
     }
 
-    this.showOverlay();
+    // /login goes straight to GM form; main path shows the new home screen
+    if (window.location.pathname === "/login") {
+      this.showOverlay();
+    } else {
+      this.showHomeScreen();
+    }
+  }
+
+  private showHomeScreen(): void {
+    const homeScreen = document.getElementById("home-screen");
+    if (homeScreen) homeScreen.style.display = "flex";
+
+    // When user picks "Enter Room Code", hide home screen and show regular overlay
+    document.addEventListener("home:enter-room", () => {
+      if (homeScreen) homeScreen.style.display = "none";
+      this.showOverlay();
+    }, { once: true });
   }
 
   private setReconnecting(active: boolean): void {

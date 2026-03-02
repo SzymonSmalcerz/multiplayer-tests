@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Multiplayer Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -20,7 +22,7 @@
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.82);
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       z-index: 200;
@@ -500,6 +502,374 @@
     body.waiting-area-bg {
       background: radial-gradient(ellipse at center, #1a2a4a 0%, #0a0a1a 100%);
     }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       HOME SCREEN — Dark Terminal / Command Center
+    ══════════════════════════════════════════════════════════════════════════ */
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    @keyframes cardFadeIn {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes scanShimmer {
+      0%   { background-position: 0 0; }
+      100% { background-position: 0 100px; }
+    }
+
+    #home-screen {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 190;
+      background: #060c06;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      overflow: hidden;
+    }
+
+    /* Scanline overlay */
+    #home-screen::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0, 255, 20, 0.03) 3px,
+        rgba(0, 255, 20, 0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 1;
+      animation: scanShimmer 8s linear infinite;
+    }
+
+    /* Noise grain overlay */
+    #home-screen::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.4;
+    }
+
+    .home-content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 48px;
+      width: 100%;
+      max-width: 900px;
+      padding: 32px 20px;
+    }
+
+    .home-header {
+      text-align: center;
+    }
+
+    .sys-status {
+      font-size: 0.72rem;
+      color: #39ff14;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      opacity: 0.75;
+    }
+
+    .home-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(2.4rem, 6vw, 4.2rem);
+      font-weight: 900;
+      color: #39ff14;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      text-shadow:
+        0 0 20px rgba(57, 255, 20, 0.6),
+        0 0 60px rgba(57, 255, 20, 0.2);
+      margin-bottom: 10px;
+      line-height: 1;
+    }
+
+    .home-title .cursor {
+      display: inline-block;
+      width: 3px;
+      height: 0.85em;
+      background: #39ff14;
+      vertical-align: middle;
+      margin-left: 4px;
+      animation: blink 1.1s step-end infinite;
+    }
+
+    .sys-sub {
+      font-size: 0.75rem;
+      color: #4aef4a;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      opacity: 0.6;
+    }
+
+    /* ── Three terminal card panels ─────────────────────────────────────── */
+    .home-cards {
+      display: flex;
+      gap: 20px;
+      width: 100%;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .home-card {
+      flex: 1;
+      min-width: 220px;
+      max-width: 260px;
+      background: rgba(4, 18, 4, 0.92);
+      border: 1px solid rgba(57, 255, 20, 0.25);
+      border-radius: 4px;
+      padding: 28px 22px 24px;
+      cursor: pointer;
+      color: #8fff8f;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+      position: relative;
+      opacity: 0;
+      animation: cardFadeIn 0.5s ease forwards;
+      user-select: none;
+    }
+
+    .home-card:nth-child(1) { animation-delay: 0.15s; }
+    .home-card:nth-child(2) { animation-delay: 0.30s; }
+    .home-card:nth-child(3) { animation-delay: 0.45s; }
+
+    /* ASCII corner accents */
+    .home-card::before {
+      content: '┌─';
+      position: absolute;
+      top: 6px;
+      left: 8px;
+      font-size: 0.65rem;
+      color: rgba(57, 255, 20, 0.3);
+      line-height: 1;
+    }
+
+    .home-card::after {
+      content: '─┘';
+      position: absolute;
+      bottom: 6px;
+      right: 8px;
+      font-size: 0.65rem;
+      color: rgba(57, 255, 20, 0.3);
+      line-height: 1;
+    }
+
+    .home-card:hover {
+      border-color: rgba(57, 255, 20, 0.7);
+      box-shadow:
+        0 0 18px rgba(57, 255, 20, 0.15),
+        inset 0 0 12px rgba(57, 255, 20, 0.04);
+      transform: translateY(-3px);
+    }
+
+    .home-card:active {
+      transform: translateY(-1px);
+    }
+
+    .card-icon {
+      font-size: 1.5rem;
+      margin-bottom: 12px;
+      color: #39ff14;
+      text-shadow: 0 0 12px rgba(57, 255, 20, 0.5);
+    }
+
+    .card-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #39ff14;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #c8ffc8;
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    .card-desc {
+      font-size: 0.76rem;
+      color: #4a7a4a;
+      line-height: 1.5;
+      margin-bottom: 18px;
+    }
+
+    .card-action {
+      display: inline-block;
+      padding: 7px 16px;
+      font-size: 0.72rem;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      background: rgba(57, 255, 20, 0.08);
+      border: 1px solid rgba(57, 255, 20, 0.35);
+      border-radius: 2px;
+      color: #39ff14;
+      text-transform: uppercase;
+      transition: background 0.15s, border-color 0.15s;
+      pointer-events: none;
+    }
+
+    .home-card:hover .card-action {
+      background: rgba(57, 255, 20, 0.15);
+      border-color: rgba(57, 255, 20, 0.6);
+    }
+
+    /* Create session card uses GM orange */
+    #card-create .card-icon,
+    #card-create .card-label,
+    #card-create .card-action {
+      color: #ff8800;
+      border-color: rgba(255, 136, 0, 0.35);
+      background: rgba(255, 136, 0, 0.06);
+      text-shadow: 0 0 10px rgba(255, 136, 0, 0.4);
+    }
+
+    #card-create {
+      border-color: rgba(255, 136, 0, 0.2);
+    }
+
+    #card-create:hover {
+      border-color: rgba(255, 136, 0, 0.65);
+      box-shadow:
+        0 0 18px rgba(255, 136, 0, 0.12),
+        inset 0 0 12px rgba(255, 136, 0, 0.03);
+    }
+
+    #card-create:hover .card-action {
+      background: rgba(255, 136, 0, 0.14);
+      border-color: rgba(255, 136, 0, 0.6);
+    }
+
+    #card-create::before,
+    #card-create::after {
+      color: rgba(255, 136, 0, 0.25);
+    }
+
+    /* Offline card */
+    .home-card.card-offline {
+      opacity: 0;
+      cursor: not-allowed;
+    }
+
+    .home-card.card-offline.card-visible {
+      opacity: 0;
+      animation: cardFadeIn 0.5s ease 0.45s forwards;
+    }
+
+    .home-card.card-offline:hover {
+      transform: none;
+      border-color: rgba(57, 255, 20, 0.15);
+      box-shadow: none;
+    }
+
+    .home-card.card-offline .card-icon,
+    .home-card.card-offline .card-label,
+    .home-card.card-offline .card-title,
+    .home-card.card-offline .card-desc,
+    .home-card.card-offline .card-action {
+      opacity: 0.35;
+    }
+
+    .offline-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 0.6rem;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #ff4444;
+      border: 1px solid rgba(255, 68, 68, 0.4);
+      padding: 2px 6px;
+      border-radius: 2px;
+      background: rgba(255, 68, 68, 0.08);
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────────────── */
+    .home-footer {
+      font-size: 0.68rem;
+      color: #2a4a2a;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    /* ── Register modal ───────────────────────────────────────────────── */
+    #register-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .register-modal-card {
+      background: rgba(4, 18, 4, 0.97);
+      border: 1px solid rgba(57, 255, 20, 0.3);
+      border-radius: 4px;
+      padding: 40px 48px;
+      text-align: center;
+      max-width: 420px;
+      width: 90%;
+    }
+
+    .register-modal-card h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #39ff14;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .register-modal-card p {
+      font-size: 0.82rem;
+      color: #4a7a4a;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    #register-close {
+      padding: 8px 28px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      background: rgba(57, 255, 20, 0.08);
+      border: 1px solid rgba(57, 255, 20, 0.3);
+      border-radius: 2px;
+      color: #39ff14;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: background 0.15s;
+    }
+
+    #register-close:hover {
+      background: rgba(57, 255, 20, 0.15);
+    }
   </style>
 </head>
 <body>
@@ -518,6 +888,59 @@
     <div class="reconnecting-card">
       Reconnecting…
       <p class="sub">Restoring your session</p>
+    </div>
+  </div>
+
+  <!-- ══ Home Screen ══════════════════════════════════════════════════════ -->
+  <div id="home-screen">
+    <div class="home-content">
+
+      <header class="home-header">
+        <div class="sys-status">// SYSTEM ONLINE ■</div>
+        <h1 class="home-title">ADVENTURE<span class="cursor"></span></h1>
+        <div class="sys-sub">MULTIPLAYER ARENA — SELECT OPERATION</div>
+      </header>
+
+      <div class="home-cards">
+
+        <div class="home-card" id="card-enter">
+          <div class="card-icon">▶</div>
+          <div class="card-label">[ ENTER REALM ]</div>
+          <div class="card-title">Join Session</div>
+          <div class="card-desc">Enter a room code from your host and join an existing game session.</div>
+          <div class="card-action">[ CONNECT ]</div>
+        </div>
+
+        <div class="home-card" id="card-create">
+          <div class="card-icon">⊕</div>
+          <div class="card-label">[ CREATE SESSION ]</div>
+          <div class="card-title">Game Master</div>
+          <div class="card-desc">Launch and manage your own private session as the Game Master.</div>
+          <div class="card-action">[ INITIALIZE ]</div>
+        </div>
+
+        <div class="home-card card-offline card-visible" id="card-register">
+          <div class="offline-badge">OFFLINE</div>
+          <div class="card-icon">◈</div>
+          <div class="card-label">[ REGISTER ]</div>
+          <div class="card-title">Create Account</div>
+          <div class="card-desc">Register a permanent account to track your progress across sessions.</div>
+          <div class="card-action">[ OFFLINE ]</div>
+        </div>
+
+      </div>
+
+      <footer class="home-footer">WASD / ARROW KEYS TO MOVE</footer>
+
+    </div>
+  </div>
+
+  <!-- ══ Register "coming soon" modal ═════════════════════════════════════ -->
+  <div id="register-modal">
+    <div class="register-modal-card">
+      <h2>Registration Offline</h2>
+      <p>Account registration is not yet available.<br>Feature coming soon.</p>
+      <button id="register-close">[ CLOSE ]</button>
     </div>
   </div>
 
@@ -654,6 +1077,40 @@
     </div>
   </div>
 
+  <script>
+    // Home screen button wiring (runs before bundle.js; HomeScene controls visibility)
+    document.addEventListener('DOMContentLoaded', function () {
+      var cardCreate   = document.getElementById('card-create');
+      var cardRegister = document.getElementById('card-register');
+      var cardEnter    = document.getElementById('card-enter');
+      var regModal     = document.getElementById('register-modal');
+      var regClose     = document.getElementById('register-close');
+
+      if (cardCreate) {
+        cardCreate.addEventListener('click', function () {
+          window.location.href = '/login';
+        });
+      }
+
+      if (cardRegister) {
+        cardRegister.addEventListener('click', function () {
+          if (regModal) regModal.style.display = 'flex';
+        });
+      }
+
+      if (regClose) {
+        regClose.addEventListener('click', function () {
+          if (regModal) regModal.style.display = 'none';
+        });
+      }
+
+      if (cardEnter) {
+        cardEnter.addEventListener('click', function () {
+          document.dispatchEvent(new CustomEvent('home:enter-room'));
+        });
+      }
+    });
+  </script>
   <script src="bundle.js"></script>
 </body>
 </html>
