@@ -37,6 +37,7 @@ export class PlayerState extends Schema {
   @type("number")  potionHealRemaining: number = 0;
   @type("boolean") disconnected: boolean = false;
   @type("boolean") isGM: boolean = false;
+  @type("int16")   kills: number = 0;
 }
 
 export class EnemyState extends Schema {
@@ -268,10 +269,10 @@ export class GameRoom extends Room<GameState> {
         return true;
       },
       getPlayersFn: () => {
-        const out: Array<{ nickname: string; level: number; xp: number; partyName: string; isDead: boolean }> = [];
+        const out: Array<{ nickname: string; level: number; xp: number; gold: number; kills: number; partyName: string; isDead: boolean }> = [];
         this.state.players.forEach(p => {
           if (!p.isGM) {
-            out.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName, isDead: p.isDead });
+            out.push({ nickname: p.nickname, level: p.level, xp: p.xp, gold: p.gold, kills: p.kills, partyName: p.partyName, isDead: p.isDead });
           }
         });
         return out;
@@ -357,6 +358,7 @@ export class GameRoom extends Room<GameState> {
       if (!player?.isGM) return;
       globalBus.startGameSession(this.passcode);
       this.broadcast("door_travel", { targetMap: "m1" });
+      globalBus.scheduleSessionEnd(this.passcode);
       console.log(`[Room] GM started session ${this.passcode} — teleporting all to m1`);
     });
 
@@ -1428,6 +1430,10 @@ export class GameRoom extends Room<GameState> {
     if (!enemy || enemy.isDead) return;
 
     enemy.isDead = true;
+
+    // Credit kill to the killer
+    const killer = this.state.players.get(killerSessionId);
+    if (killer && !killer.isGM) killer.kills = Math.min(32767, killer.kills + 1);
 
     // Remove from state after death animation window (500 ms)
     const spawnDef = this.enemyDefById.get(enemyId) ?? null;

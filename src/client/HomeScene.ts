@@ -256,6 +256,10 @@ export class HomeScene extends Phaser.Scene {
     const password = pwInput?.value.trim()       ?? "";
     const roomName = roomNameInput?.value.trim() ?? "";
 
+    const durationInput = document.getElementById("gm-duration") as HTMLInputElement | null;
+    const rawDuration = parseInt(durationInput?.value ?? "30", 10);
+    const sessionDuration = isNaN(rawDuration) ? 30 : Math.max(5, Math.min(120, rawDuration));
+
     if (!login || !password) {
       if (errorEl) { errorEl.textContent = "Please enter login and password."; errorEl.style.display = "block"; }
       return;
@@ -268,7 +272,7 @@ export class HomeScene extends Phaser.Scene {
       const resp = await fetch("/api/create-room", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ login, password, roomName }),
+        body:    JSON.stringify({ login, password, roomName, sessionDuration }),
       });
 
       if (!resp.ok) {

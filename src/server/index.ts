@@ -718,7 +718,7 @@ app.get("/api/check-session/:passcode", (req, res) => {
 });
 
 app.post("/api/create-room", (req, res) => {
-  const { login, password, roomName } = req.body as { login?: string; password?: string; roomName?: string };
+  const { login, password, roomName, sessionDuration } = req.body as { login?: string; password?: string; roomName?: string; sessionDuration?: number };
 
   if (login !== "admin" || password !== "admin123") {
     res.status(401).json({ error: "Invalid credentials" });
@@ -733,8 +733,10 @@ app.post("/api/create-room", (req, res) => {
     attempts++;
   }
 
+  const rawDuration = typeof sessionDuration === "number" ? sessionDuration : 30;
+  const durationSeconds = Math.max(5, Math.min(120, Math.round(rawDuration))) * 60;
   const name = (typeof roomName === "string" && roomName.trim()) ? roomName.trim().slice(0, 30) : "Unnamed Session";
-  globalBus.createSession(passcode, name);
+  globalBus.createSession(passcode, name, durationSeconds);
 
   console.log(`[Server] GM created session — passcode: ${passcode}, name: "${name}"`);
   res.json({ passcode, name });

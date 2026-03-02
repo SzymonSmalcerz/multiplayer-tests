@@ -30,6 +30,8 @@ type GetPlayersFn = () => Array<{
   nickname:  string;
   level:     number;
   xp:        number;
+  gold:      number;
+  kills:     number;
   partyName: string;
   isDead:    boolean;
 }>;
@@ -51,7 +53,12 @@ class GlobalBus {
 
   // ── Session registry ─────────────────────────────────────────────────────────
   /** passcode → session metadata */
-  private activeSessions = new Map<string, { name: string; isStarted: boolean }>();
+  private activeSessions = new Map<string, {
+    name: string;
+    isStarted: boolean;
+    durationSeconds: number;
+    timerHandle?: ReturnType<typeof setTimeout>;
+  }>();
 
   // ── Per-session state ────────────────────────────────────────────────────────
   /** passcode → persistentId → PlayerProfile */
@@ -75,14 +82,16 @@ class GlobalBus {
 
   // ── Session lifecycle ────────────────────────────────────────────────────────
 
-  createSession(passcode: string, name: string): void {
-    this.activeSessions.set(passcode, { name, isStarted: false });
+  createSession(passcode: string, name: string, durationSeconds: number): void {
+    this.activeSessions.set(passcode, { name, isStarted: false, durationSeconds });
     // Pre-initialize empty maps for this session
     this.profiles.set(passcode, new Map());
     this.parties.set(passcode, new Map());
   }
 
   destroySession(passcode: string): void {
+    const session = this.activeSessions.get(passcode);
+    if (session?.timerHandle) { clearTimeout(session.timerHandle); session.timerHandle = undefined; }
     // Notify and disconnect every room in this session
     this.rooms.forEach((handle) => {
       if (handle.passcode === passcode) {
@@ -111,6 +120,34 @@ class GlobalBus {
 
   isSessionStarted(passcode: string): boolean {
     return this.activeSessions.get(passcode)?.isStarted ?? false;
+  }
+
+  /** Broadcast session_timer_start to all rooms, then schedule timer_end. */
+  scheduleSessionEnd(passcode: string): void {
+    const session = this.activeSessions.get(passcode);
+    if (!session) return;
+    this.broadcastToSession(passcode, "session_timer_start", { durationSeconds: session.durationSeconds });
+    session.timerHandle = setTimeout(() => this.endSessionWithRankings(passcode), session.durationSeconds * 1000);
+  }
+
+  /** Collect top-5 rankings, broadcast timer_end to all rooms, then destroy after 3 s delay. */
+  private endSessionWithRankings(passcode: string): void {
+    const allPlayers: Array<{ nickname: string; level: number; xp: number; gold: number; kills: number; partyName: string }> = [];
+    this.rooms.forEach((handle) => {
+      if (handle.passcode !== passcode) return;
+      for (const p of handle.getPlayersFn()) {
+        if (!p.isDead) allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, gold: p.gold, kills: p.kills, partyName: p.partyName });
+      }
+    });
+    allPlayers.sort((a, b) => b.level !== a.level ? b.level - a.level : b.xp - a.xp);
+    const top5 = allPlayers.slice(0, 5).map((p, i) => ({ rank: i + 1, ...p }));
+    this.broadcastToSession(passcode, "timer_end", { rankings: top5 });
+    setTimeout(() => this.destroySession(passcode), 3000);
+  }
+
+  /** Broadcast a typed message to every room in the session. */
+  private broadcastToSession(passcode: string, type: string, data: unknown): void {
+    this.rooms.forEach((handle) => { if (handle.passcode === passcode) handle.broadcastFn(type, data); });
   }
 
   // ── Room registration ────────────────────────────────────────────────────────

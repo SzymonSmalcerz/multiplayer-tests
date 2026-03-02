@@ -112,6 +112,17 @@ export interface RemotePlayer {
   onChange: (cb: () => void) => void;
 }
 
+/** One entry in the final session rankings */
+export interface RankEntry {
+  rank:      number;
+  nickname:  string;
+  level:     number;
+  xp:        number;
+  gold:      number;
+  kills:     number;
+  partyName: string;
+}
+
 /** Scene init data passed from HomeScene → GameScene (or GameScene → GameScene on teleport) */
 export interface GameSceneData {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,6 +135,7 @@ export interface GameSceneData {
   leaderboardData?: Array<{ nickname: string; level: number; xp: number; partyName: string }>;
   actionBarState?: any;
   equipmentState?: any;
+  sessionTimerEndTime?: number;
 }
 
 /** Represents one remote player entity in the GameScene */

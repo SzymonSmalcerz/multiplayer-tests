@@ -3,6 +3,7 @@ import { Client } from "colyseus.js";
 import {
   GameSceneData, MapDataMessage, RemotePlayer, RemotePlayerEntity,
   StaticObjectData, EnemyData, EnemyEntity, NpcData, TilePlacement, DoorData,
+  RankEntry,
 } from "./types";
 import { StaticObjectDef } from "../shared/staticObjects";
 import { WeaponDef } from "../shared/weapons";
@@ -94,6 +95,7 @@ export class GameScene extends Phaser.Scene {
   private passcode = "";
   private sessionName = "";
   private isSessionEnded = false;
+  private sessionTimerEndTime = 0;
 
   // Global leaderboard (updated by server every 3 s)
   private globalLeaderboardData: Array<{ nickname: string; level: number; xp: number; partyName: string }> | null = null;
@@ -227,10 +229,11 @@ export class GameScene extends Phaser.Scene {
     this.passcode         = data.passcode ?? "";
     this.sessionName      = data.sessionName ?? "";
     this.mySessionId      = data.room.sessionId as string;
-    this.currentMapName   = data.mapName ?? "m1";
-    this.isTeleporting    = false;
-    this.isSessionEnded   = false;
-    this.isCreated        = false;
+    this.currentMapName       = data.mapName ?? "m1";
+    this.isTeleporting        = false;
+    this.isSessionEnded       = false;
+    this.isCreated            = false;
+    this.sessionTimerEndTime  = data.sessionTimerEndTime ?? 0;
     this.localLevel       = 0;
     this.localIsDead      = false;
     // Keep passcode and current map name in localStorage fresh for reconnect
@@ -425,6 +428,11 @@ export class GameScene extends Phaser.Scene {
     this.ui.createHUD();
     this.ui.createPartyHUD();
     this.createMinimap();
+
+    // ── Session timer HUD (survives map transitions via sessionTimerEndTime) ────
+    if (this.sessionTimerEndTime > 0 && this.currentMapName !== "waitingArea") {
+      this.ui.createTimerDisplay();
+    }
 
     // ── Waiting room UI (replaces all HUD / minimap for waitingArea) ────────────
     if (this.currentMapName === "waitingArea") {
@@ -768,6 +776,10 @@ export class GameScene extends Phaser.Scene {
 
     this.ui.updateHUD();
     this.ui.updatePartyHUD();
+
+    if (this.sessionTimerEndTime > 0) {
+      this.ui.updateTimerDisplay(Math.max(0, Math.floor((this.sessionTimerEndTime - Date.now()) / 1000)));
+    }
 
     this.repositionMinimapUI();
     if (this.minimapOpen) {
@@ -1277,6 +1289,20 @@ export class GameScene extends Phaser.Scene {
       localStorage.removeItem("reconnToken");
       localStorage.removeItem("roomPasscode");
       this.showSessionEndedBanner();
+    });
+
+    // Session timer started (broadcast when GM clicks "Enter World")
+    this.room.onMessage("session_timer_start", (data: { durationSeconds: number }) => {
+      this.sessionTimerEndTime = Date.now() + data.durationSeconds * 1000;
+      if (this.isCreated) this.ui.createTimerDisplay();
+    });
+
+    // Session timer expired — show Hall of Fame rankings
+    this.room.onMessage("timer_end", (data: { rankings: RankEntry[] }) => {
+      this.isSessionEnded = true;
+      localStorage.removeItem("reconnToken");
+      localStorage.removeItem("roomPasscode");
+      this.showFinalRankings(data.rankings);
     });
 
     // Coin drop animation
@@ -2340,6 +2366,7 @@ export class GameScene extends Phaser.Scene {
         leaderboardData: this.globalLeaderboardData || undefined,
         actionBarState: this.actionBarUI.exportState(),
         equipmentState: this.equipmentUI.exportState(),
+        sessionTimerEndTime: this.sessionTimerEndTime || undefined,
       };
       
       // Clean up UI before switching
@@ -2658,5 +2685,31 @@ export class GameScene extends Phaser.Scene {
     this.isTeleporting = true;
     const el = document.getElementById("session-ended-overlay");
     if (el) el.style.display = "flex";
+  }
+
+  private showFinalRankings(rankings: RankEntry[]): void {
+    this.isTeleporting = true; // suppress generic disconnect banner
+
+    const list = document.getElementById("rankings-list");
+    if (list) {
+      list.innerHTML = "";
+      rankings.forEach((entry) => {
+        const card = document.createElement("div");
+        card.className = `rank-card rank-card-${entry.rank}`;
+
+        const icon = entry.rank === 1 ? "👑" : "🛡";
+        card.innerHTML = `
+          <span class="rank-icon">${icon}</span>
+          <span class="rank-name">${entry.nickname}</span>
+          <span class="rank-stat rank-level">Lv ${entry.level}</span>
+          <span class="rank-stat rank-gold">⚜ ${entry.gold}</span>
+          <span class="rank-stat rank-kills">☠ ${entry.kills}</span>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    const overlay = document.getElementById("final-rankings-overlay");
+    if (overlay) overlay.style.display = "flex";
   }
 }

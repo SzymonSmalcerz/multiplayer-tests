@@ -28,6 +28,11 @@ export class UIManager {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private get gs(): any { return this.scene; }
 
+  // ── Session timer HUD ──────────────────────────────────────────────────────
+  private timerBg?:          Phaser.GameObjects.Graphics;
+  private timerText?:        Phaser.GameObjects.Text;
+  private lastTimerSeconds = -1;
+
   // ── HP/XP/Gold HUD ─────────────────────────────────────────────────────────
   private hudHpBar!:     Phaser.GameObjects.Graphics;
   private hudPotionBar!: Phaser.GameObjects.Graphics;
@@ -727,5 +732,47 @@ export class UIManager {
     this.weaponHudBorder.clear()
       .lineStyle(2, borderColor, 1)
       .strokeCircle(cx, cy, R);
+  }
+
+  // ── Session timer display ────────────────────────────────────────────────────
+
+  createTimerDisplay(): void {
+    if (this.gs.currentMapName === "waitingArea") return;
+    if (this.timerText?.active) return; // already created
+
+    const w = this.scene.cameras.main.width;
+    const x = w / 2;
+    // GM has a passcode badge at y=10 (~21px tall); push the timer below it
+    const y = this.gs.localSkin === "gm" ? 38 : 12;
+
+    this.timerBg = this.scene.add.graphics()
+      .fillStyle(0x000000, 0.55)
+      .fillRoundedRect(x - 52, y, 104, 28, 6)
+      .setScrollFactor(0)
+      .setDepth(99997);
+
+    this.timerText = this.scene.add.text(x, y + 14, "00:00", {
+      fontFamily: "Cinzel, serif",
+      fontSize:   "16px",
+      color:      "#c9a227",
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(99998);
+
+    this.lastTimerSeconds = -1;
+  }
+
+  updateTimerDisplay(secondsLeft: number): void {
+    if (!this.timerText?.active) return;
+    if (secondsLeft === this.lastTimerSeconds) return;
+    this.lastTimerSeconds = secondsLeft;
+
+    const mins = Math.floor(secondsLeft / 60);
+    const secs = secondsLeft % 60;
+    const label = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    this.timerText.setText(label);
+
+    let color = "#c9a227";
+    if (secondsLeft <= 30)  color = "#cc2200";
+    else if (secondsLeft <= 120) color = "#ff8800";
+    this.timerText.setColor(color);
   }
 }
