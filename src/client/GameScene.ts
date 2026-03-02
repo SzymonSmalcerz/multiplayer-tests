@@ -1828,8 +1828,32 @@ export class GameScene extends Phaser.Scene {
   // ── Per-frame updates ──────────────────────────────────────────────────────
 
   private updateEnemies(): void {
+    const cam = this.cameras.main;
+    const viewRect = new Phaser.Geom.Rectangle(
+      cam.worldView.x - 200, cam.worldView.y - 200,
+      cam.worldView.width + 400, cam.worldView.height + 400,
+    );
+
     this.enemyMap.forEach((entity) => {
       if (entity.isDead || !entity.sprite || !entity.sprite.active) return;
+
+      const inView = viewRect.contains(entity.targetX, entity.targetY);
+      if (!inView) {
+        if (entity.sprite.visible) {
+          entity.sprite.setVisible(false);
+          entity.hpBar.setVisible(false);
+          entity.label.setVisible(false);
+        }
+        return;
+      }
+      // Re-entering viewport: snap to avoid catch-up lerp artefact
+      if (!entity.sprite.visible) {
+        entity.sprite.setPosition(entity.targetX, entity.targetY);
+        entity.sprite.setVisible(true);
+        entity.hpBar.setVisible(true);
+        entity.label.setVisible(true);
+        entity.lastHpRatio = -1; // force HP bar redraw
+      }
 
       const { sprite, hpBar } = entity;
 
@@ -2049,6 +2073,12 @@ export class GameScene extends Phaser.Scene {
   // ── Remote player interpolation ─────────────────────────────────────────────
 
   private interpolateRemotePlayers(delta: number): void {
+    const cam = this.cameras.main;
+    const viewRect = new Phaser.Geom.Rectangle(
+      cam.worldView.x - 200, cam.worldView.y - 200,
+      cam.worldView.width + 400, cam.worldView.height + 400,
+    );
+
     this.remoteMap.forEach((entity, sessionId) => {
       // Safety check: skip if sprite is gone or scene is cleaning up
       if (!entity.sprite || !entity.sprite.active) return;
@@ -2064,6 +2094,27 @@ export class GameScene extends Phaser.Scene {
           entity.lastHpRatio = -1;
         }
         return;
+      }
+
+      const inView = viewRect.contains(entity.targetX, entity.targetY);
+      if (!inView) {
+        if (entity.sprite.visible) {
+          entity.sprite.setVisible(false);
+          entity.hpBar?.setVisible(false);
+          entity.label.setVisible(false);
+          entity.weaponSprite.setVisible(false);
+          entity.partyLabel?.setVisible(false);
+          entity.chatBubble?.setVisible(false);
+        }
+        return;
+      }
+      // Re-entering viewport: snap to avoid catch-up lerp artefact
+      if (!entity.sprite.visible) {
+        entity.sprite.setPosition(entity.targetX, entity.targetY);
+        entity.sprite.setVisible(true);
+        entity.hpBar?.setVisible(true);
+        entity.label.setVisible(true);
+        entity.lastHpRatio = -1; // force HP bar redraw
       }
 
       const { sprite, weaponSprite, label, chatBubble,

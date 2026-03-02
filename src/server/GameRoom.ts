@@ -934,6 +934,8 @@ export class GameRoom extends Room<GameState> {
         if (this.isInNeutralZone(p.state.x, p.state.y)) continue; // invisible to enemies
         const dx = p.state.x - enemy.x;
         const dy = p.state.y - enemy.y;
+        // Broadphase: skip expensive sqrt for clearly distant players
+        if (Math.abs(dx) > 1000 || Math.abs(dy) > 1000) continue;
         const d  = Math.sqrt(dx * dx + dy * dy);
         if (d < nearestDist) { nearestDist = d; nearest = p; }
       }
