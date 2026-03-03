@@ -109,6 +109,11 @@ export class GameScene extends Phaser.Scene {
   private localAttackTimer = 0;
   private localAttackCooldownTimer = 0;
 
+  // Local knockback state (quiz map)
+  private localKnockbackTimer = 0;
+  private localKnockbackVX    = 0;
+  private localKnockbackVY    = 0;
+
   // Local death state
   private localIsDead    = false;
   private localDeathTimer = 0;
@@ -395,11 +400,8 @@ export class GameScene extends Phaser.Scene {
       frameWidth: 20, frameHeight: 20,
     });
 
-    // Quiz answer pad images
-    this.load.image("quiz_a", "assets/maps/response_A.png");
-    this.load.image("quiz_b", "assets/maps/response_B.png");
-    this.load.image("quiz_c", "assets/maps/response_C.png");
-    this.load.image("quiz_d", "assets/maps/response_D.png");
+    // Quiz answer pad image (shared for all four pads)
+    this.load.image("quiz_pad", "assets/maps/response.png");
   }
 
   create(): void {
@@ -449,7 +451,7 @@ export class GameScene extends Phaser.Scene {
     } else if (this.currentMapName === "quiz") {
       // Draw answer pads centered on the map, positions derived from map dimensions
       const PAD_W = 200;
-      const padKeys = ["quiz_a", "quiz_b", "quiz_c", "quiz_d"];
+      const padKeys = ["quiz_pad", "quiz_pad", "quiz_pad", "quiz_pad"];
       const mapCX = ((this.room.state.mapWidth  as number) || 2000) / 2;
       const mapCY = ((this.room.state.mapHeight as number) || 2000) / 2;
       const padPositions = [
@@ -722,7 +724,7 @@ export class GameScene extends Phaser.Scene {
   // ── Attack ─────────────────────────────────────────────────────────────────
 
   private triggerAttack(): void {
-    if (this.currentMapName === "waitingArea" || this.currentMapName === "quiz") return;
+    if (this.currentMapName === "waitingArea") return;
     if (this.localIsAttacking) return;          // already mid-swing
     if (this.localIsDead) return;
     if (this.localAttackCooldownTimer > 0) return; // still on cooldown
@@ -1480,6 +1482,15 @@ export class GameScene extends Phaser.Scene {
       if (this.isCreated) this.removeCoinAnimation(data.id);
     });
 
+    // Knockback from quiz map PvP hit
+    this.room.onMessage("knockback", (data: { angle: number }) => {
+      if (!this.isCreated || this.localIsDead) return;
+      this.localKnockbackTimer = 400;
+      this.localKnockbackVX = Math.cos(data.angle) * 1000;
+      this.localKnockbackVY = Math.sin(data.angle) * 1000;
+      this.pathWaypoints = []; // cancel click-to-move path
+    });
+
     // Party invite received
     this.room.onMessage("party_invite", (data: { fromId: string; fromNickname: string }) => {
       if (this.isCreated) this.showPartyInvitePopup(data.fromId, data.fromNickname);
@@ -1793,6 +1804,9 @@ export class GameScene extends Phaser.Scene {
     const myState = this.room.state.players.get(this.mySessionId);
     if (target.isGM || myState?.isGM) return;
 
+    // No party invites in waiting area or quiz map
+    if (this.currentMapName === "waitingArea" || this.currentMapName === "quiz") return;
+
     // Only show if we can invite: target must be solo, and we must be solo or the owner
     const canInvite = (target.partyId === "") &&
                       (this.myPartyId === "" || this.myIsPartyOwner);
@@ -2103,6 +2117,15 @@ export class GameScene extends Phaser.Scene {
     // Block all movement while dead
     if (this.localIsDead) {
       this.localSprite.setVelocity(0, 0);
+      return;
+    }
+
+    // Knockback slide (quiz map) — override all input until it expires
+    if (this.localKnockbackTimer > 0) {
+      this.localKnockbackTimer -= delta;
+      const t = Math.max(0, this.localKnockbackTimer / 400); // 1.0 → 0.0
+      this.localSprite.setVelocity(this.localKnockbackVX * t, this.localKnockbackVY * t);
+      this.localSprite.setDepth(this.localSprite.y + 32);
       return;
     }
 

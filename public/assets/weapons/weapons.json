@@ -13,7 +13,7 @@
     "label": "Sword",
     "damage": 30,
     "cost": 0,
-    "hitRadius": 17,
+    "hitRadius": 19,
     "orbitRadius": 26,
     "spritePath": "/assets/weapons/sword.png"
   },
@@ -22,7 +22,7 @@
     "label": "Broad sword",
     "damage": 70,
     "cost": 200,
-    "hitRadius": 20,
+    "hitRadius": 21,
     "orbitRadius": 29,
     "spritePath": "/assets/weapons/broad_sword.png"
   },

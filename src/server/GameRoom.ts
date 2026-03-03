@@ -8,6 +8,7 @@ import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../sha
 import { OBJECT_REGISTRY }                    from "../shared/objects";
 import { ENEMY_REGISTRY }                     from "../shared/enemies";
 import { WEAPON_REGISTRY }                    from "../shared/weapons";
+import { getAnswerPadPositions, isPlayerOnPad } from "../shared/quiz";
 import { globalBus, PlayerProfile, QuizQuestion } from "./GlobalBus";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ export class PlayerState extends Schema {
   @type("boolean") disconnected: boolean = false;
   @type("boolean") isGM: boolean = false;
   @type("int16")   kills: number = 0;
+  @type("number")  knockbackEndTime: number = 0;
 }
 
 export class EnemyState extends Schema {
@@ -460,7 +462,7 @@ export class GameRoom extends Room<GameState> {
         const dist   = Math.sqrt(dx * dx + dy * dy);
         const maxDist = MAX_SPEED_PX_PER_S * dtSec * SPEED_TOLERANCE;
 
-        if (dist > maxDist) {
+        if (now > player.knockbackEndTime && dist > maxDist) {
           const ratio = maxDist / dist;
           newX = last.x + dx * ratio;
           newY = last.y + dy * ratio;
@@ -482,6 +484,9 @@ export class GameRoom extends Room<GameState> {
     this.onMessage("party_invite", (client, data: { targetId: string }) => {
       const sender = this.state.players.get(client.sessionId);
       if (!sender) return;
+
+      // Parties disabled in waiting area and quiz map
+      if (this.mapName === "waitingArea" || this.mapName === "quiz") return;
 
       // GM cannot participate in parties
       if (sender.isGM) return;
@@ -1133,7 +1138,7 @@ export class GameRoom extends Room<GameState> {
 
   /** Called every tick — checks the sword's current orbital position against all enemies and players. */
   private tickPlayerWeapons(now: number): void {
-    if (this.mapName === "quiz" || this.mapName === "waitingArea") return;
+    if (this.mapName === "waitingArea") return;
     this.playerAttacks.forEach((startTime, sessionId) => {
       const player = this.state.players.get(sessionId);
       if (!player || player.isDead) return;
@@ -1188,8 +1193,8 @@ export class GameRoom extends Room<GameState> {
         if (target.isGM) return; // GM is immune to all damage
         // Neutral zone: target player is protected
         if (this.isInNeutralZone(target.x, target.y)) return;
-        // Same party: no friendly fire
-        if (player.partyId !== "" && player.partyId === target.partyId) return;
+        // Same party: no friendly fire (on quiz map, party members can push each other)
+        if (this.mapName !== "quiz" && player.partyId !== "" && player.partyId === target.partyId) return;
 
         const dx   = target.x - weaponX;
         const dy   = target.y - weaponY;
@@ -1200,6 +1205,15 @@ export class GameRoom extends Room<GameState> {
         if (now - lastHit < WEAPON_HIT_CD_MS) return;
 
         cdMap.set(targetId, now);
+
+        if (this.mapName === "quiz") {
+          const knockAngle = Math.atan2(target.y - player.y, target.x - player.x);
+          const targetClient = this.clients.find(c => c.sessionId === targetId);
+          targetClient?.send("knockback", { angle: knockAngle });
+          target.knockbackEndTime = now + 600; // 600 ms speed-check immunity
+          return; // skip HP damage
+        }
+
         target.hp = Math.max(0, target.hp - totalDmg);
         this.playerLastDamagedAt.set(targetId, now);
 
@@ -1728,19 +1742,12 @@ export class GameRoom extends Room<GameState> {
     this.state.quizCorrectIndex = q.correctIndex;
     const xp   = q.xp   ?? 50;
     const gold = q.gold ?? 10;
-    const cx = this.mapWidth  / 2;
-    const cy = this.mapHeight / 2;
-    const pads = [
-      { x: cx - 130, y: cy - 105 }, // A (top-left)
-      { x: cx + 130, y: cy - 105 }, // B (top-right)
-      { x: cx - 130, y: cy + 105 }, // C (bottom-left)
-      { x: cx + 130, y: cy + 105 }, // D (bottom-right)
-    ];
+    const pads    = getAnswerPadPositions(this.mapWidth, this.mapHeight);
     const correct = pads[q.correctIndex];
     if (!correct) return;
     this.state.players.forEach((p, sid) => {
       if (p.isDead || p.isGM) return;
-      if (Math.abs(p.x - correct.x) <= 100 && Math.abs(p.y - correct.y) <= 75) {
+      if (isPlayerOnPad(p.x, p.y, correct.x, correct.y)) {
         p.xp   += xp;
         p.gold += gold;
         this.checkLevelUp(sid);
@@ -1750,8 +1757,7 @@ export class GameRoom extends Room<GameState> {
       const p = this.state.players.get(client.sessionId);
       if (!p || p.isGM) return;
       const isCorrect = !p.isDead &&
-        Math.abs(p.x - correct.x) <= 100 &&
-        Math.abs(p.y - correct.y) <= 75;
+        isPlayerOnPad(p.x, p.y, correct.x, correct.y);
       client.send("quiz_result", {
         correct: isCorrect,
         xp:   isCorrect ? xp   : 0,
