@@ -101,23 +101,25 @@ export class UIManager {
     if (this.isRestrictedMap) return;
     const D = 99998;
 
-    // Dark background panel
+    // Dark wood background panel
     this.scene.add.graphics()
-      .fillStyle(0x000000, 0.55)
+      .fillStyle(0x1a1208, 0.92)
       .fillRect(8, 8, 204, 50)
+      .lineStyle(1, 0x4a2e15, 1)
+      .strokeRect(8, 8, 204, 50)
       .setScrollFactor(0)
       .setDepth(D);
 
-    // HP bar background (dark red)
+    // HP bar background (very dark red)
     this.scene.add.graphics()
-      .fillStyle(0x660000, 1)
+      .fillStyle(0x2a0e0e, 1)
       .fillRect(12, 14, 192, 13)
       .setScrollFactor(0)
       .setDepth(D + 1);
 
-    // XP bar background (dark blue)
+    // XP bar background (very dark, near black)
     this.scene.add.graphics()
-      .fillStyle(0x000066, 1)
+      .fillStyle(0x0e0a04, 1)
       .fillRect(12, 32, 192, 13)
       .setScrollFactor(0)
       .setDepth(D + 1);
@@ -136,7 +138,7 @@ export class UIManager {
 
     this.hudHpText = this.scene.add.text(14, 14, "HP: 100/100", {
       fontSize: "11px",
-      color: "#ffffff",
+      color: "#e8d5a0",
       stroke: "#000000",
       strokeThickness: 2,
       resolution: 2,
@@ -144,7 +146,7 @@ export class UIManager {
 
     this.hudXpText = this.scene.add.text(14, 32, "XP: 0/100", {
       fontSize: "11px",
-      color: "#ffffff",
+      color: "#e8d5a0",
       stroke: "#000000",
       strokeThickness: 2,
       resolution: 2,
@@ -152,14 +154,16 @@ export class UIManager {
 
     // Gold panel
     this.scene.add.graphics()
-      .fillStyle(0x000000, 0.55)
+      .fillStyle(0x1a1208, 0.92)
       .fillRect(218, 8, 80, 20)
+      .lineStyle(1, 0x4a2e15, 1)
+      .strokeRect(218, 8, 80, 20)
       .setScrollFactor(0)
       .setDepth(D);
 
     this.hudGoldText = this.scene.add.text(222, 12, "Gold: 0", {
       fontSize: "11px",
-      color: "#ffd700",
+      color: "#c9a227",
       stroke: "#000000",
       strokeThickness: 2,
       resolution: 2,
@@ -189,7 +193,7 @@ export class UIManager {
     if (hpFillW !== this.hudLastHpFillW) {
       this.hudLastHpFillW = hpFillW;
       this.hudHpBar.clear();
-      this.hudHpBar.fillStyle(0xff3333, 1);
+      this.hudHpBar.fillStyle(0xaa2020, 1);
       this.hudHpBar.fillRect(12, 14, hpFillW, 13);
     }
     const hpText = `HP: ${Math.floor(p.hp)}/${p.maxHp}`;
@@ -206,7 +210,7 @@ export class UIManager {
       this.hudLastPotionKey = potionKey;
       this.hudPotionBar.clear();
       if (poolW > 0) {
-        this.hudPotionBar.fillStyle(0x44ff88, 0.8);
+        this.hudPotionBar.fillStyle(0x4a9a30, 0.85);
         this.hudPotionBar.fillRect(12 + hpFillW, 14, poolW, 13);
       }
     }
@@ -216,7 +220,7 @@ export class UIManager {
     if (xpFillW !== this.hudLastXpFillW) {
       this.hudLastXpFillW = xpFillW;
       this.hudXpBar.clear();
-      this.hudXpBar.fillStyle(0x3399ff, 1);
+      this.hudXpBar.fillStyle(0xc9a227, 1);
       this.hudXpBar.fillRect(12, 32, xpFillW, 13);
     }
     const xpText = `XP: ${Math.floor(p.xp)}/${xpNeeded}  Lv.${p.level}`;
@@ -261,7 +265,7 @@ export class UIManager {
 
     this.partyHudHeaderText = this.scene.add.text(12, 68, "◆ Party", {
       fontSize: "11px",
-      color: "#77aaff",
+      color: "#c9a227",
       stroke: "#000000",
       strokeThickness: 2,
       resolution: 2,
@@ -269,7 +273,7 @@ export class UIManager {
 
     this.partyHudLeaveBtn = this.scene.add.text(210, 68, "Leave", {
       fontSize: "11px",
-      color: "#ff9966",
+      color: "#c85050",
       stroke: "#000000",
       strokeThickness: 2,
       resolution: 2,
@@ -277,8 +281,8 @@ export class UIManager {
       .setVisible(false)
       .setInteractive({ useHandCursor: true });
 
-    this.partyHudLeaveBtn.on("pointerover", () => this.partyHudLeaveBtn.setColor("#ff5533"));
-    this.partyHudLeaveBtn.on("pointerout",  () => this.partyHudLeaveBtn.setColor("#ff9966"));
+    this.partyHudLeaveBtn.on("pointerover", () => this.partyHudLeaveBtn.setColor("#ff6060"));
+    this.partyHudLeaveBtn.on("pointerout",  () => this.partyHudLeaveBtn.setColor("#c85050"));
     this.partyHudLeaveBtn.on("pointerdown", () => {
       this.gs.ignoreNextMapClick = true;
       this.gs.room.send("party_leave");
@@ -286,7 +290,7 @@ export class UIManager {
 
     this.partyHudRenameBtn = this.scene.add.text(150, 68, "✎", {
       fontSize: "12px",
-      color: "#aaaaaa",
+      color: "#8b6914",
       stroke: "#000000",
       strokeThickness: 2,
       resolution: 2,
@@ -294,8 +298,8 @@ export class UIManager {
       .setVisible(false)
       .setInteractive({ useHandCursor: true });
 
-    this.partyHudRenameBtn.on("pointerover", () => this.partyHudRenameBtn.setColor("#ffffff"));
-    this.partyHudRenameBtn.on("pointerout",  () => this.partyHudRenameBtn.setColor("#aaaaaa"));
+    this.partyHudRenameBtn.on("pointerover", () => this.partyHudRenameBtn.setColor("#c9a227"));
+    this.partyHudRenameBtn.on("pointerout",  () => this.partyHudRenameBtn.setColor("#8b6914"));
     this.partyHudRenameBtn.on("pointerdown", () => {
       this.gs.ignoreNextMapClick = true;
       const current = this.gs.room.state.players.get(this.gs.mySessionId)?.partyName ?? "";
@@ -315,7 +319,7 @@ export class UIManager {
 
       const nameText = this.scene.add.text(14, y + 4, "", {
         fontSize: "11px",
-        color: "#77aaff",
+        color: "#e8d5a0",
         stroke: "#000000",
         strokeThickness: 2,
         resolution: 2,
@@ -323,15 +327,15 @@ export class UIManager {
 
       const kickBtn = this.scene.add.text(210, y + 4, "Kick", {
         fontSize: "10px",
-        color: "#ff9966",
+        color: "#c85050",
         stroke: "#000000",
         strokeThickness: 2,
         resolution: 2,
       }).setOrigin(1, 0).setScrollFactor(0).setDepth(D + 3).setVisible(false)
         .setInteractive({ useHandCursor: true });
 
-      kickBtn.on("pointerover", () => kickBtn.setColor("#ff5533"));
-      kickBtn.on("pointerout",  () => kickBtn.setColor("#ff9966"));
+      kickBtn.on("pointerover", () => kickBtn.setColor("#ff6060"));
+      kickBtn.on("pointerout",  () => kickBtn.setColor("#c85050"));
       kickBtn.on("pointerdown", () => {
         this.gs.ignoreNextMapClick = true;
         const targetPid = kickBtn.getData("targetPid") as string;
@@ -363,7 +367,8 @@ export class UIManager {
 
     this.partyHudHeaderBg.clear();
     if (inParty) {
-      this.partyHudHeaderBg.fillStyle(0x000000, 0.55).fillRect(8, 66, PANEL_W, HEADER_H);
+      this.partyHudHeaderBg.fillStyle(0x1a1208, 0.92).fillRect(8, 66, PANEL_W, HEADER_H);
+      this.partyHudHeaderBg.lineStyle(1, 0x4a2e15, 0.6).strokeRect(8, 66, PANEL_W, HEADER_H);
     }
     const myPartyName = this.gs.room.state.players.get(this.gs.mySessionId)?.partyName ?? "Party";
     this.partyHudHeaderText
@@ -418,13 +423,14 @@ export class UIManager {
         const m       = members[i];
         const hpRatio = Math.max(0, Math.min(1, m.hp / m.maxHp));
 
-        row.bg.fillStyle(0x000000, 0.55).fillRect(8, y, PANEL_W, ROW_H);
-        row.bg.fillStyle(0x660000, 1).fillRect(12, y + 20, BAR_W, 8);
+        row.bg.fillStyle(0x1a1208, 0.92).fillRect(8, y, PANEL_W, ROW_H);
+        row.bg.lineStyle(1, 0x4a2e15, 0.5).strokeRect(8, y, PANEL_W, ROW_H);
+        row.bg.fillStyle(0x2a0e0e, 1).fillRect(12, y + 20, BAR_W, 8);
 
         if (m.isAway) {
-          row.hpBar.fillStyle(0x666666, 1).fillRect(12, y + 20, BAR_W, 8);
+          row.hpBar.fillStyle(0x4a3a28, 1).fillRect(12, y + 20, BAR_W, 8);
         } else {
-          row.hpBar.fillStyle(0xff3333, 1).fillRect(12, y + 20, Math.floor(BAR_W * hpRatio), 8);
+          row.hpBar.fillStyle(0xaa2020, 1).fillRect(12, y + 20, Math.floor(BAR_W * hpRatio), 8);
         }
 
         const nameLabel = m.isAway ? `${m.nickname} (Away)` : m.nickname;
@@ -447,7 +453,7 @@ export class UIManager {
       const rp = this.gs.room.state.players.get(sessionId);
       if (!rp) return;
       const inPartyColor = this.gs.myPartyId !== "" && rp.partyId === this.gs.myPartyId;
-      const color = inPartyColor ? "#77aaff" : "#ffff44";
+      const color = inPartyColor ? "#c9a227" : "#ffff44";
       entity.label.setColor(color);
       if (entity.partyLabel) entity.partyLabel.setColor(color);
     });

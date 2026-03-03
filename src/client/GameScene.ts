@@ -1820,14 +1820,18 @@ export class GameScene extends Phaser.Scene {
     const my    = Math.min(screenY + 4, camH - menuH - 8);
 
     const bg = this.add.graphics()
-      .fillStyle(0x111111, 0.92)
+      .fillStyle(0x1a1208, 0.97)
       .fillRoundedRect(mx, my, menuW, menuH, 6)
+      .lineStyle(1, 0x4a2e15, 1)
+      .strokeRoundedRect(mx, my, menuW, menuH, 6)
       .setScrollFactor(0)
       .setDepth(200000);
 
     const btn = this.add.text(mx + menuW / 2, my + menuH / 2, "Ask to party", {
       fontSize: "13px",
-      color: "#ffffff",
+      color: "#c9a227",
+      stroke: "#000000",
+      strokeThickness: 1,
       resolution: 2,
     })
     .setOrigin(0.5)
@@ -1835,8 +1839,8 @@ export class GameScene extends Phaser.Scene {
     .setDepth(200001)
     .setInteractive({ useHandCursor: true });
 
-    btn.on("pointerover", () => btn.setColor("#77aaff"));
-    btn.on("pointerout",  () => btn.setColor("#ffffff"));
+    btn.on("pointerover", () => btn.setColor("#f0c060"));
+    btn.on("pointerout",  () => btn.setColor("#c9a227"));
     btn.on("pointerdown", () => {
       this.ignoreNextMapClick = true;
       this.room.send("party_invite", { targetId: sessionId });
@@ -1865,15 +1869,19 @@ export class GameScene extends Phaser.Scene {
     const py   = h / 2 - 120;
 
     const bg = this.add.graphics()
-      .fillStyle(0x111111, 0.95)
+      .fillStyle(0x1a1208, 0.97)
       .fillRoundedRect(px, py, popW, popH, 8)
+      .lineStyle(2, 0x4a2e15, 1)
+      .strokeRoundedRect(px, py, popW, popH, 8)
       .setScrollFactor(0)
       .setDepth(300000);
 
     const titleText = this.add.text(px + popW / 2, py + 14,
       `${fromNickname} invited you to a party`, {
         fontSize: "13px",
-        color: "#ffffff",
+        color: "#e8d5a0",
+        stroke: "#000000",
+        strokeThickness: 1,
         resolution: 2,
         wordWrap: { width: popW - 24 },
         align: "center",
@@ -1884,8 +1892,8 @@ export class GameScene extends Phaser.Scene {
 
     const acceptBtn = this.add.text(px + 70, py + 68, "Accept", {
       fontSize: "13px",
-      color: "#44ff44",
-      backgroundColor: "#004400",
+      color: "#f0c060",
+      backgroundColor: "#5a3010",
       padding: { x: 14, y: 6 },
       resolution: 2,
     })
@@ -1896,8 +1904,8 @@ export class GameScene extends Phaser.Scene {
 
     const refuseBtn = this.add.text(px + popW - 70, py + 68, "Refuse", {
       fontSize: "13px",
-      color: "#ff4444",
-      backgroundColor: "#440000",
+      color: "#f0a0a0",
+      backgroundColor: "#4a1a1a",
       padding: { x: 14, y: 6 },
       resolution: 2,
     })
@@ -2519,29 +2527,44 @@ export class GameScene extends Phaser.Scene {
     dlg.style.cssText = [
       "position:fixed", "top:50%", "left:50%",
       "transform:translate(-50%,-50%)",
-      "background:#1a1a2e", "border:2px solid #44aa88",
-      "border-radius:8px", "padding:24px 32px",
-      "color:#eee", "font-family:sans-serif",
+      "background:repeating-linear-gradient(-45deg,rgba(201,162,39,0.018) 0px,rgba(201,162,39,0.018) 1px,transparent 1px,transparent 7px),rgba(26,18,8,0.97)",
+      "border:2px solid #4a2e15",
+      "border-radius:10px", "padding:24px 32px",
+      "color:#e8d5a0",
+      "font-family:'Cinzel',serif",
       "text-align:center", "z-index:9999",
-      "box-shadow:0 4px 24px rgba(0,0,0,0.8)",
-      "min-width:260px",
+      "box-shadow:0 8px 48px rgba(0,0,0,0.85),0 0 0 1px rgba(74,46,21,0.3),inset 0 1px 0 rgba(201,162,39,0.08)",
+      "min-width:280px",
     ].join(";");
 
     dlg.innerHTML = `
-      <div style="font-size:18px;font-weight:bold;margin-bottom:12px">
-        Travel to <span style="color:#44ffaa">${door.targetMap}</span>?
+      <div style="font-family:'Cinzel Decorative',serif;font-size:15px;color:#c9a227;margin-bottom:8px;text-shadow:0 0 12px rgba(201,162,39,0.4)">
+        ⚑ Portal
       </div>
-      <div style="font-size:13px;color:#aaa;margin-bottom:20px">
-        You will be teleported to another map.
+      <div style="font-size:14px;margin-bottom:6px;color:#e8d5a0">
+        Travel to <span style="color:#c9a227;font-weight:700">${door.targetMap}</span>?
+      </div>
+      <div style="font-family:'VT323',serif;font-size:16px;color:#8b6914;margin-bottom:22px">
+        You will be teleported to another realm.
       </div>
       <button id="door-yes" style="
-        background:#2a7a4a;color:#fff;border:none;border-radius:4px;
-        padding:8px 24px;font-size:14px;cursor:pointer;margin-right:8px">
+        font-family:'Cinzel',serif;font-weight:700;
+        background:repeating-linear-gradient(90deg,rgba(255,255,255,0.025) 0px,transparent 1px,transparent 9px),linear-gradient(180deg,#7a4a1e 0%,#5a3010 100%);
+        color:#f0c060;
+        border-top:2px solid #9a6028;border-left:2px solid #8a5020;border-right:2px solid #3a1e08;border-bottom:4px solid #1a0e04;
+        border-radius:5px;padding:8px 24px;font-size:13px;cursor:pointer;margin-right:8px;
+        text-shadow:0 1px 2px rgba(0,0,0,0.8);
+        box-shadow:0 2px 8px rgba(0,0,0,0.5)">
         Travel
       </button>
       <button id="door-no" style="
-        background:#4a2a2a;color:#fff;border:none;border-radius:4px;
-        padding:8px 24px;font-size:14px;cursor:pointer">
+        font-family:'Cinzel',serif;font-weight:700;
+        background:linear-gradient(180deg,#6a2a2a,#4a1a1a);
+        color:#f0a0a0;
+        border-top:2px solid #8a3030;border-left:2px solid #7a2828;border-right:2px solid #2a0808;border-bottom:4px solid #1a0808;
+        border-radius:5px;padding:8px 24px;font-size:13px;cursor:pointer;
+        text-shadow:0 1px 2px rgba(0,0,0,0.8);
+        box-shadow:0 2px 8px rgba(0,0,0,0.5)">
         Cancel
       </button>
     `;
