@@ -152,10 +152,8 @@ export class HomeScene extends Phaser.Scene {
   }
 
   private setReconnecting(active: boolean): void {
-    const banner  = document.getElementById("reconnecting-banner");
-    const overlay = document.getElementById("overlay");
-    if (banner)  banner.style.display  = active ? "flex" : "none";
-    if (overlay) overlay.style.display = active ? "none" : "flex";
+    const banner = document.getElementById("reconnecting-banner");
+    if (banner) banner.style.display = active ? "flex" : "none";
   }
 
   // ── Overlay ──────────────────────────────────────────────────────────────
