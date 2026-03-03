@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Name
+
+The game is called **Wantaja**. Use this name everywhere — page title, UI headings, any user-facing text. Never use "Adventure", "Multiplayer Game", or other placeholders.
+
 ## Commands
 
 ```bash

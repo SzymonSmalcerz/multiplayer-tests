@@ -1,55 +1,57 @@
-# Gemini CLI Context: Multiplayer Top-Down Game
-
-This project is a real-time multiplayer top-down game built with **Colyseus** (backend) and **Phaser 3** (frontend). It features server-authoritative movement, client prediction, enemy AI, and a shared persistent world.
+# GEMINI.md
 
 ## Project Overview
+A real-time multiplayer top-down RPG built with **Colyseus** (Node.js) for the authoritative backend and **Phaser 3** (TypeScript) for the client-side rendering. The game features combat, leveling, gold collection, equipment/shops, and a party system.
 
-- **Architecture**: Client-Server using WebSockets (via Colyseus).
-- **Backend**: Node.js (Express + Colyseus) written in TypeScript.
-    - **Room Logic**: `src/server/GameRoom.ts` manages state, movement validation (speed checks), combat logic, and party systems.
-    - **State Sync**: Broadcasts state at 20Hz using Colyseus Schema.
-- **Frontend**: Phaser 3 (Arcade Physics) written in TypeScript.
-    - **HomeScene**: UI overlay for nickname input and skin selection.
-    - **GameScene**: Main game loop, rendering, client-side prediction, and remote player interpolation (LERP).
-    - **Pathfinding**: Implements A* on a 16px grid for click-to-move functionality.
-- **Assets**: Sprites and tiles are located in `public/assets/`. Player skins follow a specific 576x256 sprite sheet format (9 frames per direction, 4 rows).
+### Architecture
+-   **`src/server/`**: Authoritative game logic, room management (`GameRoom.ts`), and state synchronization via Colyseus.
+-   **`src/client/`**: Phaser 3 scenes, UI components (Action Bar, Equipment, Shop), and client-side systems (MobSystem).
+-   **`src/shared/`**: Shared constants, registries (enemies, items, objects), and utility logic (formulas, combat math) used by both client and server.
+-   **`public/assets/`**: Game assets including spritesheets, tiles, and map definitions in JSON format.
 
-## Tech Stack
+### Key Technologies
+-   **Backend**: Node.js, Colyseus (v0.15), Express.
+-   **Frontend**: Phaser 3, esbuild (bundler).
+-   **Language**: TypeScript.
+-   **Testing**: Vitest.
 
-- **Server**: Colyseus 0.15, Express, TypeScript.
-- **Client**: Phaser 3.87, Colyseus.js, esbuild.
-- **Tooling**: `nodemon` for server auto-restart, `esbuild` for fast client bundling, `vitest` for testing.
+---
 
 ## Building and Running
 
-### Development
-Runs the server and client in watch mode with auto-rebuild:
-```bash
-npm run dev
-```
+### Prerequisites
+-   Node.js (v20+ recommended)
+-   npm
 
-### Production
-Builds both server and client, then starts the server:
-```bash
-npm start
-```
+### Key Commands
+-   **`npm install`**: Install dependencies.
+-   **`npm start`**: Build both client and server, then start the server.
+-   **`npm run dev`**: Start development mode with hot-reloading for both client (esbuild watch) and server (nodemon).
+-   **`npm run build`**: Build both client (`public/bundle.js`) and server (`dist/`).
+-   **`npm test`**: Run unit tests using Vitest.
 
-### Manual Build Steps
-- **Build All**: `npm run build`
-- **Server Only**: `npm run build:server` (compiles to `dist/`)
-- **Client Only**: `npm run build:client` (bundles to `public/bundle.js`)
+### Local Development
+1.  Run `npm run dev`.
+2.  Open `http://localhost:3000` in multiple tabs to test multiplayer interactions.
+
+---
 
 ## Development Conventions
 
-- **Authoritative Server**: The server (`GameRoom.ts`) is the source of truth for positions and combat. It validates movement messages and clamps positions to world bounds.
-- **Client Prediction**: The client moves the local player immediately and sends the position to the server. If the server disagrees significantly (drift), the client reconciles by snapping to the server position.
-- **Interpolation**: Remote players and enemies are smoothly moved toward their target position using a LERP factor in `GameScene.ts`.
-- **Combat System**: Hits are detected using server-side hitboxes based on player direction and proximity.
-- **Depth Sorting (Y-sorting)**: All entities (players, enemies, trees) have their `depth` set based on their `y` coordinate to handle overlapping correctly.
-- **Typing**: Shared data structures are defined in `src/client/types.ts` or derived from the Colyseus Schema.
+### Code Structure
+-   **Authoritative Server**: All critical state (HP, XP, Gold, Position validation) must be handled in `GameRoom.ts`.
+-   **Shared Registries**: Definitions for enemies, weapons, and static objects should be placed in `src/shared/` to ensure consistency between client and server.
+-   **Type Safety**: Use the interfaces defined in `src/client/types.ts` (which often mirror server schemas) for consistency.
 
-## Key Files
-- `src/server/GameRoom.ts`: Server-side state, AI, and message handling.
-- `src/client/GameScene.ts`: Main client-side rendering and interaction logic.
-- `src/client/skins.ts`: Central registry for player sprite sheets and frame geometry.
-- `public/index.html`: Main entry point containing the UI overlay and game container.
+### Map & Asset Workflow
+-   **Maps**: Located in `public/assets/maps/placement/*.json`. These files define tiles, static objects, NPC positions, and enemy spawn points.
+-   **Sprites**: Player sprites follow a specific 4-directional 9-frame walk cycle layout (576x256 total).
+-   **Registries**: Adding new items or enemies requires updating the corresponding JSON/TS files in `src/shared/` (e.g., `enemies.ts`, `weapons.ts`).
+
+### Testing
+-   Logic that is independent of Phaser or Colyseus should be extracted to `src/client/logic.ts` or `src/shared/` and covered by unit tests in the `tests/` directory.
+-   Run `npm test` before committing significant changes to logic or formulas.
+
+### Communication
+-   **Messages**: Colyseus messages are used for ephemeral actions (chat, emotes, UI triggers).
+-   **State**: Use Colyseus `@type` schema for synchronizing persistent entity data (players, enemies).
