@@ -10,7 +10,7 @@ import { ENEMY_REGISTRY, loadEnemyRegistry, EnemyDef } from "../shared/enemies";
 import { WEAPON_REGISTRY, loadWeaponRegistry, WeaponDef } from "../shared/weapons";
 import { TILE_REGISTRY, loadTileRegistry, TileDef } from "../shared/tiles";
 import { GameRoom } from "./GameRoom";
-import { globalBus } from "./GlobalBus";
+import { globalBus, QuizQuestion } from "./GlobalBus";
 
 const PORT = Number(process.env.PORT ?? 3000);
 
@@ -714,11 +714,15 @@ app.get("/api/check-session/:passcode", (req, res) => {
     res.json({ valid: false });
     return;
   }
-  res.json({ valid: true, name: globalBus.getSessionName(passcode), isStarted: globalBus.isSessionStarted(passcode) });
+  res.json({
+    valid: true,
+    name:  globalBus.getSessionName(passcode),
+    stage: globalBus.getSessionStage(passcode) ?? "waiting",
+  });
 });
 
 app.post("/api/create-room", (req, res) => {
-  const { login, password, roomName, sessionDuration } = req.body as { login?: string; password?: string; roomName?: string; sessionDuration?: number };
+  const { login, password, roomName, sessionDuration, quizJson } = req.body as { login?: string; password?: string; roomName?: string; sessionDuration?: number; quizJson?: string };
 
   if (login !== "admin" || password !== "admin123") {
     res.status(401).json({ error: "Invalid credentials" });
@@ -736,7 +740,13 @@ app.post("/api/create-room", (req, res) => {
   const rawDuration = typeof sessionDuration === "number" ? sessionDuration : 30;
   const durationSeconds = Math.max(5, Math.min(120, Math.round(rawDuration))) * 60;
   const name = (typeof roomName === "string" && roomName.trim()) ? roomName.trim().slice(0, 30) : "Unnamed Session";
-  globalBus.createSession(passcode, name, durationSeconds);
+
+  let questions: QuizQuestion[] = [];
+  try {
+    if (quizJson && quizJson.trim()) questions = JSON.parse(quizJson) as QuizQuestion[];
+  } catch { /* invalid JSON → empty array */ }
+
+  globalBus.createSession(passcode, name, durationSeconds, questions);
 
   console.log(`[Server] GM created session — passcode: ${passcode}, name: "${name}"`);
   res.json({ passcode, name });

@@ -82,8 +82,8 @@ export class HomeScene extends Phaser.Scene {
   /** Passcode confirmed valid in Step 1 — used when submitting Step 2. */
   private confirmedPasscode = "";
 
-  /** Whether the session has already started (GM clicked "Enter World"). */
-  private sessionIsStarted = false;
+  /** Current stage of the session. */
+  private sessionStage: "waiting" | "quiz" | "m1" = "waiting";
 
   /** Human-readable session name returned by the server. */
   private sessionName = "";
@@ -260,6 +260,9 @@ export class HomeScene extends Phaser.Scene {
     const rawDuration = parseInt(durationInput?.value ?? "30", 10);
     const sessionDuration = isNaN(rawDuration) ? 30 : Math.max(5, Math.min(120, rawDuration));
 
+    const quizJsonInput = document.getElementById("gm-quiz-json") as HTMLTextAreaElement | null;
+    const quizJson = quizJsonInput?.value.trim() ?? "";
+
     if (!login || !password) {
       if (errorEl) { errorEl.textContent = "Please enter login and password."; errorEl.style.display = "block"; }
       return;
@@ -272,7 +275,7 @@ export class HomeScene extends Phaser.Scene {
       const resp = await fetch("/api/create-room", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ login, password, roomName, sessionDuration }),
+        body:    JSON.stringify({ login, password, roomName, sessionDuration, quizJson }),
       });
 
       if (!resp.ok) {
@@ -402,7 +405,7 @@ export class HomeScene extends Phaser.Scene {
 
     try {
       const resp = await fetch(`/api/check-session/${encodeURIComponent(code)}`);
-      const data = await resp.json() as { valid: boolean; name?: string; isStarted?: boolean };
+      const data = await resp.json() as { valid: boolean; name?: string; stage?: string };
 
       if (!data.valid) {
         if (errorEl) errorEl.textContent = "Room not found — check the code and try again.";
@@ -411,7 +414,7 @@ export class HomeScene extends Phaser.Scene {
       }
 
       this.confirmedPasscode = code;
-      this.sessionIsStarted  = data.isStarted ?? false;
+      this.sessionStage      = (data.stage as "waiting" | "quiz" | "m1") ?? "waiting";
       this.sessionName       = data.name ?? "";
       this.showStep(2, data.name ?? "");
     } catch {
@@ -526,11 +529,16 @@ export class HomeScene extends Phaser.Scene {
       const serverUrl = `${protocol}://${window.location.host}`;
       const client    = new Client(serverUrl);
 
+      let mapName: string;
+      if (this.sessionStage === "quiz") mapName = "quiz";
+      else if (this.sessionStage === "m1") mapName = "m1";
+      else mapName = "waitingArea";
+
       const room = await client.joinOrCreate("game", {
         nickname,
         skin:         this.selectedSkin,
         persistentId: getPersistentId(),
-        mapName:      this.sessionIsStarted ? "m1" : "waitingArea",
+        mapName,
         passcode,
       });
 
@@ -543,7 +551,6 @@ export class HomeScene extends Phaser.Scene {
       const overlay = document.getElementById("overlay");
       if (overlay) overlay.style.display = "none";
 
-      const mapName = this.sessionIsStarted ? "m1" : "waitingArea";
       const data: GameSceneData = { room, nickname, skin: this.selectedSkin, passcode, mapName, sessionName: this.sessionName };
       this.scene.start("GameScene", data);
     } catch (err) {

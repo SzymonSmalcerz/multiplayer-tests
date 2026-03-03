@@ -91,10 +91,14 @@ export class UIManager {
     this.scene = scene;
   }
 
+  private get isRestrictedMap(): boolean {
+    return this.gs.currentMapName === "waitingArea" || this.gs.currentMapName === "quiz";
+  }
+
   // ── HP/XP/Gold HUD ─────────────────────────────────────────────────────────
 
   createHUD(): void {
-    if (this.gs.currentMapName === "waitingArea") return;
+    if (this.isRestrictedMap) return;
     const D = 99998;
 
     // Dark background panel
@@ -163,7 +167,7 @@ export class UIManager {
   }
 
   updateHUD(): void {
-    if (this.gs.currentMapName === "waitingArea") return;
+    if (this.isRestrictedMap) return;
     const p = this.gs.room.state.players.get(this.gs.mySessionId);
     if (!p) return;
 
@@ -246,7 +250,7 @@ export class UIManager {
   // ── Party HUD ───────────────────────────────────────────────────────────────
 
   createPartyHUD(): void {
-    if (this.gs.currentMapName === "waitingArea") return;
+    if (this.isRestrictedMap) return;
     const D       = 99998;
     const ROW_H   = 32;
     const ROW_GAP = 4;
@@ -339,7 +343,7 @@ export class UIManager {
   }
 
   updatePartyHUD(): void {
-    if (this.gs.currentMapName === "waitingArea") return;
+    if (this.isRestrictedMap) return;
     const ROW_H    = 32;
     const ROW_GAP  = 4;
     const HEADER_H = 18;
@@ -496,7 +500,7 @@ export class UIManager {
   }
 
   updateLeaderboard(): void {
-    if (this.gs.currentMapName === "waitingArea") return;
+    if (this.gs.currentMapName === "waitingArea") return; // quiz map leaderboard stays visible
     if (!this.leaderboardBg || !this.leaderboardBg.active) return;
 
     const camW = this.scene.cameras.main.width;
@@ -737,7 +741,7 @@ export class UIManager {
   // ── Session timer display ────────────────────────────────────────────────────
 
   createTimerDisplay(): void {
-    if (this.gs.currentMapName === "waitingArea") return;
+    if (this.isRestrictedMap) return;
     if (this.timerText?.active) return; // already created
 
     const w = this.scene.cameras.main.width;

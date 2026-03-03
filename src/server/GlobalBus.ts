@@ -3,6 +3,15 @@
  * All state is scoped by passcode so separate private sessions are fully isolated.
  */
 
+export interface QuizQuestion {
+  text: string;
+  answers: string[];   // exactly 4 elements
+  correctIndex: number;
+  time: number;        // seconds
+  xp?: number;         // default 50
+  gold?: number;       // default 10
+}
+
 export interface PlayerProfile {
   nickname: string;
   skin: string;
@@ -55,8 +64,9 @@ class GlobalBus {
   /** passcode → session metadata */
   private activeSessions = new Map<string, {
     name: string;
-    isStarted: boolean;
+    stage: "waiting" | "quiz" | "m1";
     durationSeconds: number;
+    questions: QuizQuestion[];
     timerHandle?: ReturnType<typeof setTimeout>;
   }>();
 
@@ -82,8 +92,8 @@ class GlobalBus {
 
   // ── Session lifecycle ────────────────────────────────────────────────────────
 
-  createSession(passcode: string, name: string, durationSeconds: number): void {
-    this.activeSessions.set(passcode, { name, isStarted: false, durationSeconds });
+  createSession(passcode: string, name: string, durationSeconds: number, questions: QuizQuestion[] = []): void {
+    this.activeSessions.set(passcode, { name, stage: "waiting", durationSeconds, questions });
     // Pre-initialize empty maps for this session
     this.profiles.set(passcode, new Map());
     this.parties.set(passcode, new Map());
@@ -113,13 +123,22 @@ class GlobalBus {
     return this.activeSessions.get(passcode)?.name ?? "";
   }
 
-  startGameSession(passcode: string): void {
-    const session = this.activeSessions.get(passcode);
-    if (session) session.isStarted = true;
+  setSessionStage(passcode: string, stage: "waiting" | "quiz" | "m1"): void {
+    const s = this.activeSessions.get(passcode);
+    if (s) s.stage = stage;
+  }
+
+  getSessionStage(passcode: string): "waiting" | "quiz" | "m1" | undefined {
+    return this.activeSessions.get(passcode)?.stage;
+  }
+
+  getSessionQuestions(passcode: string): QuizQuestion[] {
+    return this.activeSessions.get(passcode)?.questions ?? [];
   }
 
   isSessionStarted(passcode: string): boolean {
-    return this.activeSessions.get(passcode)?.isStarted ?? false;
+    const stage = this.activeSessions.get(passcode)?.stage;
+    return stage === "quiz" || stage === "m1";
   }
 
   /** Broadcast session_timer_start to all rooms, then schedule timer_end. */

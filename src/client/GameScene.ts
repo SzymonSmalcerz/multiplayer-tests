@@ -90,6 +90,9 @@ export class GameScene extends Phaser.Scene {
   private doors: DoorData[] = [];
   private doorSprites = new Map<string, Phaser.GameObjects.Image>();
   private isTeleporting = false;
+  private quizPads: Phaser.GameObjects.Image[] = [];
+  private quizPadLabels: Phaser.GameObjects.Text[] = [];
+  private quizResultTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Private session
   private passcode = "";
@@ -391,6 +394,12 @@ export class GameScene extends Phaser.Scene {
     this.load.spritesheet("coins", "/assets/utils/coins.png", {
       frameWidth: 20, frameHeight: 20,
     });
+
+    // Quiz answer pad images
+    this.load.image("quiz_a", "assets/maps/response_A.png");
+    this.load.image("quiz_b", "assets/maps/response_B.png");
+    this.load.image("quiz_c", "assets/maps/response_C.png");
+    this.load.image("quiz_d", "assets/maps/response_D.png");
   }
 
   create(): void {
@@ -430,13 +439,43 @@ export class GameScene extends Phaser.Scene {
     this.createMinimap();
 
     // ── Session timer HUD (survives map transitions via sessionTimerEndTime) ────
-    if (this.sessionTimerEndTime > 0 && this.currentMapName !== "waitingArea") {
+    if (this.sessionTimerEndTime > 0 && this.currentMapName !== "waitingArea" && this.currentMapName !== "quiz") {
       this.ui.createTimerDisplay();
     }
 
     // ── Waiting room UI (replaces all HUD / minimap for waitingArea) ────────────
     if (this.currentMapName === "waitingArea") {
       this.createWaitingRoomUI();
+    } else if (this.currentMapName === "quiz") {
+      // Draw answer pads centered on the map, positions derived from map dimensions
+      const PAD_W = 200;
+      const padKeys = ["quiz_a", "quiz_b", "quiz_c", "quiz_d"];
+      const mapCX = ((this.room.state.mapWidth  as number) || 2000) / 2;
+      const mapCY = ((this.room.state.mapHeight as number) || 2000) / 2;
+      const padPositions = [
+        { x: mapCX - 130, y: mapCY - 105 }, // A (top-left)
+        { x: mapCX + 130, y: mapCY - 105 }, // B (top-right)
+        { x: mapCX - 130, y: mapCY + 105 }, // C (bottom-left)
+        { x: mapCX + 130, y: mapCY + 105 }, // D (bottom-right)
+      ];
+      this.quizPadLabels = [];
+      this.quizPads = padPositions.map((pos, i) => {
+        const img = this.add.image(pos.x, pos.y, padKeys[i]).setDepth(2);
+
+        // Answer text (centered on pad, initially empty)
+        const label = this.add.text(pos.x, pos.y, "", {
+          fontSize: "16px",
+          color: "#ffffff",
+          stroke: "#000000",
+          strokeThickness: 2,
+          wordWrap: { width: PAD_W - 20 },
+          align: "center",
+        }).setOrigin(0.5, 0.5).setDepth(3);
+        this.quizPadLabels.push(label);
+        return img;
+      });
+      this.ui.createLeaderboard();
+      this.showQuizOverlay();
     } else if (this.localSkin === "gm" && this.passcode) {
       // GM passcode badge (shown on normal maps only)
       const w = this.cameras.main.width;
@@ -537,7 +576,7 @@ export class GameScene extends Phaser.Scene {
       () => { this.ignoreNextMapClick = true; },
     );
     if (this.pendingActionBarState) this.actionBarUI.importState(this.pendingActionBarState);
-    if (this.currentMapName !== "waitingArea") this.actionBarUI.build();
+    if (this.currentMapName !== "waitingArea" && this.currentMapName !== "quiz") this.actionBarUI.build();
 
     // ── Equipment UI ─────────────────────────────────────────────────────────
     this.equipmentUI = new EquipmentUI(
@@ -578,6 +617,22 @@ export class GameScene extends Phaser.Scene {
     this.time.addEvent({ delay: 200, loop: true, callback: () => {
       if (this.currentMapName !== "waitingArea") this.ui.updateLeaderboard();
     }});
+
+    // ── Quiz state listeners ─────────────────────────────────────────────────
+    if (this.currentMapName === "quiz") {
+      this.room.state.listen("quizStatus",   (val: string) => this.onQuizStatusChange(val));
+      this.room.state.listen("quizQuestion", (val: string) => {
+        const el = document.getElementById("quiz-question-text");
+        if (el) el.textContent = val;
+      });
+      this.room.state.listen("quizTimeLeft", (val: number) => {
+        const el = document.getElementById("quiz-timer");
+        if (el) el.textContent = String(val);
+      });
+      this.room.onMessage("quiz_result", (data: { correct: boolean; xp: number; gold: number }) => {
+        this.showQuizResultPopup(data.correct, data.xp, data.gold);
+      });
+    }
 
     // ── Mob system ───────────────────────────────────────────────────────────
     this.mobSystem = new MobSystem(this);
@@ -667,7 +722,7 @@ export class GameScene extends Phaser.Scene {
   // ── Attack ─────────────────────────────────────────────────────────────────
 
   private triggerAttack(): void {
-    if (this.currentMapName === "waitingArea") return;
+    if (this.currentMapName === "waitingArea" || this.currentMapName === "quiz") return;
     if (this.localIsAttacking) return;          // already mid-swing
     if (this.localIsDead) return;
     if (this.localAttackCooldownTimer > 0) return; // still on cooldown
@@ -845,10 +900,119 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ── Quiz UI ──────────────────────────────────────────────────────────────────
+
+  private fitPadText(textObj: Phaser.GameObjects.Text, maxW: number, maxH: number): void {
+    for (let size = 18; size >= 8; size -= 2) {
+      textObj.setStyle({ fontSize: `${size}px`, wordWrap: { width: maxW } });
+      if (textObj.displayHeight <= maxH && textObj.displayWidth <= maxW) break;
+    }
+  }
+
+  private showQuizResultPopup(correct: boolean, xp: number, gold: number): void {
+    const popup = document.getElementById("quiz-result-popup");
+    const card  = document.getElementById("quiz-result-card");
+    const icon  = document.getElementById("quiz-result-icon");
+    const title = document.getElementById("quiz-result-title");
+    const sub   = document.getElementById("quiz-result-sub");
+    if (!popup || !card || !icon || !title || !sub) return;
+
+    if (this.quizResultTimer) { clearTimeout(this.quizResultTimer); this.quizResultTimer = null; }
+
+    // Reset then set new state
+    popup.classList.remove("qr-visible");
+    card.classList.remove("qr-correct", "qr-wrong");
+
+    if (correct) {
+      card.classList.add("qr-correct");
+      icon.textContent  = "✓";
+      title.textContent = "Correct!";
+      const rewards: string[] = [];
+      if (xp   > 0) rewards.push(`+${xp} XP`);
+      if (gold > 0) rewards.push(`+${gold} Gold`);
+      sub.textContent   = rewards.join("  ·  ");
+      sub.style.display = rewards.length > 0 ? "block" : "none";
+    } else {
+      card.classList.add("qr-wrong");
+      icon.textContent  = "✗";
+      title.textContent = "Wrong!";
+      sub.textContent   = "";
+      sub.style.display = "none";
+    }
+
+    // Show (next frame so transition fires after class reset)
+    requestAnimationFrame(() => popup.classList.add("qr-visible"));
+
+    // Auto-dismiss after 2.5 s
+    this.quizResultTimer = setTimeout(() => {
+      popup.classList.remove("qr-visible");
+      this.quizResultTimer = null;
+    }, 2500);
+  }
+
+  private showQuizOverlay(): void {
+    const overlay = document.getElementById("quiz-overlay");
+    if (overlay) overlay.style.display = "block";
+
+    if (this.localSkin === "gm") {
+      const ctrl = document.getElementById("quiz-gm-controls");
+      if (ctrl) ctrl.style.display = "block";
+
+      document.getElementById("btn-start-quiz")?.addEventListener("click", () => {
+        this.room.send("gm_start_quiz");
+      });
+      document.getElementById("btn-next-question")?.addEventListener("click", () => {
+        this.room.send("gm_next_question");
+      });
+      document.getElementById("btn-end-quiz")?.addEventListener("click", () => {
+        this.room.send("gm_end_quiz");
+      });
+    }
+  }
+
+  private onQuizStatusChange(status: string): void {
+    const qText    = document.getElementById("quiz-question-text");
+    const timer    = document.getElementById("quiz-timer");
+    const btnStart = document.getElementById("btn-start-quiz")  as HTMLButtonElement | null;
+    const btnNext  = document.getElementById("btn-next-question") as HTMLButtonElement | null;
+    const btnEnd   = document.getElementById("btn-end-quiz")    as HTMLButtonElement | null;
+
+    if (status === "active") {
+      if (qText) qText.style.display = "block";
+      if (timer) timer.style.display = "block";
+      if (btnStart) btnStart.style.display = "none";
+      if (btnNext)  btnNext.style.display  = "none";
+      if (btnEnd)   btnEnd.style.display   = "none";
+      this.quizPads.forEach(p => p.clearTint());
+      // Populate answer text on each pad
+      const answers = this.room.state.quizAnswers;
+      this.quizPadLabels.forEach((label, i) => {
+        const answer = (answers[i] as string) ?? "";
+        label.setText(answer);
+        this.fitPadText(label, 180, 120);
+      });
+    } else if (status === "idle") {
+      this.quizPadLabels.forEach(l => l.setText(""));
+    } else if (status === "result") {
+      const correctIdx = this.room.state.quizCorrectIndex as number;
+      if (timer) timer.style.display = "none";
+      this.quizPads.forEach((p, i) => {
+        if (i === correctIdx) p.setTint(0x44ff44);
+        else p.clearTint();
+      });
+      if (this.localSkin === "gm" && btnNext && btnEnd) {
+        const isLast = (this.room.state.quizCurrentIndex as number) >=
+                       (this.room.state.quizTotalQuestions as number) - 1;
+        btnNext.style.display = isLast ? "none"         : "inline-block";
+        btnEnd.style.display  = isLast ? "inline-block" : "none";
+      }
+    }
+  }
+
   // ── Minimap ────────────────────────────────────────────────────────────────
 
   private createMinimap(): void {
-    if (this.currentMapName === "waitingArea") return;
+    if (this.currentMapName === "waitingArea" || this.currentMapName === "quiz") return;
     const D = 99990;
     const camW = this.cameras.main.width;
 
@@ -949,6 +1113,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private repositionMinimapUI(): void {
+    if (this.currentMapName === "waitingArea" || this.currentMapName === "quiz") return;
     const camW = this.cameras.main.width;
     const mmX = camW - 208;
     const mmY = 8;
@@ -961,7 +1126,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateMinimap(): void {
-    if (this.currentMapName === "waitingArea") return;
+    if (this.currentMapName === "waitingArea" || this.currentMapName === "quiz") return;
     if (!this.scene.isActive() || !this.minimapBg || !this.minimapBg.active) return;
     this.minimapDots.clear();
     const camW = this.cameras.main.width;
@@ -1338,6 +1503,21 @@ export class GameScene extends Phaser.Scene {
       if (newWeapon !== this.localWeaponKey) {
         this.localWeaponKey = newWeapon;
         if (this.localWeapon) this.localWeapon.setTexture(newWeapon);
+      }
+
+      // Level-up — update label text and local skin tier
+      const newLv = player.level ?? 1;
+      if (newLv !== this.localLevel) {
+        this.localLevel = newLv;
+        if (this.localSkin !== "gm") {
+          this.localLabel.setText(`${this.localNickname} [Lv.${newLv}]`);
+          if (isTierBoundary(newLv)) {
+            const newKey = skinKey(getSkinForLevel(this.localSkin, newLv));
+            if (this.textures.exists(newKey)) {
+              this.localSprite.setTexture(newKey, DIR_TO_ROW[this.localDirection] * 9);
+            }
+          }
+        }
       }
 
       // Party state change — update label colors of all remote players
@@ -2357,9 +2537,11 @@ export class GameScene extends Phaser.Scene {
     if (this.isTeleporting) return;
     this.isTeleporting = true;
 
-    // Hide the waiting-room HTML overlay so it doesn't bleed through the loading screen
+    // Hide the waiting-room and quiz HTML overlays so they don't bleed through the loading screen
     const wrOverlay = document.getElementById("waiting-room-overlay");
     if (wrOverlay) wrOverlay.style.display = "none";
+    const quizOverlay = document.getElementById("quiz-overlay");
+    if (quizOverlay) quizOverlay.style.display = "none";
     document.body.classList.remove("waiting-area-bg");
 
     // Show loading overlay

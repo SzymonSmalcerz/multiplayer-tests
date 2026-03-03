@@ -1,1086 +1,195 @@
 {
-  "mapWidth": 1000,
-  "mapHeight": 1000,
+  "mapWidth": 2000,
+  "mapHeight": 2000,
   "defaultTile": "grass_basic",
   "spawnPoint": {
-    "x": 336,
-    "y": 203
+    "x": 1003,
+    "y": 994
   },
-  "tiles": [
+  "tiles": [],
+  "objects": [
     {
-      "type": "dirt",
-      "x": 0,
-      "y": 960
+      "type": "tree3",
+      "x": 391,
+      "y": 1702
     },
     {
-      "type": "dirt",
-      "x": 32,
-      "y": 960
+      "type": "tree3",
+      "x": 310,
+      "y": 1428
     },
     {
-      "type": "dirt",
-      "x": 64,
-      "y": 960
+      "type": "tree3",
+      "x": 115,
+      "y": 1542
     },
     {
-      "type": "dirt",
-      "x": 96,
-      "y": 960
+      "type": "tree3",
+      "x": 1,
+      "y": 388
     },
     {
-      "type": "dirt",
-      "x": 128,
-      "y": 960
+      "type": "tree3",
+      "x": 409,
+      "y": 123
     },
     {
-      "type": "dirt",
-      "x": 160,
-      "y": 960
+      "type": "tree3",
+      "x": 1848,
+      "y": 333
     },
     {
-      "type": "dirt",
-      "x": 192,
-      "y": 960
+      "type": "tree3",
+      "x": 1629,
+      "y": 642
     },
     {
-      "type": "dirt",
-      "x": 224,
-      "y": 960
+      "type": "tree3",
+      "x": 1714,
+      "y": 1000
     },
     {
-      "type": "dirt",
-      "x": 256,
-      "y": 960
+      "type": "tree3",
+      "x": 1323,
+      "y": 1023
     },
     {
-      "type": "dirt",
-      "x": 288,
-      "y": 960
+      "type": "tree3",
+      "x": 1186,
+      "y": 310
     },
     {
-      "type": "dirt",
-      "x": 320,
-      "y": 960
+      "type": "tree3",
+      "x": 429,
+      "y": 645
     },
     {
-      "type": "dirt",
-      "x": 384,
-      "y": 960
+      "type": "tree3",
+      "x": 234,
+      "y": 1160
     },
     {
-      "type": "dirt",
-      "x": 416,
-      "y": 928
+      "type": "tree3",
+      "x": 1617,
+      "y": 1769
     },
     {
-      "type": "dirt",
-      "x": 448,
-      "y": 928
+      "type": "tree3",
+      "x": 1355,
+      "y": 1798
     },
     {
-      "type": "dirt",
-      "x": 512,
-      "y": 928
+      "type": "tree3",
+      "x": 1513,
+      "y": 1504
     },
     {
-      "type": "dirt",
-      "x": 640,
-      "y": 896
+      "type": "tree3",
+      "x": 1751,
+      "y": 1274
     },
     {
-      "type": "dirt",
-      "x": 704,
-      "y": 896
+      "type": "tree3",
+      "x": 945,
+      "y": 1708
     },
     {
-      "type": "dirt",
-      "x": 768,
-      "y": 896
+      "type": "tree3",
+      "x": 167,
+      "y": 817
     },
     {
-      "type": "dirt",
-      "x": 864,
-      "y": 864
+      "type": "tree3",
+      "x": 289,
+      "y": 348
     },
     {
-      "type": "dirt",
-      "x": 960,
-      "y": 864
+      "type": "tree3",
+      "x": 109,
+      "y": 94
     },
     {
-      "type": "dirt",
-      "x": 992,
-      "y": 448
+      "type": "toitoi",
+      "x": 278,
+      "y": 83
     },
     {
-      "type": "dirt",
-      "x": 928,
-      "y": 256
+      "type": "tent",
+      "x": 196,
+      "y": 106
     },
     {
-      "type": "dirt",
-      "x": 896,
-      "y": 192
+      "type": "bucket_empty",
+      "x": 176,
+      "y": 257
     },
     {
-      "type": "dirt",
-      "x": 896,
-      "y": 160
+      "type": "bucket_full",
+      "x": 202,
+      "y": 251
     },
     {
-      "type": "dirt",
-      "x": 864,
-      "y": 160
+      "type": "barell",
+      "x": 115,
+      "y": 167
     },
     {
-      "type": "dirt",
-      "x": 864,
-      "y": 128
-    },
-    {
-      "type": "dirt",
-      "x": 864,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 832,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 800,
-      "y": 64
-    },
-    {
-      "type": "dirt",
-      "x": 768,
-      "y": 64
-    },
-    {
-      "type": "dirt",
-      "x": 736,
-      "y": 32
-    },
-    {
-      "type": "dirt",
-      "x": 704,
-      "y": 32
-    },
-    {
-      "type": "dirt",
-      "x": 672,
-      "y": 0
-    },
-    {
-      "type": "dirt",
-      "x": 608,
-      "y": 0
-    },
-    {
-      "type": "dirt",
-      "x": 576,
-      "y": 0
-    },
-    {
-      "type": "dirt",
-      "x": 512,
-      "y": 0
-    },
-    {
-      "type": "dirt",
-      "x": 128,
-      "y": 0
-    },
-    {
-      "type": "dirt",
-      "x": 96,
-      "y": 0
-    },
-    {
-      "type": "dirt",
-      "x": 64,
-      "y": 32
-    },
-    {
-      "type": "dirt",
-      "x": 64,
-      "y": 64
-    },
-    {
-      "type": "dirt",
-      "x": 32,
-      "y": 128
-    },
-    {
-      "type": "dirt",
-      "x": 32,
-      "y": 160
-    },
-    {
-      "type": "dirt",
-      "x": 32,
-      "y": 192
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 192
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 224
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 288
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 320
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 352
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 384
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 416
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 448
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 480
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 512
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 544
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 576
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 608
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 640
-    },
-    {
-      "type": "dirt",
-      "x": 0,
-      "y": 672
-    },
-    {
-      "type": "dirt",
-      "x": 32,
-      "y": 672
-    },
-    {
-      "type": "dirt",
-      "x": 32,
-      "y": 704
-    },
-    {
-      "type": "dirt",
-      "x": 64,
-      "y": 736
-    },
-    {
-      "type": "dirt",
-      "x": 96,
-      "y": 768
-    },
-    {
-      "type": "dirt",
-      "x": 128,
-      "y": 800
-    },
-    {
-      "type": "dirt",
-      "x": 160,
-      "y": 800
-    },
-    {
-      "type": "dirt",
-      "x": 192,
-      "y": 832
-    },
-    {
-      "type": "dirt",
-      "x": 224,
-      "y": 832
-    },
-    {
-      "type": "dirt",
-      "x": 256,
-      "y": 864
-    },
-    {
-      "type": "dirt",
-      "x": 256,
-      "y": 896
-    },
-    {
-      "type": "dirt",
-      "x": 288,
-      "y": 896
-    },
-    {
-      "type": "dirt",
-      "x": 320,
-      "y": 928
-    },
-    {
-      "type": "dirt",
-      "x": 352,
-      "y": 928
-    },
-    {
-      "type": "dirt",
-      "x": 352,
-      "y": 960
-    },
-    {
-      "type": "dirt",
-      "x": 416,
-      "y": 960
-    },
-    {
-      "type": "dirt",
-      "x": 416,
-      "y": 992
-    },
-    {
-      "type": "dirt",
-      "x": 448,
-      "y": 992
-    },
-    {
-      "type": "dirt",
-      "x": 480,
-      "y": 992
-    },
-    {
-      "type": "dirt",
-      "x": 512,
-      "y": 992
-    },
-    {
-      "type": "dirt",
-      "x": 544,
-      "y": 960
-    },
-    {
-      "type": "dirt",
-      "x": 576,
-      "y": 960
-    },
-    {
-      "type": "dirt",
-      "x": 608,
-      "y": 960
-    },
-    {
-      "type": "dirt",
-      "x": 640,
-      "y": 960
-    },
-    {
-      "type": "dirt",
-      "x": 672,
-      "y": 928
-    },
-    {
-      "type": "dirt",
-      "x": 736,
-      "y": 896
-    },
-    {
-      "type": "dirt",
-      "x": 768,
-      "y": 832
-    },
-    {
-      "type": "dirt",
-      "x": 832,
-      "y": 768
-    },
-    {
-      "type": "dirt",
-      "x": 864,
-      "y": 736
-    },
-    {
-      "type": "dirt",
-      "x": 928,
-      "y": 704
-    },
-    {
-      "type": "dirt",
-      "x": 928,
-      "y": 672
-    },
-    {
-      "type": "dirt",
-      "x": 960,
-      "y": 640
-    },
-    {
-      "type": "dirt",
-      "x": 992,
-      "y": 576
-    },
-    {
-      "type": "dirt",
-      "x": 960,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 832,
-      "y": 160
-    },
-    {
-      "type": "dirt",
-      "x": 832,
-      "y": 128
-    },
-    {
-      "type": "dirt",
-      "x": 768,
-      "y": 128
-    },
-    {
-      "type": "dirt",
-      "x": 736,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 704,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 672,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 640,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 608,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 576,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 544,
-      "y": 64
-    },
-    {
-      "type": "dirt",
-      "x": 512,
-      "y": 64
-    },
-    {
-      "type": "dirt",
-      "x": 480,
-      "y": 64
-    },
-    {
-      "type": "dirt",
-      "x": 448,
-      "y": 64
-    },
-    {
-      "type": "dirt",
-      "x": 416,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 384,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 352,
-      "y": 96
-    },
-    {
-      "type": "dirt",
-      "x": 288,
-      "y": 128
-    },
-    {
-      "type": "dirt",
-      "x": 256,
-      "y": 160
-    },
-    {
-      "type": "dirt",
-      "x": 256,
-      "y": 192
-    },
-    {
-      "type": "dirt",
-      "x": 224,
-      "y": 192
-    },
-    {
-      "type": "dirt",
-      "x": 224,
-      "y": 224
-    },
-    {
-      "type": "dirt",
-      "x": 192,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 192,
-      "y": 288
-    },
-    {
-      "type": "dirt",
-      "x": 160,
-      "y": 320
-    },
-    {
-      "type": "dirt",
-      "x": 160,
-      "y": 384
-    },
-    {
-      "type": "dirt",
-      "x": 128,
-      "y": 416
-    },
-    {
-      "type": "dirt",
-      "x": 128,
-      "y": 448
-    },
-    {
-      "type": "dirt",
-      "x": 128,
-      "y": 480
-    },
-    {
-      "type": "dirt",
-      "x": 160,
-      "y": 512
-    },
-    {
-      "type": "dirt",
-      "x": 160,
-      "y": 544
-    },
-    {
-      "type": "dirt",
-      "x": 192,
-      "y": 576
-    },
-    {
-      "type": "dirt",
-      "x": 192,
-      "y": 608
-    },
-    {
-      "type": "dirt",
-      "x": 224,
-      "y": 608
-    },
-    {
-      "type": "dirt",
-      "x": 256,
-      "y": 640
-    },
-    {
-      "type": "dirt",
-      "x": 288,
-      "y": 672
-    },
-    {
-      "type": "dirt",
-      "x": 320,
-      "y": 704
-    },
-    {
-      "type": "dirt",
-      "x": 352,
-      "y": 704
-    },
-    {
-      "type": "dirt",
-      "x": 384,
-      "y": 704
-    },
-    {
-      "type": "dirt",
-      "x": 416,
-      "y": 736
-    },
-    {
-      "type": "dirt",
-      "x": 448,
-      "y": 736
-    },
-    {
-      "type": "dirt",
-      "x": 480,
-      "y": 736
-    },
-    {
-      "type": "dirt",
-      "x": 512,
-      "y": 704
-    },
-    {
-      "type": "dirt",
-      "x": 544,
-      "y": 704
-    },
-    {
-      "type": "dirt",
-      "x": 576,
-      "y": 704
-    },
-    {
-      "type": "dirt",
-      "x": 576,
-      "y": 672
-    },
-    {
-      "type": "dirt",
-      "x": 608,
-      "y": 672
-    },
-    {
-      "type": "dirt",
-      "x": 640,
-      "y": 640
-    },
-    {
-      "type": "dirt",
-      "x": 672,
-      "y": 640
-    },
-    {
-      "type": "dirt",
-      "x": 672,
-      "y": 608
-    },
-    {
-      "type": "dirt",
-      "x": 704,
-      "y": 608
-    },
-    {
-      "type": "dirt",
-      "x": 704,
-      "y": 576
-    },
-    {
-      "type": "dirt",
-      "x": 704,
-      "y": 544
-    },
-    {
-      "type": "dirt",
-      "x": 736,
-      "y": 544
-    },
-    {
-      "type": "dirt",
-      "x": 736,
-      "y": 512
-    },
-    {
-      "type": "dirt",
-      "x": 736,
-      "y": 480
-    },
-    {
-      "type": "dirt",
-      "x": 736,
-      "y": 448
-    },
-    {
-      "type": "dirt",
-      "x": 736,
-      "y": 416
-    },
-    {
-      "type": "dirt",
-      "x": 704,
-      "y": 384
-    },
-    {
-      "type": "dirt",
-      "x": 704,
-      "y": 352
-    },
-    {
-      "type": "dirt",
-      "x": 672,
-      "y": 320
-    },
-    {
-      "type": "dirt",
-      "x": 640,
-      "y": 320
-    },
-    {
-      "type": "dirt",
-      "x": 640,
-      "y": 288
-    },
-    {
-      "type": "dirt",
-      "x": 608,
-      "y": 288
-    },
-    {
-      "type": "dirt",
-      "x": 608,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 576,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 544,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 512,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 480,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 448,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 416,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 384,
-      "y": 256
-    },
-    {
-      "type": "dirt",
-      "x": 352,
-      "y": 288
-    },
-    {
-      "type": "dirt",
-      "x": 320,
-      "y": 288
-    },
-    {
-      "type": "dirt",
-      "x": 320,
-      "y": 320
-    },
-    {
-      "type": "dirt",
-      "x": 320,
-      "y": 352
-    },
-    {
-      "type": "dirt",
-      "x": 288,
-      "y": 352
-    },
-    {
-      "type": "dirt",
-      "x": 288,
-      "y": 384
-    },
-    {
-      "type": "dirt",
-      "x": 288,
-      "y": 416
-    },
-    {
-      "type": "dirt",
-      "x": 288,
-      "y": 448
-    },
-    {
-      "type": "dirt",
-      "x": 288,
-      "y": 480
-    },
-    {
-      "type": "dirt",
-      "x": 288,
-      "y": 512
-    },
-    {
-      "type": "dirt",
-      "x": 320,
-      "y": 512
-    },
-    {
-      "type": "dirt",
-      "x": 320,
-      "y": 544
-    },
-    {
-      "type": "dirt",
-      "x": 352,
-      "y": 544
-    },
-    {
-      "type": "dirt",
-      "x": 352,
-      "y": 576
-    },
-    {
-      "type": "dirt",
-      "x": 384,
-      "y": 576
-    },
-    {
-      "type": "dirt",
-      "x": 416,
-      "y": 608
-    },
-    {
-      "type": "dirt",
-      "x": 448,
-      "y": 608
-    },
-    {
-      "type": "dirt",
-      "x": 480,
-      "y": 608
-    },
-    {
-      "type": "dirt",
-      "x": 512,
-      "y": 608
-    },
-    {
-      "type": "dirt",
-      "x": 544,
-      "y": 576
-    },
-    {
-      "type": "dirt",
-      "x": 576,
-      "y": 576
-    },
-    {
-      "type": "dirt",
-      "x": 608,
-      "y": 576
-    },
-    {
-      "type": "dirt",
-      "x": 608,
-      "y": 544
-    },
-    {
-      "type": "dirt",
-      "x": 640,
-      "y": 544
-    },
-    {
-      "type": "dirt",
-      "x": 640,
-      "y": 512
-    },
-    {
-      "type": "dirt",
-      "x": 640,
-      "y": 480
-    },
-    {
-      "type": "dirt",
-      "x": 672,
-      "y": 480
-    },
-    {
-      "type": "dirt",
-      "x": 672,
-      "y": 448
-    },
-    {
-      "type": "dirt",
-      "x": 640,
-      "y": 448
-    },
-    {
-      "type": "dirt",
-      "x": 640,
-      "y": 416
-    },
-    {
-      "type": "dirt",
-      "x": 608,
-      "y": 384
-    },
-    {
-      "type": "dirt",
-      "x": 576,
-      "y": 384
-    },
-    {
-      "type": "dirt",
-      "x": 576,
-      "y": 352
-    },
-    {
-      "type": "dirt",
-      "x": 544,
-      "y": 352
-    },
-    {
-      "type": "dirt",
-      "x": 512,
-      "y": 352
-    },
-    {
-      "type": "dirt",
-      "x": 480,
-      "y": 352
-    },
-    {
-      "type": "dirt",
-      "x": 448,
-      "y": 352
-    },
-    {
-      "type": "dirt",
-      "x": 416,
-      "y": 384
-    },
-    {
-      "type": "dirt",
-      "x": 416,
-      "y": 416
-    },
-    {
-      "type": "dirt",
-      "x": 384,
-      "y": 416
-    },
-    {
-      "type": "dirt",
-      "x": 384,
-      "y": 448
-    },
-    {
-      "type": "dirt",
-      "x": 384,
-      "y": 480
-    },
-    {
-      "type": "dirt",
-      "x": 416,
-      "y": 480
-    },
-    {
-      "type": "dirt",
-      "x": 416,
-      "y": 512
-    },
-    {
-      "type": "dirt",
-      "x": 448,
-      "y": 512
-    },
-    {
-      "type": "dirt",
-      "x": 480,
-      "y": 512
-    },
-    {
-      "type": "dirt",
-      "x": 512,
-      "y": 512
-    },
-    {
-      "type": "dirt",
-      "x": 512,
-      "y": 480
-    },
-    {
-      "type": "dirt",
-      "x": 480,
-      "y": 448
-    },
-    {
-      "type": "dirt",
-      "x": 480,
-      "y": 480
-    },
-    {
-      "type": "dirt",
-      "x": 448,
-      "y": 480
+      "type": "barell",
+      "x": 106,
+      "y": 179
     }
   ],
-  "objects": [],
   "npcs": [],
-  "mobs": [],
+  "mobs": [
+    {
+      "type": "butterfly",
+      "x": 62,
+      "y": 83,
+      "width": 1879,
+      "height": 1861,
+      "speed": 1,
+      "changeTime": 3000,
+      "specialTime": 2000,
+      "chanceOfDoingSpecialAction": 0.3,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "butterfly",
+      "x": 700,
+      "y": 1137,
+      "width": 1165,
+      "height": 745,
+      "speed": 1,
+      "changeTime": 3000,
+      "specialTime": 2000,
+      "chanceOfDoingSpecialAction": 0.3,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "butterfly",
+      "x": 1111,
+      "y": 167,
+      "width": 742,
+      "height": 655,
+      "speed": 1,
+      "changeTime": 3000,
+      "specialTime": 2000,
+      "chanceOfDoingSpecialAction": 0.3,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "dog",
+      "x": 648,
+      "y": 214,
+      "width": 570,
+      "height": 410,
+      "speed": 1,
+      "changeTime": 3000,
+      "specialTime": 2000,
+      "chanceOfDoingSpecialAction": 0.2,
+      "howManyAnimationsPerSec": 2
+    }
+  ],
   "enemies": [],
   "neutralZones": [],
   "doors": []

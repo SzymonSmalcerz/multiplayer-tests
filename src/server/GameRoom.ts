@@ -1,5 +1,5 @@
 import { Room, Client } from "@colyseus/core";
-import { Schema, MapSchema, type } from "@colyseus/schema";
+import { Schema, MapSchema, ArraySchema, type } from "@colyseus/schema";
 import fs   from "fs";
 import path from "path";
 import { xpForNextLevel }                    from "../shared/formulas";
@@ -8,7 +8,7 @@ import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../sha
 import { OBJECT_REGISTRY }                    from "../shared/objects";
 import { ENEMY_REGISTRY }                     from "../shared/enemies";
 import { WEAPON_REGISTRY }                    from "../shared/weapons";
-import { globalBus, PlayerProfile }           from "./GlobalBus";
+import { globalBus, PlayerProfile, QuizQuestion } from "./GlobalBus";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -58,6 +58,15 @@ export class GameState extends Schema {
   @type({ map: EnemyState }) enemies = new MapSchema<EnemyState>();
   @type("number") mapWidth:  number = 2000;
   @type("number") mapHeight: number = 2000;
+
+  // ── Quiz state ──────────────────────────────────────────────────────────────
+  @type("string") quizStatus: string = "idle";       // "idle" | "active" | "result"
+  @type("string") quizQuestion: string = "";
+  @type(["string"]) quizAnswers = new ArraySchema<string>();
+  @type("number") quizTimeLeft: number = 0;
+  @type("number") quizCorrectIndex: number = -1;
+  @type("number") quizCurrentIndex: number = 0;
+  @type("number") quizTotalQuestions: number = 0;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -178,6 +187,11 @@ export class GameRoom extends Room<GameState> {
   /** Passcode for the private session this room belongs to. */
   private passcode = "";
 
+  // ── Quiz state ──────────────────────────────────────────────────────────────
+  private quizQuestions: QuizQuestion[] = [];
+  private currentQuestionIndex = 0;
+  private quizTickAccum = 0;
+
   // ── Party bookkeeping ──────────────────────────────────────────────────────
   /** targetSessionId → inviterSessionId */
   private pendingInvites = new Map<string, string>();
@@ -196,6 +210,11 @@ export class GameRoom extends Room<GameState> {
     // ── Resolve passcode and map name from join options ───────────────────────
     this.passcode = String(options.passcode ?? "").replace(/[^A-Z0-9]/g, "").slice(0, 6);
     this.mapName = String(options.mapName ?? "m1").replace(/[^a-zA-Z0-9_-]/g, "") || "m1";
+
+    // ── Load quiz questions if this is the quiz map ───────────────────────────
+    if (this.mapName === "quiz") {
+      this.quizQuestions = globalBus.getSessionQuestions(this.passcode);
+    }
 
     // ── Load map JSON ─────────────────────────────────────────────────────────
     const mapFile  = path.resolve(__dirname, `../../public/assets/maps/placement/${this.mapName}.json`);
@@ -356,10 +375,44 @@ export class GameRoom extends Room<GameState> {
     this.onMessage("start_session", (client) => {
       const player = this.state.players.get(client.sessionId);
       if (!player?.isGM) return;
-      globalBus.startGameSession(this.passcode);
-      this.broadcast("door_travel", { targetMap: "m1" });
+      const hasQuiz = globalBus.getSessionQuestions(this.passcode).length > 0;
+      if (hasQuiz) {
+        globalBus.setSessionStage(this.passcode, "quiz");
+        this.broadcast("door_travel", { targetMap: "quiz" });
+        console.log(`[Room] GM started session ${this.passcode} — teleporting all to quiz`);
+      } else {
+        globalBus.setSessionStage(this.passcode, "m1");
+        this.broadcast("door_travel", { targetMap: "m1" });
+        globalBus.scheduleSessionEnd(this.passcode);
+        console.log(`[Room] GM started session ${this.passcode} — teleporting all to m1`);
+      }
+    });
+
+    this.onMessage("gm_start_quiz", (client) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player?.isGM || this.mapName !== "quiz") return;
+      this.state.quizTotalQuestions = this.quizQuestions.length;
+      this.currentQuestionIndex = 0;
+      this.loadQuestion(0);
+    });
+
+    this.onMessage("gm_next_question", (client) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player?.isGM || this.mapName !== "quiz") return;
+      this.currentQuestionIndex++;
+      if (this.currentQuestionIndex < this.quizQuestions.length) {
+        this.loadQuestion(this.currentQuestionIndex);
+      }
+      // If no more questions, status stays "result" — GM sees "End Quiz" button
+    });
+
+    this.onMessage("gm_end_quiz", (client) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player?.isGM || this.mapName !== "quiz") return;
+      globalBus.setSessionStage(this.passcode, "m1");
       globalBus.scheduleSessionEnd(this.passcode);
-      console.log(`[Room] GM started session ${this.passcode} — teleporting all to m1`);
+      this.broadcast("door_travel", { targetMap: "m1" });
+      console.log(`[Room] GM ended quiz — teleporting all to m1, starting session timer`);
     });
 
     this.onMessage("chat", (client, message: string) => {
@@ -724,9 +777,14 @@ export class GameRoom extends Room<GameState> {
     // Refresh global leaderboard so the new player is immediately visible
     globalBus.broadcastLeaderboard();
 
-    // Late-joiner redirect: if the session already started but player landed in waitingArea, send them to m1
-    if (this.mapName === "waitingArea" && globalBus.isSessionStarted(this.passcode)) {
-      setTimeout(() => client.send("door_travel", { targetMap: "m1" }), 200);
+    // Late-joiner redirect: if the session already started but player landed in waitingArea
+    if (this.mapName === "waitingArea") {
+      const stage = globalBus.getSessionStage(this.passcode);
+      if (stage === "quiz") {
+        setTimeout(() => client.send("door_travel", { targetMap: "quiz" }), 200);
+      } else if (stage === "m1") {
+        setTimeout(() => client.send("door_travel", { targetMap: "m1" }), 200);
+      }
     }
 
     this.broadcast("chat", {
@@ -895,6 +953,7 @@ export class GameRoom extends Room<GameState> {
     const now   = Date.now();
     const dtSec = dt / 1000;
 
+    this.tickQuiz(dt);
     this.tickCoins(now);
     this.tickPlayerWeapons(now);
     this.tickPlayerRegen(now, dtSec);
@@ -1074,6 +1133,7 @@ export class GameRoom extends Room<GameState> {
 
   /** Called every tick — checks the sword's current orbital position against all enemies and players. */
   private tickPlayerWeapons(now: number): void {
+    if (this.mapName === "quiz" || this.mapName === "waitingArea") return;
     this.playerAttacks.forEach((startTime, sessionId) => {
       const player = this.state.players.get(sessionId);
       if (!player || player.isDead) return;
@@ -1635,6 +1695,68 @@ export class GameRoom extends Room<GameState> {
       sessionId: "server",
       nickname: "Server",
       message: `You have gained ${amount} gold`,
+    });
+  }
+
+  // ── Quiz logic ────────────────────────────────────────────────────────────────
+
+  private loadQuestion(index: number): void {
+    const q = this.quizQuestions[index];
+    if (!q) return;
+    this.state.quizQuestion = q.text;
+    this.state.quizAnswers.splice(0, this.state.quizAnswers.length, ...q.answers);
+    this.state.quizTimeLeft = q.time;
+    this.state.quizCorrectIndex = -1;
+    this.state.quizCurrentIndex = index;
+    this.state.quizStatus = "active";
+    this.quizTickAccum = 0;
+  }
+
+  private tickQuiz(dt: number): void {
+    if (this.mapName !== "quiz" || this.state.quizStatus !== "active") return;
+    this.quizTickAccum += dt;
+    if (this.quizTickAccum < 1000) return;
+    this.quizTickAccum -= 1000;
+    this.state.quizTimeLeft = Math.max(0, this.state.quizTimeLeft - 1);
+    if (this.state.quizTimeLeft <= 0) this.evaluateQuiz();
+  }
+
+  private evaluateQuiz(): void {
+    const q = this.quizQuestions[this.currentQuestionIndex];
+    if (!q) return;
+    this.state.quizStatus = "result";
+    this.state.quizCorrectIndex = q.correctIndex;
+    const xp   = q.xp   ?? 50;
+    const gold = q.gold ?? 10;
+    const cx = this.mapWidth  / 2;
+    const cy = this.mapHeight / 2;
+    const pads = [
+      { x: cx - 130, y: cy - 105 }, // A (top-left)
+      { x: cx + 130, y: cy - 105 }, // B (top-right)
+      { x: cx - 130, y: cy + 105 }, // C (bottom-left)
+      { x: cx + 130, y: cy + 105 }, // D (bottom-right)
+    ];
+    const correct = pads[q.correctIndex];
+    if (!correct) return;
+    this.state.players.forEach((p, sid) => {
+      if (p.isDead || p.isGM) return;
+      if (Math.abs(p.x - correct.x) <= 100 && Math.abs(p.y - correct.y) <= 75) {
+        p.xp   += xp;
+        p.gold += gold;
+        this.checkLevelUp(sid);
+      }
+    });
+    this.clients.forEach(client => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.isGM) return;
+      const isCorrect = !p.isDead &&
+        Math.abs(p.x - correct.x) <= 100 &&
+        Math.abs(p.y - correct.y) <= 75;
+      client.send("quiz_result", {
+        correct: isCorrect,
+        xp:   isCorrect ? xp   : 0,
+        gold: isCorrect ? gold : 0,
+      });
     });
   }
 
