@@ -4,17 +4,8 @@ import {
   sortLeaderboard,
   MINIMAP_SIZE,
 } from "../logic";
-import { getSkinForLevel, isTierBoundary } from "../skins";
-
 // Mirror of the GameScene constant
 const ATTACK_COOLDOWN_MS = 1000;
-
-// Direction index → sprite-sheet row  (down→row2, left→row1, up→row0, right→row3)
-const DIR_TO_ROW = [2, 1, 0, 3] as const;
-
-function skinKey(skin: string): string {
-  return skin.replace("/", "_");
-}
 
 /**
  * UIManager — owns all HUD, party panel, leaderboard, death screen, and weapon HUD.
@@ -235,20 +226,6 @@ export class UIManager {
       this.hudGoldText.setText(goldText);
     }
 
-    if (p.level !== this.gs.localLevel) {
-      this.gs.localLevel = p.level;
-      if (p.isGM) {
-        this.gs.localLabel.setText(`${this.gs.localNickname} [GM]`);
-      } else {
-        this.gs.localLabel.setText(`${this.gs.localNickname} [Lv.${p.level}]`);
-        if (isTierBoundary(p.level)) {
-          const newKey = skinKey(getSkinForLevel(this.gs.localSkin, p.level));
-          if (this.scene.textures.exists(newKey) && this.gs.localSprite.texture.key !== newKey) {
-            this.gs.localSprite.setTexture(newKey, DIR_TO_ROW[this.gs.localDirection as 0 | 1 | 2 | 3] * 9);
-          }
-        }
-      }
-    }
   }
 
   // ── Party HUD ───────────────────────────────────────────────────────────────

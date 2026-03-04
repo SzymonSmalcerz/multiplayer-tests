@@ -310,10 +310,15 @@ export class GameRoom extends Room<GameState> {
         let found = false;
         this.state.players.forEach((p, sid) => {
           if (p.nickname === nickname && !p.isGM && !found) {
-            p.x = this.spawnPoint.x;
-            p.y = this.spawnPoint.y;
-            this.lastPositions.set(sid, { x: p.x, y: p.y, time: Date.now() });
-            found = true;
+            const targetClient = this.clients.find((c: Client) => c.sessionId === sid);
+            if (targetClient) {
+              targetClient.send("door_travel", {
+                targetMap: this.mapName,
+                spawnX: this.spawnPoint.x,
+                spawnY: this.spawnPoint.y,
+              });
+              found = true;
+            }
           }
         });
         return found;
@@ -709,6 +714,25 @@ export class GameRoom extends Room<GameState> {
         const existingPlayer = this.state.players.get(existingSessionId);
         // Only kick if the old session is currently active (not already in grace period)
         if (existingPlayer && !existingPlayer.disconnected) {
+          // Flush live state before kicking so the new session loads fresh data
+          if (!existingPlayer.isGM) {
+            globalBus.saveProfile(this.passcode, pid, {
+              nickname:            existingPlayer.nickname,
+              skin:                existingPlayer.skin,
+              level:               existingPlayer.level,
+              xp:                  existingPlayer.xp,
+              gold:                existingPlayer.gold,
+              kills:               existingPlayer.kills,
+              hp:                  existingPlayer.hp,
+              maxHp:               existingPlayer.maxHp,
+              weapon:              existingPlayer.weapon,
+              potions:             existingPlayer.potions,
+              potionHealRemaining: existingPlayer.potionHealRemaining,
+              partyId:             existingPlayer.partyId,
+              isPartyOwner:        existingPlayer.isPartyOwner,
+              partyName:           existingPlayer.partyName,
+            });
+          }
           const oldClient = this.clients.find((c: Client) => c.sessionId === existingSessionId);
           oldClient?.leave(4001); // 4001 = replaced by new window
         }
@@ -738,6 +762,7 @@ export class GameRoom extends Room<GameState> {
       player.weapon              = profile.weapon;
       player.potions             = profile.potions;
       player.potionHealRemaining = profile.potionHealRemaining;
+      player.kills               = profile.kills ?? 0;
       player.attackBonus         = (player.level - 1) * 0.5; // recalculate bonus
 
       // Validate party still exists in GlobalBus (may have been disbanded in transit)
@@ -759,6 +784,7 @@ export class GameRoom extends Room<GameState> {
       player.xp        = 0;
       player.attackBonus = 0;
       player.gold      = 1000;
+      player.kills     = 0;
     }
 
     // Apply GM overrides AFTER profile load — preserves saved weapon, but enforces
@@ -786,6 +812,7 @@ export class GameRoom extends Room<GameState> {
         level:               player.level,
         xp:                  player.xp,
         gold:                player.gold,
+        kills:               player.kills,
         hp:                  player.hp,
         maxHp:               player.maxHp,
         weapon:              player.weapon,
@@ -890,6 +917,7 @@ export class GameRoom extends Room<GameState> {
           level:               player.level,
           xp:                  player.xp,
           gold:                player.gold,
+          kills:               player.kills,
           hp:                  player.hp,
           maxHp:               player.maxHp,
           weapon:              player.weapon,
@@ -1346,6 +1374,7 @@ export class GameRoom extends Room<GameState> {
         level:               player.level,
         xp:                  player.xp,
         gold:                player.gold,
+        kills:               player.kills,
         hp:                  player.hp,
         maxHp:               player.maxHp,
         weapon:              player.weapon,
@@ -1532,16 +1561,21 @@ export class GameRoom extends Room<GameState> {
       const targetNick = parts.slice(1).join(" ");
       if (!targetNick) { sendPrivate("Usage: /summon {nickname}"); return; }
 
-      // Case 1: player is in the same room — direct position assignment
+      // Case 1: player is in the same room — send door_travel to their client
       let found = false;
       this.state.players.forEach((p, sid) => {
         if (p.nickname === targetNick && !p.isGM && !found) {
           const offsetX = (Math.random() - 0.5) * 200;
           const offsetY = (Math.random() - 0.5) * 200;
-          p.x = Math.max(32, Math.min(this.mapWidth  - 32, gmPlayer.x + offsetX));
-          p.y = Math.max(32, Math.min(this.mapHeight - 32, gmPlayer.y + offsetY));
-          this.lastPositions.set(sid, { x: p.x, y: p.y, time: Date.now() });
-          found = true;
+          const targetClient = this.clients.find((c: Client) => c.sessionId === sid);
+          if (targetClient) {
+            targetClient.send("door_travel", {
+              targetMap: this.mapName,
+              spawnX: Math.max(32, Math.min(this.mapWidth  - 32, gmPlayer.x + offsetX)),
+              spawnY: Math.max(32, Math.min(this.mapHeight - 32, gmPlayer.y + offsetY)),
+            });
+            found = true;
+          }
         }
       });
 
@@ -1570,15 +1604,17 @@ export class GameRoom extends Room<GameState> {
       const targetNick = parts.slice(1).join(" ");
       if (!targetNick) { sendPrivate("Usage: /teleport {nickname}"); return; }
 
-      // Case 1: player is in the same room — move GM directly
+      // Case 1: player is in the same room — send door_travel to GM client
       let found = false;
       this.state.players.forEach((p) => {
         if (p.nickname === targetNick && !p.isGM && !found) {
           const offsetX = (Math.random() - 0.5) * 200;
           const offsetY = (Math.random() - 0.5) * 200;
-          gmPlayer.x = Math.max(32, Math.min(this.mapWidth  - 32, p.x + offsetX));
-          gmPlayer.y = Math.max(32, Math.min(this.mapHeight - 32, p.y + offsetY));
-          this.lastPositions.set(client.sessionId, { x: gmPlayer.x, y: gmPlayer.y, time: Date.now() });
+          client.send("door_travel", {
+            targetMap: this.mapName,
+            spawnX: Math.max(32, Math.min(this.mapWidth  - 32, p.x + offsetX)),
+            spawnY: Math.max(32, Math.min(this.mapHeight - 32, p.y + offsetY)),
+          });
           found = true;
         }
       });

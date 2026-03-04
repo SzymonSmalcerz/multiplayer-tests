@@ -820,6 +820,26 @@ export class GameScene extends Phaser.Scene {
     const myState = this.room.state.players.get(this.mySessionId);
     if (!myState) return;
 
+    // Level + skin sync — runs on all maps including quiz/waitingArea
+    const newLv = (myState.level as number) ?? 1;
+    if (newLv !== this.localLevel) {
+      if (newLv > this.localLevel && this.localLevel > 0 && this.localSprite?.active) {
+        this.spawnPlayerEffect(this.localSprite.x, this.localSprite.y, 0xffd700);
+      }
+      this.localLevel = newLv;
+      if (this.localSkin === "gm") {
+        this.localLabel.setText(`${this.localNickname} [GM]`);
+      } else {
+        this.localLabel.setText(`${this.localNickname} [Lv.${newLv}]`);
+        if (isTierBoundary(newLv)) {
+          const newKey = skinKey(getSkinForLevel(this.localSkin, newLv));
+          if (this.textures.exists(newKey) && this.localSprite.texture.key !== newKey) {
+            this.localSprite.setTexture(newKey, DIR_TO_ROW[this.localDirection as 0 | 1 | 2 | 3] * 9);
+          }
+        }
+      }
+    }
+
     this.myPartyId      = myState?.partyId      ?? "";
     this.myIsPartyOwner = myState?.isPartyOwner ?? false;
 
@@ -1548,22 +1568,6 @@ export class GameScene extends Phaser.Scene {
       }
       this.localPotions = player.potions ?? 0;
       player.onChange(() => {
-        const newLv = player.level ?? 1;
-        if (newLv !== this.localLevel) {
-          if (newLv > this.localLevel && this.localLevel > 0 && this.localSprite) {
-            this.spawnPlayerEffect(this.localSprite.x, this.localSprite.y, 0xffd700);
-          }
-          this.localLevel = newLv;
-          if (this.localSkin !== "gm") {
-            this.localLabel.setText(`${this.localNickname} [Lv.${newLv}]`);
-            if (isTierBoundary(newLv)) {
-              const newKey = skinKey(getSkinForLevel(this.localSkin, newLv));
-              if (this.textures.exists(newKey)) {
-                this.localSprite.setTexture(newKey, DIR_TO_ROW[this.localDirection] * 9);
-              }
-            }
-          }
-        }
         const newPotions = player.potions ?? 0;
         if (newPotions < this.localPotions && this.localSprite?.active) {
           this.spawnPlayerEffect(this.localSprite.x, this.localSprite.y, 0xff4444);

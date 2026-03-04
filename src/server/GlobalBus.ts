@@ -18,6 +18,7 @@ export interface PlayerProfile {
   level: number;
   xp: number;
   gold: number;
+  kills: number;
   hp: number;
   maxHp: number;
   weapon: string;
@@ -159,7 +160,7 @@ class GlobalBus {
     this.rooms.forEach((handle) => {
       if (handle.passcode !== passcode) return;
       for (const p of handle.getPlayersFn()) {
-        if (!p.isDead) allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, gold: p.gold, kills: p.kills, partyName: p.partyName });
+        allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, gold: p.gold, kills: p.kills, partyName: p.partyName });
       }
     });
     allPlayers.sort((a, b) => b.level !== a.level ? b.level - a.level : b.xp - a.xp);

@@ -1618,8 +1618,8 @@ canvas.addEventListener('contextmenu', e => {
   const wx    = world.x;
   const wy    = world.y;
 
-  // Tiles: context menu with Edit / Delete (works regardless of selected category)
-  {
+  // Tiles: context menu with Edit / Delete (only when tile category is selected)
+  if (selectedCategory === 'tile') {
     const snappedX = Math.floor(wx / TILE_SNAP) * TILE_SNAP;
     const snappedY = Math.floor(wy / TILE_SNAP) * TILE_SNAP;
     const idx = placedTiles.findIndex(t => t.x === snappedX && t.y === snappedY);
