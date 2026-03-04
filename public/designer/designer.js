@@ -13,6 +13,7 @@ let mobRegistry    = {};     // { [key]: { type, frameWidth, frameHeight, … } 
 let enemyRegistry  = {};     // { [key]: { type, label, defaultRespawnTime } }
 let weaponRegistry = {};     // { [key]: { type, label, damage, cost, hitRadius, spritePath } }
 let tileRegistry   = {};     // { [key]: { type, label, imageWidth, imageHeight } }
+let noDeleteConfirm = false;
 const images      = {};     // { [key]: HTMLImageElement }
 
 const TILE_SNAP = 32;  // tiles always snap to 32 px grid
@@ -541,6 +542,23 @@ function addDoorSection() {
   body.appendChild(item);
 }
 
+async function deleteTile(key, itemEl) {
+  if (!noDeleteConfirm) {
+    const ok = confirm(`Delete tile "${key}"?\n\nThis permanently removes the image file and registry entry.`);
+    if (!ok) return;
+  }
+  try {
+    const res  = await fetch(`/design/tile/${encodeURIComponent(key)}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (!res.ok) { alert(json.error || 'Delete failed'); return; }
+    delete tileRegistry[key];
+    itemEl.remove();
+    if (selectedType === key) { selectedType = null; selectedCategory = null; updateStatus(); }
+  } catch (err) {
+    alert('Network error: ' + err.message);
+  }
+}
+
 function addTileSection() {
   const { body } = makeCollapsibleSection('Tiles (click/drag to paint)');
 
@@ -584,6 +602,16 @@ function addTileSection() {
         updateStatus();
       });
       thumbWrap.appendChild(defBtn);
+
+      const BUILTIN_TILES = ['grass_basic', 'dirt'];
+      if (!BUILTIN_TILES.includes(key)) {
+        const trashBtn = document.createElement('button');
+        trashBtn.textContent = '🗑';
+        trashBtn.title = 'Delete tile';
+        trashBtn.style.cssText = 'position:absolute;top:2px;left:2px;padding:0 2px;font-size:10px;background:#3a1a1a;color:#e44;border:1px solid #663333;border-radius:2px;cursor:pointer;line-height:14px;';
+        trashBtn.addEventListener('click', e => { e.stopPropagation(); deleteTile(key, item); });
+        thumbWrap.appendChild(trashBtn);
+      }
 
       const label = document.createElement('div');
       label.className = 'sidebar-label';
@@ -1808,6 +1836,9 @@ async function init() {
     .then(r => r.ok ? r.json() : [])
     .then(maps => { availableMaps = Array.isArray(maps) ? maps : []; })
     .catch(() => {});
+
+  const noDeleteCb = document.getElementById('no-delete-confirm');
+  if (noDeleteCb) noDeleteCb.addEventListener('change', e => { noDeleteConfirm = e.currentTarget.checked; });
 
   // Fit map to viewport and start render loop
   fitMap();

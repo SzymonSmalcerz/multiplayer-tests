@@ -152,6 +152,27 @@ app.post("/design/save-tile", (req, res) => {
   });
 });
 
+app.delete("/design/tile/:type", (req, res) => {
+  const { type } = req.params;
+  const BUILTINS = ["grass_basic", "dirt"];
+  if (BUILTINS.includes(type)) {
+    res.status(403).json({ error: "Cannot delete built-in tiles" });
+    return;
+  }
+  if (!TILE_REGISTRY[type]) {
+    res.status(404).json({ error: `Tile '${type}' not found` });
+    return;
+  }
+  delete TILE_REGISTRY[type];
+  const existing: Record<string, TileDef> = {};
+  try { Object.assign(existing, JSON.parse(fs.readFileSync(tilesJsonPath, "utf-8"))); } catch { /* ok */ }
+  delete existing[type];
+  fs.writeFileSync(tilesJsonPath, JSON.stringify(existing, null, 2));
+  const pngPath = path.join(publicDir, "assets/tiles", `${type}.png`);
+  try { fs.unlinkSync(pngPath); } catch { /* already gone */ }
+  res.json({ ok: true });
+});
+
 // Expose the full object registry (built-ins + user-added)
 app.get("/design/objects", (_req, res) => {
   res.json(OBJECT_REGISTRY);

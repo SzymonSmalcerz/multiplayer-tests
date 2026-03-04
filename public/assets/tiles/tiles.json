@@ -20,41 +20,6 @@
     "imageWidth": 32,
     "imageHeight": 32
   },
-  "tile_001": {
-    "type": "tile_001",
-    "tag": "village",
-    "label": "tile_001",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_002": {
-    "type": "tile_002",
-    "tag": "village",
-    "label": "tile_002",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_003": {
-    "type": "tile_003",
-    "tag": "village",
-    "label": "tile_003",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_004": {
-    "type": "tile_004",
-    "tag": "village",
-    "label": "tile_004",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_005": {
-    "type": "tile_005",
-    "tag": "village",
-    "label": "tile_005",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
   "tile_006": {
     "type": "tile_006",
     "tag": "village",
@@ -97,80 +62,10 @@
     "imageWidth": 32,
     "imageHeight": 32
   },
-  "tile_012": {
-    "type": "tile_012",
-    "tag": "village",
-    "label": "tile_012",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_013": {
-    "type": "tile_013",
-    "tag": "village",
-    "label": "tile_013",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_014": {
-    "type": "tile_014",
-    "tag": "village",
-    "label": "tile_014",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_015": {
-    "type": "tile_015",
-    "tag": "village",
-    "label": "tile_015",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_016": {
-    "type": "tile_016",
-    "tag": "village",
-    "label": "tile_016",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
   "tile_017": {
     "type": "tile_017",
     "tag": "village",
     "label": "tile_017",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_018": {
-    "type": "tile_018",
-    "tag": "village",
-    "label": "tile_018",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_019": {
-    "type": "tile_019",
-    "tag": "village",
-    "label": "tile_019",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_020": {
-    "type": "tile_020",
-    "tag": "village",
-    "label": "tile_020",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_021": {
-    "type": "tile_021",
-    "tag": "village",
-    "label": "tile_021",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_022": {
-    "type": "tile_022",
-    "tag": "village",
-    "label": "tile_022",
     "imageWidth": 32,
     "imageHeight": 32
   },
@@ -223,80 +118,10 @@
     "imageWidth": 32,
     "imageHeight": 32
   },
-  "tile_030": {
-    "type": "tile_030",
-    "tag": "village",
-    "label": "tile_030",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_031": {
-    "type": "tile_031",
-    "tag": "village",
-    "label": "tile_031",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_032": {
-    "type": "tile_032",
-    "tag": "village",
-    "label": "tile_032",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_033": {
-    "type": "tile_033",
-    "tag": "village",
-    "label": "tile_033",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_034": {
-    "type": "tile_034",
-    "tag": "village",
-    "label": "tile_034",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
   "tile_035": {
     "type": "tile_035",
     "tag": "village",
     "label": "tile_035",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_036": {
-    "type": "tile_036",
-    "tag": "village",
-    "label": "tile_036",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_037": {
-    "type": "tile_037",
-    "tag": "village",
-    "label": "tile_037",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_038": {
-    "type": "tile_038",
-    "tag": "village",
-    "label": "tile_038",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_039": {
-    "type": "tile_039",
-    "tag": "village",
-    "label": "tile_039",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_040": {
-    "type": "tile_040",
-    "tag": "village",
-    "label": "tile_040",
     "imageWidth": 32,
     "imageHeight": 32
   },
@@ -475,59 +300,10 @@
     "imageWidth": 32,
     "imageHeight": 32
   },
-  "tile_066": {
-    "type": "tile_066",
-    "tag": "village",
-    "label": "tile_066",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_067": {
-    "type": "tile_067",
-    "tag": "village",
-    "label": "tile_067",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_068": {
-    "type": "tile_068",
-    "tag": "village",
-    "label": "tile_068",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_069": {
-    "type": "tile_069",
-    "tag": "village",
-    "label": "tile_069",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_070": {
-    "type": "tile_070",
-    "tag": "village",
-    "label": "tile_070",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
   "tile_071": {
     "type": "tile_071",
     "tag": "village",
     "label": "tile_071",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_072": {
-    "type": "tile_072",
-    "tag": "village",
-    "label": "tile_072",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_073": {
-    "type": "tile_073",
-    "tag": "village",
-    "label": "tile_073",
     "imageWidth": 32,
     "imageHeight": 32
   },
