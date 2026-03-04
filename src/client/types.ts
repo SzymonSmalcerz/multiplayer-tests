@@ -161,6 +161,8 @@ export interface RemotePlayerEntity {
   partyLabel?: Phaser.GameObjects.Text;
   /** Last HP ratio drawn to the world HP bar (-1 = bar is cleared / force redraw) */
   lastHpRatio: number;
+  /** Potion count last seen — used to detect when a potion is consumed */
+  potions: number;
 }
 
 /** Enemy state proxy (mirrors server EnemyState schema) */

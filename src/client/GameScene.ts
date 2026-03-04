@@ -84,6 +84,7 @@ export class GameScene extends Phaser.Scene {
   private localWeaponKey = "sword";
   private weaponsRegistry: Record<string, WeaponDef> = {};
   private localLevel = 1;
+  private localPotions = 0;
 
   // Map / doors
   private currentMapName = "m1";
@@ -243,6 +244,7 @@ export class GameScene extends Phaser.Scene {
     this.isCreated            = false;
     this.sessionTimerEndTime  = data.sessionTimerEndTime ?? 0;
     this.localLevel       = 0;
+    this.localPotions     = 0;
     this.localIsDead      = false;
     // Keep passcode and current map name in localStorage fresh for reconnect
     if (this.passcode) localStorage.setItem("roomPasscode", this.passcode);
@@ -1516,21 +1518,6 @@ export class GameScene extends Phaser.Scene {
         if (this.localWeapon) this.localWeapon.setTexture(newWeapon);
       }
 
-      // Level-up — update label text and local skin tier
-      const newLv = player.level ?? 1;
-      if (newLv !== this.localLevel) {
-        this.localLevel = newLv;
-        if (this.localSkin !== "gm") {
-          this.localLabel.setText(`${this.localNickname} [Lv.${newLv}]`);
-          if (isTierBoundary(newLv)) {
-            const newKey = skinKey(getSkinForLevel(this.localSkin, newLv));
-            if (this.textures.exists(newKey)) {
-              this.localSprite.setTexture(newKey, DIR_TO_ROW[this.localDirection] * 9);
-            }
-          }
-        }
-      }
-
       // Party state change — update label colors of all remote players
       const newPartyId = player.partyId ?? "";
       const newIsOwner = player.isPartyOwner ?? false;
@@ -1559,6 +1546,30 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.scrollX = player.x - this.cameras.main.width  / 2;
         this.cameras.main.scrollY = player.y - this.cameras.main.height / 2;
       }
+      this.localPotions = player.potions ?? 0;
+      player.onChange(() => {
+        const newLv = player.level ?? 1;
+        if (newLv !== this.localLevel) {
+          if (newLv > this.localLevel && this.localLevel > 0 && this.localSprite) {
+            this.spawnPlayerEffect(this.localSprite.x, this.localSprite.y, 0xffd700);
+          }
+          this.localLevel = newLv;
+          if (this.localSkin !== "gm") {
+            this.localLabel.setText(`${this.localNickname} [Lv.${newLv}]`);
+            if (isTierBoundary(newLv)) {
+              const newKey = skinKey(getSkinForLevel(this.localSkin, newLv));
+              if (this.textures.exists(newKey)) {
+                this.localSprite.setTexture(newKey, DIR_TO_ROW[this.localDirection] * 9);
+              }
+            }
+          }
+        }
+        const newPotions = player.potions ?? 0;
+        if (newPotions < this.localPotions && this.localSprite?.active) {
+          this.spawnPlayerEffect(this.localSprite.x, this.localSprite.y, 0xff4444);
+        }
+        this.localPotions = newPotions;
+      });
       this.ui.updateLeaderboard();
       return;
     }
@@ -1692,6 +1703,7 @@ export class GameScene extends Phaser.Scene {
       isDead: player.isDead || false,
       partyId: player.partyId ?? "",
       lastHpRatio: -1,
+      potions: player.potions ?? 0,
     };
 
     // Apply initial visibility
@@ -1752,6 +1764,9 @@ export class GameScene extends Phaser.Scene {
 
       const newLv = player.level ?? 1;
       if (e.level !== newLv) {
+        if (newLv > e.level && e.sprite?.active) {
+          this.spawnPlayerEffect(e.sprite.x, e.sprite.y, 0xffd700);
+        }
         e.level = newLv;
         if (player.isGM) {
           e.label.setText(`${player.nickname} [GM]`);
@@ -1767,6 +1782,12 @@ export class GameScene extends Phaser.Scene {
           }
         }
       }
+
+      const newPotions = player.potions ?? 0;
+      if (newPotions < e.potions && e.sprite?.active) {
+        this.spawnPlayerEffect(e.sprite.x, e.sprite.y, 0xff4444);
+      }
+      e.potions = newPotions;
 
       // Update party membership and label color
       const newPartyId = player.partyId ?? "";
@@ -2860,6 +2881,44 @@ export class GameScene extends Phaser.Scene {
       duration: 300,
       onComplete: () => anim.sprite.destroy(),
     });
+  }
+
+  private spawnPlayerEffect(x: number, y: number, color: number): void {
+    const particleKey = "effect_particle_" + color.toString(16);
+    if (!this.textures.exists(particleKey)) {
+      const g = this.make.graphics({ x: 0, y: 0, add: false });
+      g.fillStyle(color, 1);
+      g.fillCircle(4, 4, 4);
+      g.generateTexture(particleKey, 8, 8);
+      g.destroy();
+    }
+
+    for (let i = 0; i < 3; i++) {
+      const ring = this.add.graphics();
+      ring.lineStyle(3, color, 1);
+      ring.strokeCircle(0, 0, 20);
+      ring.setPosition(x, y);
+      ring.setDepth(10000);
+      this.tweens.add({
+        targets: ring,
+        scaleX: 3, scaleY: 3, alpha: 0,
+        delay: i * 150, duration: 800, ease: "Sine.easeOut",
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    const emitter = this.add.particles(x, y - 16, particleKey, {
+      speed: { min: 60, max: 130 },
+      angle: { min: 240, max: 300 },
+      lifespan: 1500,
+      scale: { start: 1, end: 0 },
+      alpha: { start: 1, end: 0 },
+      quantity: 25,
+      emitting: false,
+    });
+    emitter.setDepth(10000);
+    emitter.explode(25);
+    this.time.delayedCall(1600, () => emitter.destroy());
   }
 
   // ── NPCs & Shop ────────────────────────────────────────────────────────────
