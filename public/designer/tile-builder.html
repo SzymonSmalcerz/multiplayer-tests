@@ -110,6 +110,9 @@
       <label>Label</label>
       <input type="text" id="inp-label" placeholder="e.g. Water" maxlength="60">
 
+      <label>Tag</label>
+      <input type="text" id="inp-tag" placeholder="other" value="other" maxlength="40">
+
       <label>Width (px)</label>
       <div class="tb-readonly" id="disp-width">—</div>
 
@@ -135,6 +138,7 @@
     const dispH     = document.getElementById('disp-height');
     const inpType   = document.getElementById('inp-type');
     const inpLabel  = document.getElementById('inp-label');
+    const inpTag    = document.getElementById('inp-tag');
     const btnSave   = document.getElementById('btn-save');
     const status    = document.getElementById('status');
 
@@ -175,6 +179,7 @@
 
     inpType.addEventListener('input', updateSaveBtn);
     inpLabel.addEventListener('input', updateSaveBtn);
+    inpTag.addEventListener('input', updateSaveBtn);
 
     function updateSaveBtn() {
       const typeOk  = /^[a-z0-9_]+$/.test(inpType.value.trim());
@@ -190,6 +195,7 @@
       const payload = {
         type:        inpType.value.trim(),
         label:       inpLabel.value.trim(),
+        tag:         inpTag.value.trim() || 'other',
         imageWidth,
         imageHeight,
         imageBase64,
@@ -209,7 +215,7 @@
         imageBase64 = null; imageWidth = 0; imageHeight = 0; dimensionsValid = false;
         preview.style.display = 'none'; preview.src = '';
         dispW.textContent = '—'; dispH.textContent = '—';
-        inpType.value = ''; inpLabel.value = '';
+        inpType.value = ''; inpLabel.value = ''; inpTag.value = 'other';
         dimError.style.display = 'none';
       } catch (err) {
         status.textContent = `Error: ${err.message}`;

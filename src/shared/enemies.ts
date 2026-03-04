@@ -1,5 +1,6 @@
 export interface EnemyDef {
   type:               string;
+  tag?:               string;
   label:              string;
   level:              number;
   hp:                 number;

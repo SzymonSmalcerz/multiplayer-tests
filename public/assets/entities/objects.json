@@ -1,6 +1,7 @@
 {
   "tree1": {
     "type": "tree1",
+    "tag": "tree",
     "imageWidth": 96,
     "imageHeight": 128,
     "collision": {
@@ -13,6 +14,7 @@
   },
   "tree2": {
     "type": "tree2",
+    "tag": "tree",
     "imageWidth": 96,
     "imageHeight": 128,
     "collision": {
@@ -25,6 +27,7 @@
   },
   "tree3": {
     "type": "tree3",
+    "tag": "tree",
     "imageWidth": 96,
     "imageHeight": 128,
     "collision": {
@@ -37,6 +40,7 @@
   },
   "house_cottage_big": {
     "type": "house_cottage_big",
+    "tag": "house",
     "imageWidth": 270,
     "imageHeight": 350,
     "collision": {
@@ -49,6 +53,7 @@
   },
   "house_cottage_small": {
     "type": "house_cottage_small",
+    "tag": "house",
     "imageWidth": 125,
     "imageHeight": 150,
     "collision": {
@@ -61,6 +66,7 @@
   },
   "house_cottage_big_2": {
     "type": "house_cottage_big_2",
+    "tag": "house",
     "imageWidth": 340,
     "imageHeight": 340,
     "collision": {
@@ -73,6 +79,7 @@
   },
   "house2_b": {
     "type": "house2_b",
+    "tag": "house",
     "imageWidth": 270,
     "imageHeight": 350,
     "collision": {
@@ -85,6 +92,7 @@
   },
   "house2_old": {
     "type": "house2_old",
+    "tag": "house",
     "imageWidth": 270,
     "imageHeight": 350,
     "collision": {
@@ -97,6 +105,7 @@
   },
   "house_semitown_big_1": {
     "type": "house_semitown_big_1",
+    "tag": "house",
     "imageWidth": 262,
     "imageHeight": 192,
     "collision": {
@@ -109,6 +118,7 @@
   },
   "house_semitown_big_2": {
     "type": "house_semitown_big_2",
+    "tag": "house",
     "imageWidth": 262,
     "imageHeight": 192,
     "collision": {
@@ -121,6 +131,7 @@
   },
   "house_semitown_long_1": {
     "type": "house_semitown_long_1",
+    "tag": "house",
     "imageWidth": 147,
     "imageHeight": 309,
     "collision": {
@@ -133,6 +144,7 @@
   },
   "house_semitown_small_1": {
     "type": "house_semitown_small_1",
+    "tag": "house",
     "imageWidth": 110,
     "imageHeight": 160,
     "collision": {
@@ -145,6 +157,7 @@
   },
   "house_semitown_small_2": {
     "type": "house_semitown_small_2",
+    "tag": "house",
     "imageWidth": 110,
     "imageHeight": 160,
     "collision": {
@@ -157,6 +170,7 @@
   },
   "house_semitown_small_3": {
     "type": "house_semitown_small_3",
+    "tag": "house",
     "imageWidth": 110,
     "imageHeight": 160,
     "collision": {
@@ -169,6 +183,7 @@
   },
   "house_semitown_small_4": {
     "type": "house_semitown_small_4",
+    "tag": "house",
     "imageWidth": 110,
     "imageHeight": 160,
     "collision": {
@@ -181,6 +196,7 @@
   },
   "house_semitown_small_5": {
     "type": "house_semitown_small_5",
+    "tag": "house",
     "imageWidth": 110,
     "imageHeight": 160,
     "collision": {
@@ -193,6 +209,7 @@
   },
   "house_semitown_small_6": {
     "type": "house_semitown_small_6",
+    "tag": "house",
     "imageWidth": 110,
     "imageHeight": 160,
     "collision": {
@@ -205,6 +222,7 @@
   },
   "house_town_1": {
     "type": "house_town_1",
+    "tag": "house",
     "imageWidth": 318,
     "imageHeight": 227,
     "collision": {
@@ -217,6 +235,7 @@
   },
   "house_town_2": {
     "type": "house_town_2",
+    "tag": "house",
     "imageWidth": 197,
     "imageHeight": 272,
     "collision": {
@@ -229,6 +248,7 @@
   },
   "house_town_3": {
     "type": "house_town_3",
+    "tag": "house",
     "imageWidth": 147,
     "imageHeight": 198,
     "collision": {
@@ -241,6 +261,7 @@
   },
   "house_town_4": {
     "type": "house_town_4",
+    "tag": "house",
     "imageWidth": 193,
     "imageHeight": 213,
     "collision": {
@@ -253,6 +274,7 @@
   },
   "house_town_5": {
     "type": "house_town_5",
+    "tag": "house",
     "imageWidth": 185,
     "imageHeight": 168,
     "collision": {
@@ -265,6 +287,7 @@
   },
   "house_town_6": {
     "type": "house_town_6",
+    "tag": "house",
     "imageWidth": 423,
     "imageHeight": 210,
     "collision": {
@@ -277,6 +300,7 @@
   },
   "barell": {
     "type": "barell",
+    "tag": "city items",
     "imageWidth": 30,
     "imageHeight": 40,
     "collision": {
@@ -289,6 +313,7 @@
   },
   "bucket_empty": {
     "type": "bucket_empty",
+    "tag": "city items",
     "imageWidth": 25,
     "imageHeight": 30,
     "collision": {
@@ -301,6 +326,7 @@
   },
   "bucket_full": {
     "type": "bucket_full",
+    "tag": "city items",
     "imageWidth": 25,
     "imageHeight": 30,
     "collision": {
@@ -313,6 +339,7 @@
   },
   "cage_animal_1": {
     "type": "cage_animal_1",
+    "tag": "city items",
     "imageWidth": 96,
     "imageHeight": 96,
     "collision": {
@@ -325,6 +352,7 @@
   },
   "cart_full": {
     "type": "cart_full",
+    "tag": "city items",
     "imageWidth": 90,
     "imageHeight": 60,
     "collision": {
@@ -337,6 +365,7 @@
   },
   "lamp": {
     "type": "lamp",
+    "tag": "city items",
     "imageWidth": 28,
     "imageHeight": 78,
     "collision": {
@@ -351,6 +380,7 @@
   },
   "monument_lion": {
     "type": "monument_lion",
+    "tag": "city items",
     "imageWidth": 51,
     "imageHeight": 88,
     "collision": {
@@ -363,6 +393,7 @@
   },
   "tent": {
     "type": "tent",
+    "tag": "city items",
     "imageWidth": 130,
     "imageHeight": 160,
     "collision": {
@@ -375,6 +406,7 @@
   },
   "waterFountain": {
     "type": "waterFountain",
+    "tag": "city items",
     "imageWidth": 64,
     "imageHeight": 76,
     "collision": {
@@ -389,6 +421,7 @@
   },
   "well": {
     "type": "well",
+    "tag": "city items",
     "imageWidth": 77,
     "imageHeight": 109,
     "collision": {
@@ -401,6 +434,7 @@
   },
   "wheat": {
     "type": "wheat",
+    "tag": "city items",
     "imageWidth": 30,
     "imageHeight": 40,
     "collision": {
@@ -413,6 +447,7 @@
   },
   "wood": {
     "type": "wood",
+    "tag": "city items",
     "imageWidth": 30,
     "imageHeight": 40,
     "collision": {
@@ -425,12 +460,14 @@
   },
   "bower_1": {
     "type": "bower_1",
+    "tag": "city items",
     "imageWidth": 96,
     "imageHeight": 132,
     "spritePath": "/assets/entities/bower_1.png"
   },
   "bower_2": {
     "type": "bower_2",
+    "tag": "city items",
     "imageWidth": 100,
     "imageHeight": 110,
     "collision": {
@@ -443,6 +480,7 @@
   },
   "bower_3": {
     "type": "bower_3",
+    "tag": "city items",
     "imageWidth": 96,
     "imageHeight": 132,
     "collision": {
@@ -455,6 +493,7 @@
   },
   "toitoi": {
     "type": "toitoi",
+    "tag": "city items",
     "imageWidth": 70,
     "imageHeight": 94,
     "collision": {
@@ -467,6 +506,7 @@
   },
   "fence": {
     "type": "fence",
+    "tag": "city items",
     "imageWidth": 128,
     "imageHeight": 32,
     "spritePath": "/assets/entities/fence.png",
@@ -479,6 +519,7 @@
   },
   "fence_vertical": {
     "type": "fence_vertical",
+    "tag": "city items",
     "imageWidth": 16,
     "imageHeight": 64,
     "spritePath": "/assets/entities/fence_vertical.png",

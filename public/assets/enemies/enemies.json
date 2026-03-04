@@ -1,6 +1,7 @@
 {
   "hit": {
     "type": "hit",
+    "tag": "village",
     "label": "Hit Enemy",
     "level": 3,
     "hp": 15,
@@ -26,6 +27,7 @@
   },
   "orc": {
     "type": "orc",
+    "tag": "village",
     "label": "Orc",
     "level": 5,
     "hp": 20,
@@ -51,6 +53,7 @@
   },
   "beetle": {
     "type": "beetle",
+    "tag": "village",
     "label": "beetle",
     "level": 1,
     "hp": 100,
@@ -76,6 +79,7 @@
   },
   "mantis": {
     "type": "mantis",
+    "tag": "village",
     "label": "mantis",
     "level": 2,
     "hp": 110,
@@ -101,6 +105,7 @@
   },
   "orc_commander": {
     "type": "orc_commander",
+    "tag": "village",
     "label": "Orc commander",
     "level": 10,
     "hp": 300,
@@ -126,6 +131,7 @@
   },
   "orc_warrior": {
     "type": "orc_warrior",
+    "tag": "village",
     "label": "Orc warrior",
     "level": 7,
     "hp": 200,

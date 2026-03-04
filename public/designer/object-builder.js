@@ -16,6 +16,7 @@ let uploadedDataURL = null;   // data URL of a newly uploaded replacement image;
 let naturalW        = 0;
 let naturalH        = 0;
 let typeKey         = '';
+let tagValue        = 'other';
 let isAnimated      = false;
 let frameCount      = 1;
 let frameRate       = 8;
@@ -125,6 +126,7 @@ function validateStep(n) {
       return false;
     }
     typeKey = val;
+    tagValue = (document.getElementById('ob-tag')?.value.trim() || 'other');
     return true;
   }
   if (n === 3) {
@@ -159,6 +161,7 @@ async function loadEditData(type) {
 
     originalType      = type;
     typeKey           = type;
+    tagValue          = def.tag || 'other';
     existingSpritePath = def.spritePath || `/assets/entities/${type}.png`;
 
     frameWidth = def.imageWidth;
@@ -275,6 +278,8 @@ function buildIdentifierStep() {
       <label for="type-key-input">Type key</label>
       <input id="type-key-input" type="text" placeholder="e.g. my_lamp" autocomplete="off" spellcheck="false"
              value="${isEditMode ? typeKey : ''}">
+      <label for="ob-tag">Tag</label>
+      <input id="ob-tag" type="text" placeholder="other" value="${tagValue}">
     </div>
     <div id="type-check-hint" style="font-size:12px;margin-top:10px;color:#888"></div>
   `;
@@ -564,6 +569,7 @@ async function saveObject() {
 
   const body = {
     type:        typeKey,
+    tag:         tagValue || 'other',
     imageWidth:  frameWidth,
     imageHeight: naturalH,
     ...(isAnimated ? { frameCount, frameRate } : {}),

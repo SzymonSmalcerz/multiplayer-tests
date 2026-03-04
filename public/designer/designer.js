@@ -1,7 +1,6 @@
 'use strict';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const TREE_KEYS = new Set(['tree1', 'tree2', 'tree3']);
 const NPC_TYPES = ['trader', 'healer'];
 
 // Pixel size used to render NPC thumbnails / placements when no sprite found
@@ -97,8 +96,7 @@ function screenToWorld(sx, sy) {
 
 // ── Image helpers ──────────────────────────────────────────────────────────────
 function imagePathForKey(key) {
-  if (TREE_KEYS.has(key)) return `/assets/trees/${key}.png`;
-  return `/assets/entities/${key}.png`;
+  return registry[key]?.spritePath ?? `/assets/entities/${key}.png`;
 }
 
 function loadImage(key, src) {
@@ -126,15 +124,75 @@ function drawImageFit(tc, img, def, dx, dy, dw, dh, fallbackLabel) {
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────────────────
+
+/** Creates a collapsible top-level section. Returns { heading, body }. */
+function makeCollapsibleSection(title) {
+  const heading = document.createElement('div');
+  heading.className = 'sidebar-heading';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'collapse-arrow';
+  arrow.textContent = '▶';
+  heading.appendChild(arrow);
+  heading.appendChild(document.createTextNode(title));
+
+  const body = document.createElement('div');
+  body.className = 'sidebar-section-body';
+
+  heading.addEventListener('click', () => {
+    heading.classList.toggle('open');
+    body.classList.toggle('open');
+  });
+
+  sidebar.appendChild(heading);
+  sidebar.appendChild(body);
+
+  return { heading, body };
+}
+
+/** Creates a collapsible tag sub-group inside a section body. Returns the tag body element. */
+function makeTagGroup(tag, parentBody) {
+  const tagHeading = document.createElement('div');
+  tagHeading.className = 'sidebar-tag-heading';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'collapse-arrow';
+  arrow.textContent = '▶';
+  tagHeading.appendChild(arrow);
+  tagHeading.appendChild(document.createTextNode(tag));
+
+  const tagBody = document.createElement('div');
+  tagBody.className = 'sidebar-tag-body';
+
+  tagHeading.addEventListener('click', () => {
+    tagHeading.classList.toggle('open');
+    tagBody.classList.toggle('open');
+  });
+
+  parentBody.appendChild(tagHeading);
+  parentBody.appendChild(tagBody);
+
+  return tagBody;
+}
+
+/** Groups an array of keys by their tag, sorts groups and items alphabetically. */
+function groupByTag(keys, getTag) {
+  const groups = {};
+  keys.forEach(key => {
+    const tag = getTag(key) || 'other';
+    if (!groups[tag]) groups[tag] = [];
+    groups[tag].push(key);
+  });
+  // Sort keys within each group
+  Object.values(groups).forEach(arr => arr.sort());
+  return groups;
+}
+
 function buildSidebar() {
   sidebar.innerHTML = '';
 
-  const treeKeys = Object.keys(registry).filter(k => TREE_KEYS.has(k)).sort();
-  const otherKeys = Object.keys(registry).filter(k => !TREE_KEYS.has(k)).sort();
-
   addTileSection();
-  addSection('Trees', treeKeys, 'object');
-  addObjectSection(otherKeys);
+  addObjectSection();
   addNpcSection();
   addMobSection();
   addEnemySection();
@@ -143,49 +201,33 @@ function buildSidebar() {
   addDoorSection();
 }
 
-function addSection(title, keys, category) {
-  if (keys.length === 0) return;
+function addObjectSection() {
+  const { body } = makeCollapsibleSection('Objects');
 
-  const heading = document.createElement('div');
-  heading.className = 'sidebar-heading';
-  heading.textContent = title;
-  sidebar.appendChild(heading);
+  const allKeys = Object.keys(registry).sort();
+  const groups = groupByTag(allKeys, k => registry[k]?.tag);
 
-  keys.forEach(key => {
-    const item  = createSidebarItem(key, key, category);
-    sidebar.appendChild(item);
-  });
-}
-
-function addObjectSection(keys) {
-  const heading = document.createElement('div');
-  heading.className = 'sidebar-heading';
-  heading.textContent = 'Objects';
-  sidebar.appendChild(heading);
-
-  keys.forEach(key => {
-    const item = createSidebarItem(key, key, 'object');
-    sidebar.appendChild(item);
+  Object.keys(groups).sort().forEach(tag => {
+    const tagBody = makeTagGroup(tag, body);
+    groups[tag].forEach(key => {
+      tagBody.appendChild(createSidebarItem(key, key, 'object'));
+    });
   });
 
   const addBtn = document.createElement('a');
   addBtn.href      = '/design/object-builder';
   addBtn.className = 'sidebar-add-btn';
   addBtn.textContent = '+ Add new object';
-  sidebar.appendChild(addBtn);
+  body.appendChild(addBtn);
 }
 
 function addNpcSection() {
-  const heading = document.createElement('div');
-  heading.className = 'sidebar-heading';
-  heading.textContent = 'NPCs';
-  sidebar.appendChild(heading);
+  const { body } = makeCollapsibleSection('NPCs');
 
   NPC_TYPES.forEach(key => {
     const item = createSidebarItem('npc_' + key, key, 'npc');
-    // Relabel
     item.querySelector('.sidebar-label').textContent = key + ' (NPC)';
-    sidebar.appendChild(item);
+    body.appendChild(item);
   });
 }
 
@@ -193,132 +235,131 @@ function addMobSection() {
   const keys = Object.keys(mobRegistry).sort();
   if (keys.length === 0) return;
 
-  const heading = document.createElement('div');
-  heading.className = 'sidebar-heading';
-  heading.textContent = 'Mobs (drag to place)';
-  sidebar.appendChild(heading);
+  const { body } = makeCollapsibleSection('Mobs (drag to place)');
 
-  keys.forEach(key => {
-    const def = mobRegistry[key];
-    const item = document.createElement('div');
-    item.className = 'sidebar-item';
-    item.dataset.type = key;
-    item.dataset.category = 'mob';
+  const groups = groupByTag(keys, k => mobRegistry[k]?.tag);
 
-    const thumb = document.createElement('canvas');
-    thumb.width  = 48;
-    thumb.height = 48;
-    thumb.className = 'sidebar-thumb';
-    item.appendChild(thumb);
+  Object.keys(groups).sort().forEach(tag => {
+    const tagBody = makeTagGroup(tag, body);
+    groups[tag].forEach(key => {
+      const def = mobRegistry[key];
+      const item = document.createElement('div');
+      item.className = 'sidebar-item';
+      item.dataset.type = key;
+      item.dataset.category = 'mob';
 
-    const label = document.createElement('div');
-    label.className = 'sidebar-label';
-    label.textContent = key;
-    item.appendChild(label);
+      const thumb = document.createElement('canvas');
+      thumb.width  = 48;
+      thumb.height = 48;
+      thumb.className = 'sidebar-thumb';
+      item.appendChild(thumb);
 
-    item.addEventListener('click', () => selectType(key, 'mob'));
-    sidebar.appendChild(item);
+      const label = document.createElement('div');
+      label.className = 'sidebar-label';
+      label.textContent = key;
+      item.appendChild(label);
 
-    // Draw the first "goDown" frame (row 3, col 0) as thumbnail
-    const img = images['mob_' + key];
-    function drawMobThumb() {
-      const tc = thumb.getContext('2d');
-      tc.clearRect(0, 0, 48, 48);
-      if (img && img.complete && img.naturalWidth > 0) {
-        const cols = img.naturalWidth / def.frameWidth;
-        const goDownFirstFrame = 3 * cols; // row 3, col 0
-        const sx = (goDownFirstFrame % cols) * def.frameWidth;
-        const sy = Math.floor(goDownFirstFrame / cols) * def.frameHeight;
-        const scale = Math.min(48 / def.frameWidth, 48 / def.frameHeight);
-        const dw = def.frameWidth  * scale;
-        const dh = def.frameHeight * scale;
-        try {
-          tc.drawImage(img, sx, sy, def.frameWidth, def.frameHeight,
-                       (48 - dw) / 2, (48 - dh) / 2, dw, dh);
-        } catch (_) {}
-      } else {
-        tc.fillStyle = '#2a5a3a';
-        tc.fillRect(4, 4, 40, 40);
-        tc.fillStyle = '#ccc';
-        tc.font = '9px sans-serif';
-        tc.textAlign = 'center';
-        tc.textBaseline = 'middle';
-        tc.fillText(key, 24, 24);
+      item.addEventListener('click', () => selectType(key, 'mob'));
+      tagBody.appendChild(item);
+
+      const img = images['mob_' + key];
+      function drawMobThumb() {
+        const tc = thumb.getContext('2d');
+        tc.clearRect(0, 0, 48, 48);
+        if (img && img.complete && img.naturalWidth > 0) {
+          const cols = img.naturalWidth / def.frameWidth;
+          const goDownFirstFrame = 3 * cols;
+          const sx = (goDownFirstFrame % cols) * def.frameWidth;
+          const sy = Math.floor(goDownFirstFrame / cols) * def.frameHeight;
+          const scale = Math.min(48 / def.frameWidth, 48 / def.frameHeight);
+          const dw = def.frameWidth  * scale;
+          const dh = def.frameHeight * scale;
+          try {
+            tc.drawImage(img, sx, sy, def.frameWidth, def.frameHeight,
+                         (48 - dw) / 2, (48 - dh) / 2, dw, dh);
+          } catch (_) {}
+        } else {
+          tc.fillStyle = '#2a5a3a';
+          tc.fillRect(4, 4, 40, 40);
+          tc.fillStyle = '#ccc';
+          tc.font = '9px sans-serif';
+          tc.textAlign = 'center';
+          tc.textBaseline = 'middle';
+          tc.fillText(key, 24, 24);
+        }
       }
-    }
-    if (!img || img.complete) drawMobThumb();
-    else { img.addEventListener('load', drawMobThumb); img.addEventListener('error', drawMobThumb); }
+      if (!img || img.complete) drawMobThumb();
+      else { img.addEventListener('load', drawMobThumb); img.addEventListener('error', drawMobThumb); }
+    });
   });
 }
 
 function addEnemySection() {
-  const heading = document.createElement('div');
-  heading.className = 'sidebar-heading';
-  heading.textContent = 'Enemies (click to place)';
-  sidebar.appendChild(heading);
+  const { body } = makeCollapsibleSection('Enemies (click to place)');
 
   const keys = Object.keys(enemyRegistry).sort();
-  keys.forEach(key => {
-    const def  = enemyRegistry[key];
-    const item = document.createElement('div');
-    item.className        = 'sidebar-item';
-    item.dataset.type     = key;
-    item.dataset.category = 'enemy';
+  const groups = groupByTag(keys, k => enemyRegistry[k]?.tag);
 
-    const thumbWrap = document.createElement('div');
-    thumbWrap.className = 'sidebar-thumb-wrap';
-    item.appendChild(thumbWrap);
+  Object.keys(groups).sort().forEach(tag => {
+    const tagBody = makeTagGroup(tag, body);
+    groups[tag].forEach(key => {
+      const def  = enemyRegistry[key];
+      const item = document.createElement('div');
+      item.className        = 'sidebar-item';
+      item.dataset.type     = key;
+      item.dataset.category = 'enemy';
 
-    const thumb = document.createElement('canvas');
-    thumb.width = thumb.height = 48;
-    thumb.className = 'sidebar-thumb';
-    thumbWrap.appendChild(thumb);
+      const thumbWrap = document.createElement('div');
+      thumbWrap.className = 'sidebar-thumb-wrap';
+      item.appendChild(thumbWrap);
 
-    const editBtn = document.createElement('a');
-    editBtn.href      = `/design/enemy-editor?edit=${encodeURIComponent(key)}`;
-    editBtn.className = 'sidebar-edit-btn';
-    editBtn.title     = 'Edit enemy';
-    editBtn.textContent = '✏';
-    editBtn.addEventListener('click', e => e.stopPropagation());
-    thumbWrap.appendChild(editBtn);
+      const thumb = document.createElement('canvas');
+      thumb.width = thumb.height = 48;
+      thumb.className = 'sidebar-thumb';
+      thumbWrap.appendChild(thumb);
 
-    const label = document.createElement('div');
-    label.className = 'sidebar-label';
-    label.textContent = def.label + ` (${def.defaultRespawnTime}s)`;
-    item.appendChild(label);
+      const editBtn = document.createElement('a');
+      editBtn.href      = `/design/enemy-editor?edit=${encodeURIComponent(key)}`;
+      editBtn.className = 'sidebar-edit-btn';
+      editBtn.title     = 'Edit enemy';
+      editBtn.textContent = '✏';
+      editBtn.addEventListener('click', e => e.stopPropagation());
+      thumbWrap.appendChild(editBtn);
 
-    item.addEventListener('click', () => selectType(key, 'enemy'));
-    sidebar.appendChild(item);
+      const label = document.createElement('div');
+      label.className = 'sidebar-label';
+      label.textContent = def.label + ` (${def.defaultRespawnTime}s)`;
+      item.appendChild(label);
 
-    const img = images['enemy_' + key];
-    function drawThumb() {
-      const tc = thumb.getContext('2d');
-      tc.clearRect(0, 0, 48, 48);
-      drawEnemyFrame(tc, img, def, 24, 24, 40);
-    }
-    if (!img || img.complete) drawThumb();
-    else { img.addEventListener('load', drawThumb); img.addEventListener('error', drawThumb); }
+      item.addEventListener('click', () => selectType(key, 'enemy'));
+      tagBody.appendChild(item);
+
+      const img = images['enemy_' + key];
+      function drawThumb() {
+        const tc = thumb.getContext('2d');
+        tc.clearRect(0, 0, 48, 48);
+        drawEnemyFrame(tc, img, def, 24, 24, 40);
+      }
+      if (!img || img.complete) drawThumb();
+      else { img.addEventListener('load', drawThumb); img.addEventListener('error', drawThumb); }
+    });
   });
 
   const addBtn = document.createElement('a');
   addBtn.href      = '/design/enemy-builder';
   addBtn.className = 'sidebar-add-btn';
   addBtn.textContent = '+ Add new enemy';
-  sidebar.appendChild(addBtn);
+  body.appendChild(addBtn);
 }
 
 function addWeaponSection() {
-  const heading = document.createElement('div');
-  heading.className = 'sidebar-heading';
-  heading.textContent = 'Weapons (shop only)';
-  sidebar.appendChild(heading);
+  const { body } = makeCollapsibleSection('Weapons (shop only)');
 
   const keys = Object.keys(weaponRegistry).sort();
   keys.forEach(key => {
     const def  = weaponRegistry[key];
     const item = document.createElement('div');
     item.className = 'sidebar-item';
-    // Weapons are not placeable — no click-to-select, just display + edit
 
     const thumbWrap = document.createElement('div');
     thumbWrap.className = 'sidebar-thumb-wrap';
@@ -342,7 +383,7 @@ function addWeaponSection() {
     label.textContent = `${def.label}\n${def.damage}dmg / ${def.cost}g`;
     item.appendChild(label);
 
-    sidebar.appendChild(item);
+    body.appendChild(item);
 
     const img = images['weapon_' + key];
     function drawThumb() {
@@ -371,14 +412,11 @@ function addWeaponSection() {
   addBtn.href      = '/design/weapon-builder';
   addBtn.className = 'sidebar-add-btn';
   addBtn.textContent = '+ Add new weapon';
-  sidebar.appendChild(addBtn);
+  body.appendChild(addBtn);
 }
 
 function addNeutralZoneSection() {
-  const heading = document.createElement('div');
-  heading.className = 'sidebar-heading';
-  heading.textContent = 'Zones';
-  sidebar.appendChild(heading);
+  const { body } = makeCollapsibleSection('Zones');
 
   const item = document.createElement('div');
   item.className = 'sidebar-item';
@@ -414,7 +452,7 @@ function addNeutralZoneSection() {
   item.appendChild(label);
 
   item.addEventListener('click', () => selectType('neutral_zone', 'neutralZone'));
-  sidebar.appendChild(item);
+  body.appendChild(item);
 
   // Spawn point item
   const spItem = document.createElement('div');
@@ -450,14 +488,11 @@ function addNeutralZoneSection() {
   spItem.appendChild(spLabel);
 
   spItem.addEventListener('click', () => selectType('spawn_point', 'spawnPoint'));
-  sidebar.appendChild(spItem);
+  body.appendChild(spItem);
 }
 
 function addDoorSection() {
-  const heading = document.createElement('div');
-  heading.className = 'sidebar-heading';
-  heading.textContent = 'Doors';
-  sidebar.appendChild(heading);
+  const { body } = makeCollapsibleSection('Doors');
 
   const item = document.createElement('div');
   item.className = 'sidebar-item';
@@ -503,89 +538,90 @@ function addDoorSection() {
   item.appendChild(label);
 
   item.addEventListener('click', () => selectType('door', 'door'));
-  sidebar.appendChild(item);
+  body.appendChild(item);
 }
 
 function addTileSection() {
-  const heading = document.createElement('div');
-  heading.className = 'sidebar-heading';
-  heading.textContent = 'Tiles (click/drag to paint)';
-  sidebar.appendChild(heading);
+  const { body } = makeCollapsibleSection('Tiles (click/drag to paint)');
 
   // Default tile indicator
   const defRow = document.createElement('div');
   defRow.id    = 'tile-default-row';
   defRow.style.cssText = 'font-size:11px;color:#aaa;padding:2px 6px 6px 6px;';
   defRow.textContent = `Background: ${defaultTile}`;
-  sidebar.appendChild(defRow);
+  body.appendChild(defRow);
 
   const tileKeys = Object.keys(tileRegistry).sort();
-  tileKeys.forEach(key => {
-    const def  = tileRegistry[key];
-    const item = document.createElement('div');
-    item.className        = 'sidebar-item';
-    item.dataset.type     = key;
-    item.dataset.category = 'tile';
+  const groups = groupByTag(tileKeys, k => tileRegistry[k]?.tag);
 
-    const thumbWrap = document.createElement('div');
-    thumbWrap.className = 'sidebar-thumb-wrap';
-    item.appendChild(thumbWrap);
+  Object.keys(groups).sort().forEach(tag => {
+    const tagBody = makeTagGroup(tag, body);
+    groups[tag].forEach(key => {
+      const def  = tileRegistry[key];
+      const item = document.createElement('div');
+      item.className        = 'sidebar-item';
+      item.dataset.type     = key;
+      item.dataset.category = 'tile';
 
-    const thumb = document.createElement('canvas');
-    thumb.width = thumb.height = 48;
-    thumb.className = 'sidebar-thumb';
-    thumbWrap.appendChild(thumb);
+      const thumbWrap = document.createElement('div');
+      thumbWrap.className = 'sidebar-thumb-wrap';
+      item.appendChild(thumbWrap);
 
-    // "Set as default" button
-    const defBtn = document.createElement('button');
-    defBtn.textContent = '★';
-    defBtn.title = 'Set as map default tile';
-    defBtn.style.cssText = 'position:absolute;bottom:2px;right:2px;padding:0 3px;font-size:10px;background:#333;color:#fa3;border:1px solid #555;border-radius:2px;cursor:pointer;line-height:14px;';
-    defBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      defaultTile = key;
-      const row = document.getElementById('tile-default-row');
-      if (row) row.textContent = `Background: ${defaultTile}`;
-      updateStatus();
-    });
-    thumbWrap.appendChild(defBtn);
+      const thumb = document.createElement('canvas');
+      thumb.width = thumb.height = 48;
+      thumb.className = 'sidebar-thumb';
+      thumbWrap.appendChild(thumb);
 
-    const label = document.createElement('div');
-    label.className = 'sidebar-label';
-    label.textContent = def.label || key;
-    item.appendChild(label);
+      const defBtn = document.createElement('button');
+      defBtn.textContent = '★';
+      defBtn.title = 'Set as map default tile';
+      defBtn.style.cssText = 'position:absolute;bottom:2px;right:2px;padding:0 3px;font-size:10px;background:#333;color:#fa3;border:1px solid #555;border-radius:2px;cursor:pointer;line-height:14px;';
+      defBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        defaultTile = key;
+        const row = document.getElementById('tile-default-row');
+        if (row) row.textContent = `Background: ${defaultTile}`;
+        updateStatus();
+      });
+      thumbWrap.appendChild(defBtn);
 
-    item.addEventListener('click', () => selectType(key, 'tile'));
-    sidebar.appendChild(item);
+      const label = document.createElement('div');
+      label.className = 'sidebar-label';
+      label.textContent = def.label || key;
+      item.appendChild(label);
 
-    const img = images['tile_' + key];
-    function drawThumb() {
-      const tc = thumb.getContext('2d');
-      tc.clearRect(0, 0, 48, 48);
-      if (img && img.complete && img.naturalWidth > 0) {
-        const scale = Math.min(48 / def.imageWidth, 48 / def.imageHeight);
-        const dw = def.imageWidth  * scale;
-        const dh = def.imageHeight * scale;
-        try { tc.drawImage(img, (48 - dw) / 2, (48 - dh) / 2, dw, dh); } catch (_) {}
-      } else {
-        tc.fillStyle = '#3a5a3a';
-        tc.fillRect(4, 4, 40, 40);
-        tc.fillStyle = '#ccc';
-        tc.font = '9px sans-serif';
-        tc.textAlign = 'center';
-        tc.textBaseline = 'middle';
-        tc.fillText(key.substring(0, 12), 24, 24);
+      item.addEventListener('click', () => selectType(key, 'tile'));
+      tagBody.appendChild(item);
+
+      const img = images['tile_' + key];
+      function drawThumb() {
+        const tc = thumb.getContext('2d');
+        tc.clearRect(0, 0, 48, 48);
+        if (img && img.complete && img.naturalWidth > 0) {
+          const scale = Math.min(48 / def.imageWidth, 48 / def.imageHeight);
+          const dw = def.imageWidth  * scale;
+          const dh = def.imageHeight * scale;
+          try { tc.drawImage(img, (48 - dw) / 2, (48 - dh) / 2, dw, dh); } catch (_) {}
+        } else {
+          tc.fillStyle = '#3a5a3a';
+          tc.fillRect(4, 4, 40, 40);
+          tc.fillStyle = '#ccc';
+          tc.font = '9px sans-serif';
+          tc.textAlign = 'center';
+          tc.textBaseline = 'middle';
+          tc.fillText(key.substring(0, 12), 24, 24);
+        }
       }
-    }
-    if (!img || img.complete) drawThumb();
-    else { img.addEventListener('load', drawThumb); img.addEventListener('error', drawThumb); }
+      if (!img || img.complete) drawThumb();
+      else { img.addEventListener('load', drawThumb); img.addEventListener('error', drawThumb); }
+    });
   });
 
   const addBtn = document.createElement('a');
   addBtn.href      = '/design/tile-builder';
   addBtn.className = 'sidebar-add-btn';
   addBtn.textContent = '+ Add new tile';
-  sidebar.appendChild(addBtn);
+  body.appendChild(addBtn);
 }
 
 /**

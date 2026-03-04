@@ -13,6 +13,7 @@ export interface MobFrames {
 
 export interface MobDef {
   type:        string;
+  tag?:        string;
   frameWidth:  number;
   frameHeight: number;
   /** Default animation frames; individual map placements may override specialAction. */
@@ -32,6 +33,7 @@ export interface MobDef {
 export const MOB_REGISTRY: Record<string, MobDef> = {
   butterfly: {
     type: "butterfly",
+    tag: "village",
     frameWidth: 16, frameHeight: 32,
     frames: {
       goLeft:        [0, 1, 2, 3],
@@ -49,6 +51,7 @@ export const MOB_REGISTRY: Record<string, MobDef> = {
 
   cat: {
     type: "cat",
+    tag: "village",
     frameWidth: 30, frameHeight: 30,
     frames: {
       goLeft:        [0, 1, 2, 3],
@@ -66,6 +69,7 @@ export const MOB_REGISTRY: Record<string, MobDef> = {
 
   chicken: {
     type: "chicken",
+    tag: "village",
     frameWidth: 32, frameHeight: 32,
     frames: {
       goLeft:        [0, 1, 2, 3],
@@ -83,6 +87,7 @@ export const MOB_REGISTRY: Record<string, MobDef> = {
 
   cow: {
     type: "cow",
+    tag: "village",
     frameWidth: 80, frameHeight: 80,
     frames: {
       goLeft:        [0, 1, 2, 3],
@@ -100,6 +105,7 @@ export const MOB_REGISTRY: Record<string, MobDef> = {
 
   dog: {
     type: "dog",
+    tag: "village",
     frameWidth: 32, frameHeight: 32,
     frames: {
       goLeft:        [0, 1, 2, 3],
@@ -117,6 +123,7 @@ export const MOB_REGISTRY: Record<string, MobDef> = {
 
   pig: {
     type: "pig",
+    tag: "village",
     frameWidth: 60, frameHeight: 60,
     frames: {
       goLeft:        [0, 1, 2, 3],

@@ -45,6 +45,7 @@ let collisionDragStart  = { x: 0, y: 0 };
 
 let stats = {
   type:               '',
+  tag:                'other',
   label:              '',
   level:              1,
   hp:                 20,
@@ -173,6 +174,8 @@ function initStatsStep() {
       <input id="eb-type" type="text" placeholder="orc" value="${stats.type}">
       <label>Display name</label>
       <input id="eb-label" type="text" placeholder="Orc Warrior" value="${stats.label}">
+      <label>Tag</label>
+      <input id="eb-tag" type="text" placeholder="other" value="${stats.tag}">
       <label>Level</label>
       <input id="eb-level" type="number" min="1" max="100" value="${stats.level}">
       <label>Hit Points (HP)</label>
@@ -458,6 +461,7 @@ function renderCollisionCanvas() {
 function readStats() {
   const g = (id) => document.getElementById(id);
   stats.type               = (g('eb-type')?.value        ?? '').trim();
+  stats.tag                = (g('eb-tag')?.value         ?? '').trim() || 'other';
   stats.label              = (g('eb-label')?.value       ?? '').trim();
   stats.level              = parseInt(g('eb-level')?.value,       10) || 1;
   stats.hp                 = parseInt(g('eb-hp')?.value,          10) || 1;

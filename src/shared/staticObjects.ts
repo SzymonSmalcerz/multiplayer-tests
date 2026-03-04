@@ -8,6 +8,7 @@
 
 export interface StaticObjectDef {
   type: string;
+  tag?: string;
   imageWidth: number;
   imageHeight: number;
   /** Collision rectangle in image-local pixels. Omit for visual-only objects. */

@@ -7,6 +7,7 @@ import * as fs from "fs";
 
 export interface TileDef {
   type:        string;
+  tag?:        string;
   label:       string;
   imageWidth:  number;
   imageHeight: number;

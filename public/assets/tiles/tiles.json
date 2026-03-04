@@ -1,12 +1,14 @@
 {
   "grass_basic": {
     "type": "grass_basic",
+    "tag": "village",
     "label": "Grass Basic",
     "imageWidth": 32,
     "imageHeight": 32
   },
   "dirt": {
     "type": "dirt",
+    "tag": "village",
     "label": "dirt",
     "imageWidth": 32,
     "imageHeight": 32
