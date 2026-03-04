@@ -52,6 +52,16 @@ let neutralZoneDragStartWY = 0;
 // Spawn point drag state
 let isDraggingSpawnPoint = false;
 
+// Entity drag-to-move state (used when nothing is selected)
+let isDraggingEntity      = false;
+let draggingEntityCat     = null;   // 'object'|'npc'|'enemy'|'door'|'tile'|'mob'|'neutralZone'
+let draggingEntityIndex   = -1;
+let draggingEntityOffsetX = 0;
+let draggingEntityOffsetY = 0;
+let draggingTileData      = null;   // { type, tag } for tile lift-and-replace
+let draggingTileDstX      = 0;
+let draggingTileDstY      = 0;
+
 // Canvas transform
 let zoom        = 0.3;
 let panX        = 0;
@@ -798,6 +808,16 @@ function paintTileAt(wx, wy) {
 }
 
 function selectType(type, category) {
+  // Clicking the already-selected item deselects it (browse mode)
+  if (selectedType === type && selectedCategory === category) {
+    selectedType     = null;
+    selectedCategory = null;
+    document.querySelectorAll('.sidebar-item.selected')
+      .forEach(el => el.classList.remove('selected'));
+    updateStatus();
+    return;
+  }
+
   selectedType     = type;
   selectedCategory = category;
 
@@ -879,6 +899,11 @@ function render() {
 
   // Placed non-default tiles
   placedTiles.forEach(tile => renderTile(tile, 1.0));
+
+  // Ghost tile preview while dragging a tile to a new position
+  if (isDraggingEntity && draggingEntityCat === 'tile' && draggingTileData) {
+    renderTile({ type: draggingTileData.type, x: draggingTileDstX, y: draggingTileDstY }, 0.5);
+  }
 
   // Tile cursor preview (snapped)
   if (selectedCategory === 'tile' && selectedType && cursorOnCanvas) {
@@ -1441,6 +1466,69 @@ canvas.addEventListener('mousemove', e => {
     spawnPoint = { x: Math.round(world.x), y: Math.round(world.y) };
   }
 
+  if (isDraggingEntity && draggingEntityCat) {
+    const wx = Math.round(world.x);
+    const wy = Math.round(world.y);
+
+    if (draggingEntityCat === 'tile') {
+      draggingTileDstX = Math.floor(wx / TILE_SNAP) * TILE_SNAP;
+      draggingTileDstY = Math.floor(wy / TILE_SNAP) * TILE_SNAP;
+    } else if (draggingEntityCat === 'object' && draggingEntityIndex !== -1) {
+      placedObjects[draggingEntityIndex].x = wx + draggingEntityOffsetX;
+      placedObjects[draggingEntityIndex].y = wy + draggingEntityOffsetY;
+    } else if (draggingEntityCat === 'npc' && draggingEntityIndex !== -1) {
+      placedNpcs[draggingEntityIndex].x = wx + draggingEntityOffsetX;
+      placedNpcs[draggingEntityIndex].y = wy + draggingEntityOffsetY;
+    } else if (draggingEntityCat === 'enemy' && draggingEntityIndex !== -1) {
+      placedEnemies[draggingEntityIndex].x = wx + draggingEntityOffsetX;
+      placedEnemies[draggingEntityIndex].y = wy + draggingEntityOffsetY;
+    } else if (draggingEntityCat === 'door' && draggingEntityIndex !== -1) {
+      placedDoors[draggingEntityIndex].x = wx + draggingEntityOffsetX;
+      placedDoors[draggingEntityIndex].y = wy + draggingEntityOffsetY;
+    } else if (draggingEntityCat === 'mob' && draggingEntityIndex !== -1) {
+      placedMobs[draggingEntityIndex].x = wx + draggingEntityOffsetX;
+      placedMobs[draggingEntityIndex].y = wy + draggingEntityOffsetY;
+    } else if (draggingEntityCat === 'neutralZone' && draggingEntityIndex !== -1) {
+      placedNeutralZones[draggingEntityIndex].x = wx + draggingEntityOffsetX;
+      placedNeutralZones[draggingEntityIndex].y = wy + draggingEntityOffsetY;
+    }
+  }
+
+  // Hover cursor: show grab hand when hovering over a draggable entity with nothing selected
+  if (!isDraggingEntity && !selectedType && !isPanning && !spaceDown) {
+    const wx = Math.round(world.x);
+    const wy = Math.round(world.y);
+    let hovered = false;
+    if (!hovered && hitTest(placedNpcs, 'npc', wx, wy) !== -1) hovered = true;
+    if (!hovered && hitTest(placedObjects, 'object', wx, wy) !== -1) hovered = true;
+    if (!hovered) {
+      for (const en of placedEnemies) {
+        if (Math.abs(wx - en.x) <= 12 && Math.abs(wy - en.y) <= 12) { hovered = true; break; }
+      }
+    }
+    if (!hovered) {
+      for (const d of placedDoors) {
+        if (Math.abs(wx - d.x) <= 24 && Math.abs(wy - d.y) <= 32) { hovered = true; break; }
+      }
+    }
+    if (!hovered) {
+      const snX = Math.floor(wx / TILE_SNAP) * TILE_SNAP;
+      const snY = Math.floor(wy / TILE_SNAP) * TILE_SNAP;
+      if (placedTiles.some(t => t.x === snX && t.y === snY)) hovered = true;
+    }
+    if (!hovered) {
+      for (const m of placedMobs) {
+        if (wx >= m.x && wx <= m.x + m.width && wy >= m.y && wy <= m.y + m.height) { hovered = true; break; }
+      }
+    }
+    if (!hovered) {
+      for (const z of placedNeutralZones) {
+        if (wx >= z.x && wx <= z.x + z.width && wy >= z.y && wy <= z.y + z.height) { hovered = true; break; }
+      }
+    }
+    canvas.style.cursor = hovered ? 'grab' : 'default';
+  }
+
   if (isPaintingTile && selectedCategory === 'tile' && selectedType) {
     paintTileAt(Math.round(world.x), Math.round(world.y));
   }
@@ -1485,6 +1573,84 @@ canvas.addEventListener('mousedown', e => {
       canvas.style.cursor = 'move';
       e.preventDefault();
       return;
+    }
+  }
+
+  // Grab existing entity for drag-move when nothing is selected
+  if (e.button === 0 && !spaceDown && !selectedType) {
+    const world = screenToWorld(sx, sy);
+    const wx = Math.round(world.x);
+    const wy = Math.round(world.y);
+
+    // NPCs (rendered on top, check first)
+    const npcI = hitTest(placedNpcs, 'npc', wx, wy);
+    if (npcI !== -1) {
+      isDraggingEntity = true; draggingEntityCat = 'npc'; draggingEntityIndex = npcI;
+      draggingEntityOffsetX = placedNpcs[npcI].x - wx;
+      draggingEntityOffsetY = placedNpcs[npcI].y - wy;
+      canvas.style.cursor = 'grabbing'; e.preventDefault(); return;
+    }
+
+    // Objects
+    const objI = hitTest(placedObjects, 'object', wx, wy);
+    if (objI !== -1) {
+      isDraggingEntity = true; draggingEntityCat = 'object'; draggingEntityIndex = objI;
+      draggingEntityOffsetX = placedObjects[objI].x - wx;
+      draggingEntityOffsetY = placedObjects[objI].y - wy;
+      canvas.style.cursor = 'grabbing'; e.preventDefault(); return;
+    }
+
+    // Enemies (±12 px hit area)
+    for (let i = placedEnemies.length - 1; i >= 0; i--) {
+      const en = placedEnemies[i];
+      if (Math.abs(wx - en.x) <= 12 && Math.abs(wy - en.y) <= 12) {
+        isDraggingEntity = true; draggingEntityCat = 'enemy'; draggingEntityIndex = i;
+        draggingEntityOffsetX = en.x - wx; draggingEntityOffsetY = en.y - wy;
+        canvas.style.cursor = 'grabbing'; e.preventDefault(); return;
+      }
+    }
+
+    // Doors (±24 wide, ±32 tall)
+    for (let i = placedDoors.length - 1; i >= 0; i--) {
+      const d = placedDoors[i];
+      if (Math.abs(wx - d.x) <= 24 && Math.abs(wy - d.y) <= 32) {
+        isDraggingEntity = true; draggingEntityCat = 'door'; draggingEntityIndex = i;
+        draggingEntityOffsetX = d.x - wx; draggingEntityOffsetY = d.y - wy;
+        canvas.style.cursor = 'grabbing'; e.preventDefault(); return;
+      }
+    }
+
+    // Tiles (lift-and-replace approach to avoid index shifting)
+    const snappedX = Math.floor(wx / TILE_SNAP) * TILE_SNAP;
+    const snappedY = Math.floor(wy / TILE_SNAP) * TILE_SNAP;
+    const tileI = placedTiles.findIndex(t => t.x === snappedX && t.y === snappedY);
+    if (tileI !== -1) {
+      draggingTileData = { type: placedTiles[tileI].type, tag: placedTiles[tileI].tag };
+      placedTiles.splice(tileI, 1);
+      draggingTileDstX = snappedX;
+      draggingTileDstY = snappedY;
+      isDraggingEntity = true; draggingEntityCat = 'tile'; draggingEntityIndex = -1;
+      canvas.style.cursor = 'grabbing'; e.preventDefault(); return;
+    }
+
+    // Mob zones (point-in-rect)
+    for (let i = placedMobs.length - 1; i >= 0; i--) {
+      const m = placedMobs[i];
+      if (wx >= m.x && wx <= m.x + m.width && wy >= m.y && wy <= m.y + m.height) {
+        isDraggingEntity = true; draggingEntityCat = 'mob'; draggingEntityIndex = i;
+        draggingEntityOffsetX = m.x - wx; draggingEntityOffsetY = m.y - wy;
+        canvas.style.cursor = 'grabbing'; e.preventDefault(); return;
+      }
+    }
+
+    // Neutral zones
+    for (let i = placedNeutralZones.length - 1; i >= 0; i--) {
+      const z = placedNeutralZones[i];
+      if (wx >= z.x && wx <= z.x + z.width && wy >= z.y && wy <= z.y + z.height) {
+        isDraggingEntity = true; draggingEntityCat = 'neutralZone'; draggingEntityIndex = i;
+        draggingEntityOffsetX = z.x - wx; draggingEntityOffsetY = z.y - wy;
+        canvas.style.cursor = 'grabbing'; e.preventDefault(); return;
+      }
     }
   }
 
@@ -1564,6 +1730,21 @@ canvas.addEventListener('mousedown', e => {
 
 // Stop panning / finalise mob rect / finalise neutral zone on mouseup anywhere in the document
 document.addEventListener('mouseup', e => {
+  if (isDraggingEntity) {
+    if (draggingEntityCat === 'tile' && draggingTileData) {
+      // Remove any tile already at destination, then place the lifted tile
+      const clash = placedTiles.findIndex(t => t.x === draggingTileDstX && t.y === draggingTileDstY);
+      if (clash !== -1) placedTiles.splice(clash, 1);
+      placedTiles.push({ type: draggingTileData.type, x: draggingTileDstX, y: draggingTileDstY, tag: draggingTileData.tag });
+      draggingTileData = null;
+    }
+    isDraggingEntity    = false;
+    draggingEntityCat   = null;
+    draggingEntityIndex = -1;
+    canvas.style.cursor = 'default';
+    updateStatus();
+    return;
+  }
   if (isDraggingSpawnPoint) {
     isDraggingSpawnPoint = false;
     canvas.style.cursor = 'crosshair';

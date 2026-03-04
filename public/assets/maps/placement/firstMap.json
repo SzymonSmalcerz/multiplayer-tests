@@ -1084,11 +1084,6 @@
     },
     {
       "type": "tile_035",
-      "x": 1536,
-      "y": 288
-    },
-    {
-      "type": "tile_035",
       "x": 1568,
       "y": 288
     },
@@ -1591,11 +1586,6 @@
       "type": "tile_035",
       "x": 1248,
       "y": 288
-    },
-    {
-      "type": "tile_035",
-      "x": 1088,
-      "y": 320
     },
     {
       "type": "tile_035",
@@ -2811,6 +2801,17 @@
       "type": "tile_028",
       "x": 928,
       "y": 480
+    },
+    {
+      "type": "tile_035",
+      "x": 1088,
+      "y": 320
+    },
+    {
+      "type": "tile_035",
+      "x": 1536,
+      "y": 288,
+      "tag": "village"
     }
   ],
   "objects": [
@@ -3187,22 +3188,22 @@
     {
       "type": "house_town_5",
       "x": 1833,
-      "y": 326
+      "y": 311
     },
     {
       "type": "house_town_5",
-      "x": 1659,
-      "y": 324
+      "x": 1658,
+      "y": 311
     },
     {
       "type": "house_town_5",
-      "x": 1483,
-      "y": 322
+      "x": 1485,
+      "y": 311
     },
     {
       "type": "house_town_5",
       "x": 1310,
-      "y": 321
+      "y": 308
     },
     {
       "type": "waterFountain",
@@ -3351,12 +3352,12 @@
     },
     {
       "type": "lamp",
-      "x": 1312,
-      "y": 429
+      "x": 1303,
+      "y": 430
     },
     {
       "type": "lamp",
-      "x": 1177,
+      "x": 1166,
       "y": 430
     },
     {
@@ -3499,21 +3500,9 @@
   ],
   "mobs": [
     {
-      "type": "dog",
-      "x": 1006,
-      "y": 74,
-      "width": 230,
-      "height": 189,
-      "speed": 1,
-      "changeTime": 3000,
-      "specialTime": 2000,
-      "chanceOfDoingSpecialAction": 0.2,
-      "howManyAnimationsPerSec": 2
-    },
-    {
       "type": "cat",
-      "x": 1503,
-      "y": 508,
+      "x": 1496,
+      "y": 526,
       "width": 491,
       "height": 133,
       "speed": 1,
