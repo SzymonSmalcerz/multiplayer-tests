@@ -40,6 +40,9 @@ export class PlayerState extends Schema {
   @type("boolean") isGM: boolean = false;
   @type("int16")   kills: number = 0;
   @type("number")  knockbackEndTime: number = 0;
+  @type("number")  statPoints: number = 0;
+  @type("number")  vitality:   number = 0;
+  @type("number")  strength:   number = 0;
 }
 
 export class EnemyState extends Schema {
@@ -690,6 +693,21 @@ export class GameRoom extends Room<GameState> {
       player.potions           -= 1;
       player.potionHealRemaining += Math.round(player.maxHp * 0.30);
     });
+
+    this.onMessage("allocate_stat", (client, data: { stat: "vitality" | "strength" }) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.isDead || player.statPoints <= 0) return;
+      if (data.stat === "vitality") {
+        player.vitality   += 1;
+        player.maxHp      += 4;
+        player.hp         += 4;
+        player.statPoints -= 1;
+      } else if (data.stat === "strength") {
+        player.strength   += 1;
+        player.attackBonus = player.strength * 2;
+        player.statPoints -= 1;
+      }
+    });
   }
 
   onJoin(client: Client, options: { nickname?: string; skin?: string; persistentId?: string; mapName?: string; spawnX?: number; spawnY?: number; login?: string; password?: string; passcode?: string }): void {
@@ -731,6 +749,9 @@ export class GameRoom extends Room<GameState> {
               partyId:             existingPlayer.partyId,
               isPartyOwner:        existingPlayer.isPartyOwner,
               partyName:           existingPlayer.partyName,
+              statPoints:          existingPlayer.statPoints,
+              vitality:            existingPlayer.vitality,
+              strength:            existingPlayer.strength,
             });
           }
           const oldClient = this.clients.find((c: Client) => c.sessionId === existingSessionId);
@@ -763,7 +784,20 @@ export class GameRoom extends Room<GameState> {
       player.potions             = profile.potions;
       player.potionHealRemaining = profile.potionHealRemaining;
       player.kills               = profile.kills ?? 0;
-      player.attackBonus         = (player.level - 1) * 0.5; // recalculate bonus
+      if (profile.statPoints === undefined) {
+        // Retroactive migration for old saves without stat points
+        player.statPoints  = player.level - 1;
+        player.vitality    = 0;
+        player.strength    = 0;
+        player.maxHp       = profile.maxHp;
+        player.attackBonus = 0;
+      } else {
+        player.statPoints  = profile.statPoints;
+        player.vitality    = profile.vitality!;
+        player.strength    = profile.strength!;
+        player.maxHp       = 100 + player.vitality * 4;
+        player.attackBonus = player.strength * 2;
+      }
 
       // Validate party still exists in GlobalBus (may have been disbanded in transit)
       if (profile.partyId && !isGMLogin) {
@@ -821,6 +855,9 @@ export class GameRoom extends Room<GameState> {
         partyId:             player.partyId,
         isPartyOwner:        player.isPartyOwner,
         partyName:           player.partyName,
+        statPoints:          player.statPoints,
+        vitality:            player.vitality,
+        strength:            player.strength,
       });
     }
 
@@ -926,6 +963,9 @@ export class GameRoom extends Room<GameState> {
           partyId:             player.partyId,
           isPartyOwner:        player.isPartyOwner,
           partyName:           player.partyName,
+          statPoints:          player.statPoints,
+          vitality:            player.vitality,
+          strength:            player.strength,
         };
         globalBus.saveProfile(this.passcode, pid, profile);
       }
@@ -1383,6 +1423,9 @@ export class GameRoom extends Room<GameState> {
         partyId:             player.partyId,
         isPartyOwner:        player.isPartyOwner,
         partyName:           player.partyName,
+        statPoints:          player.statPoints,
+        vitality:            player.vitality,
+        strength:            player.strength,
       });
 
       if (player.partyId) partiesNeedingRefresh.add(player.partyId);
@@ -1917,9 +1960,8 @@ export class GameRoom extends Room<GameState> {
     while (player.xp >= xpForNextLevel(player.level)) {
       player.xp -= xpForNextLevel(player.level);
       player.level  += 1;
-      player.maxHp  += 10;
-      player.hp      = player.maxHp; // full heal on level-up
-      player.attackBonus = parseFloat((player.attackBonus + 0.5).toFixed(1));
+      player.statPoints += 1;
+      player.hp          = player.maxHp; // full heal on level-up
       this.broadcast("chat", {
         sessionId: "server",
         nickname: "Server",

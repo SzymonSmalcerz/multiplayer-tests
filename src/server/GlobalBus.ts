@@ -27,6 +27,9 @@ export interface PlayerProfile {
   partyId: string;
   isPartyOwner: boolean;
   partyName: string;
+  statPoints?: number;
+  vitality?:   number;
+  strength?:   number;
 }
 
 export interface GlobalParty {

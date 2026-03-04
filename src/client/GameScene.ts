@@ -11,6 +11,7 @@ import { MOB_REGISTRY } from "../shared/mobs";
 import { MobSystem } from "./MobSystem";
 import { ShopUI } from "./ui/ShopUI";
 import { EquipmentUI } from "./ui/EquipmentUI";
+import { StatsUI } from "./ui/StatsUI";
 import { HealerShopUI } from "./ui/HealerShopUI";
 import { ActionBarUI } from "./ui/ActionBarUI";
 import { UIManager } from "./managers/UIManager";
@@ -211,6 +212,8 @@ export class GameScene extends Phaser.Scene {
   private shopUI!: ShopUI;
   // Equipment panel
   private equipmentUI!: EquipmentUI;
+  // Stats panel
+  private statsUI!: StatsUI;
   // Healer shop
   private healerShopUI!: HealerShopUI;
   // Action bar
@@ -603,6 +606,25 @@ export class GameScene extends Phaser.Scene {
     );
     if (this.pendingEquipmentState) this.equipmentUI.importState(this.pendingEquipmentState);
 
+    // ── Stats UI ──────────────────────────────────────────────────────────────
+    this.statsUI = new StatsUI(
+      this,
+      () => {
+        const ps = this.room.state.players.get(this.mySessionId);
+        if (!ps) return null;
+        return {
+          statPoints: ps.statPoints as number,
+          vitality:   ps.vitality   as number,
+          strength:   ps.strength   as number,
+          level:      ps.level      as number,
+          hp:         ps.hp         as number,
+          maxHp:      ps.maxHp      as number,
+        };
+      },
+      (stat) => { this.room.send("allocate_stat", { stat }); },
+      () => { this.ignoreNextMapClick = true; },
+    );
+
     // ── Healer Shop UI ────────────────────────────────────────────────────────
     this.healerShopUI = new HealerShopUI(
       this,
@@ -685,9 +707,13 @@ export class GameScene extends Phaser.Scene {
     // ── I key → equipment panel ───────────────────────────────────────────────
     this.keyI.on("down", () => {
       if (this.isTyping) return;
-      this.shopUI.close();
-      this.healerShopUI.close();
-      this.equipmentUI.toggle();
+      this.toggleEquipmentUI();
+    });
+
+    // ── C key → stats panel ───────────────────────────────────────────────────
+    this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.C).on("down", () => {
+      if (this.isTyping) return;
+      this.toggleStatsUI();
     });
 
     // ── Space key → attack ────────────────────────────────────────────────────
@@ -712,7 +738,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (this.isTyping) return;
       // Block map clicks while any UI panel is open
-      if (this.shopUI.isShopOpen || this.healerShopUI.isHealerShopOpen || this.equipmentUI.isEquipmentOpen) return;
+      if (this.shopUI.isShopOpen || this.healerShopUI.isHealerShopOpen || this.equipmentUI.isEquipmentOpen || this.statsUI.isStatsOpen) return;
       // Sprite click handlers set this flag first; scene fires after
       if (this.ignoreNextMapClick) {
         this.ignoreNextMapClick = false;
@@ -721,6 +747,18 @@ export class GameScene extends Phaser.Scene {
       this.hidePlayerActionMenu();
       this.onMapClick(pointer.worldX, pointer.worldY);
     });
+  }
+
+  // ── Panel toggle helpers ────────────────────────────────────────────────────
+
+  public toggleStatsUI(): void {
+    this.shopUI.close(); this.healerShopUI.close(); this.equipmentUI.close();
+    this.statsUI.toggle();
+  }
+
+  public toggleEquipmentUI(): void {
+    this.shopUI.close(); this.healerShopUI.close(); this.statsUI.close();
+    this.equipmentUI.toggle();
   }
 
   // ── Attack ─────────────────────────────────────────────────────────────────
@@ -758,6 +796,7 @@ export class GameScene extends Phaser.Scene {
       this.shopUI?.close();
       this.healerShopUI?.close();
       this.equipmentUI?.close();
+      this.statsUI?.close();
     });
   }
 
@@ -877,6 +916,7 @@ export class GameScene extends Phaser.Scene {
     if (this.equipmentUI.isEquipmentOpen) {
       this.equipmentUI.updateItems(potions, healPool, hp, maxHp);
     }
+    if (this.statsUI.isStatsOpen) this.statsUI.updateItems();
     this.sendPositionIfNeeded(time);
   }
 
@@ -2677,6 +2717,7 @@ export class GameScene extends Phaser.Scene {
       this.shopUI.close();
       this.healerShopUI.close();
       this.equipmentUI.close();
+      this.statsUI.close();
       
       this.scene.start("GameScene", data);
     } catch (err) {
@@ -2976,6 +3017,7 @@ export class GameScene extends Phaser.Scene {
       this.ignoreNextMapClick = true;
       this.healerShopUI.close();
       this.equipmentUI.close();
+      this.statsUI.close();
       this.shopUI.toggle();
     });
   }
@@ -3010,6 +3052,7 @@ export class GameScene extends Phaser.Scene {
       this.ignoreNextMapClick = true;
       this.shopUI.close();
       this.equipmentUI.close();
+      this.statsUI.close();
       this.healerShopUI.toggle();
     });
   }

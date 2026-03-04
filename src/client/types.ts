@@ -109,6 +109,9 @@ export interface RemotePlayer {
   potionHealRemaining: number;
   disconnected: boolean;
   isGM: boolean;
+  statPoints: number;
+  vitality:   number;
+  strength:   number;
   onChange: (cb: () => void) => void;
 }
 

@@ -78,6 +78,15 @@ export class UIManager {
   private weaponHudBorder!:  Phaser.GameObjects.Graphics;
   private weaponHudHitArea!: Phaser.GameObjects.Rectangle;
 
+  // ── Stats / Equipment circle buttons ─────────────────────────────────────
+  private statsBtnBg!:    Phaser.GameObjects.Graphics;
+  private statsBtnLabel!: Phaser.GameObjects.Text;
+  private statsBtnHit!:   Phaser.GameObjects.Rectangle;
+  private statsBtnDot!:   Phaser.GameObjects.Graphics;
+  private equipBtnBg!:    Phaser.GameObjects.Graphics;
+  private equipBtnLabel!: Phaser.GameObjects.Text;
+  private equipBtnHit!:   Phaser.GameObjects.Rectangle;
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
   }
@@ -738,6 +747,35 @@ export class UIManager {
       this.gs.ignoreNextMapClick = true;
       this.gs.triggerAttack();
     });
+
+    // ── Stats button ──────────────────────────────────────────────────────────
+    this.statsBtnBg    = this.scene.add.graphics().setScrollFactor(0).setDepth(D);
+    this.statsBtnLabel = this.scene.add.text(0, 0, "S", {
+      fontSize: "18px", color: "#c9a227",
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
+    }).setScrollFactor(0).setDepth(D + 2).setOrigin(0.5, 0.5);
+    this.statsBtnHit = this.scene.add.rectangle(0, 0, R * 2, R * 2, 0x000000, 0)
+      .setScrollFactor(0).setDepth(D + 3)
+      .setInteractive({ useHandCursor: true }) as Phaser.GameObjects.Rectangle;
+    this.statsBtnHit.on("pointerdown", () => {
+      this.gs.ignoreNextMapClick = true;
+      this.gs.toggleStatsUI();
+    });
+    this.statsBtnDot = this.scene.add.graphics().setScrollFactor(0).setDepth(D + 3).setVisible(false);
+
+    // ── Equipment button ──────────────────────────────────────────────────────
+    this.equipBtnBg    = this.scene.add.graphics().setScrollFactor(0).setDepth(D);
+    this.equipBtnLabel = this.scene.add.text(0, 0, "E", {
+      fontSize: "18px", color: "#c9a227",
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
+    }).setScrollFactor(0).setDepth(D + 2).setOrigin(0.5, 0.5);
+    this.equipBtnHit = this.scene.add.rectangle(0, 0, R * 2, R * 2, 0x000000, 0)
+      .setScrollFactor(0).setDepth(D + 3)
+      .setInteractive({ useHandCursor: true }) as Phaser.GameObjects.Rectangle;
+    this.equipBtnHit.on("pointerdown", () => {
+      this.gs.ignoreNextMapClick = true;
+      this.gs.toggleEquipmentUI();
+    });
   }
 
   updateWeaponHUD(): void {
@@ -785,6 +823,30 @@ export class UIManager {
     this.weaponHudBorder.clear()
       .lineStyle(2, borderColor, 1)
       .strokeCircle(cx, cy, R);
+
+    const cy_stats = cy - (R * 2 + 10);
+    const cy_equip = cy - (R * 4 + 20);
+
+    this.statsBtnBg.clear()
+      .fillStyle(0x111111, 0.85).fillCircle(cx, cy_stats, R)
+      .lineStyle(2, 0xbbaa44, 1).strokeCircle(cx, cy_stats, R);
+    this.statsBtnLabel.setPosition(cx, cy_stats);
+    this.statsBtnHit.setPosition(cx, cy_stats);
+
+    const myState = this.gs.room?.state?.players?.get(this.gs.mySessionId);
+    const pts = (myState?.statPoints as number) ?? 0;
+    if (pts > 0) {
+      this.statsBtnDot.setVisible(true).clear()
+        .fillStyle(0xff2222, 1).fillCircle(cx + R - 4, cy_stats - R + 4, 5);
+    } else {
+      this.statsBtnDot.setVisible(false);
+    }
+
+    this.equipBtnBg.clear()
+      .fillStyle(0x111111, 0.85).fillCircle(cx, cy_equip, R)
+      .lineStyle(2, 0xbbaa44, 1).strokeCircle(cx, cy_equip, R);
+    this.equipBtnLabel.setPosition(cx, cy_equip);
+    this.equipBtnHit.setPosition(cx, cy_equip);
   }
 
   // ── Session timer display ────────────────────────────────────────────────────
