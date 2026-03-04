@@ -54,6 +54,10 @@ interface RoomHandle {
   sendToPlayerFn: (pid: string, type: string, msg: unknown) => boolean;
   /** Broadcasts "session_ended" to all clients and disconnects the room. */
   endSessionFn:   () => void;
+  /** Teleport a player (by nickname) to their room's spawn point. Returns true if found. */
+  unstuckPlayerFn: (nickname: string) => boolean;
+  /** Get position+mapName of a player by nickname. Returns undefined if not found. */
+  getPlayerPositionFn: (nickname: string) => { x: number; y: number; mapName: string } | undefined;
 }
 
 class GlobalBus {
@@ -266,6 +270,36 @@ class GlobalBus {
   /** Force a cross-room roster refresh for an active party (e.g. after live HP sync). */
   refreshParty(passcode: string, partyId: string): void {
     this.publishPartyUpdate(passcode, partyId);
+  }
+
+  /** Find a persistentId by nickname within a session's profile map. */
+  findPidByNickname(passcode: string, nickname: string): string | undefined {
+    const profiles = this.getSessionProfiles(passcode);
+    for (const [pid, profile] of profiles.entries()) {
+      if (profile.nickname === nickname) return pid;
+    }
+    return undefined;
+  }
+
+  /** Teleport a player (by nickname) to their room's spawn point. Returns true if found. */
+  unstuckPlayer(passcode: string, nickname: string): boolean {
+    for (const handle of this.rooms.values()) {
+      if (handle.passcode === passcode) {
+        if (handle.unstuckPlayerFn(nickname)) return true;
+      }
+    }
+    return false;
+  }
+
+  /** Get the position and mapName of a player by nickname. Returns undefined if not found. */
+  getPlayerPosition(passcode: string, nickname: string): { x: number; y: number; mapName: string } | undefined {
+    for (const handle of this.rooms.values()) {
+      if (handle.passcode === passcode) {
+        const pos = handle.getPlayerPositionFn(nickname);
+        if (pos) return pos;
+      }
+    }
+    return undefined;
   }
 
   /**

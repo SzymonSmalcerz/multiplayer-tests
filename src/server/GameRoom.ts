@@ -306,6 +306,27 @@ export class GameRoom extends Room<GameState> {
         this.broadcast("session_ended", {});
         void this.disconnect();
       },
+      unstuckPlayerFn: (nickname: string): boolean => {
+        let found = false;
+        this.state.players.forEach((p, sid) => {
+          if (p.nickname === nickname && !p.isGM && !found) {
+            p.x = this.spawnPoint.x;
+            p.y = this.spawnPoint.y;
+            this.lastPositions.set(sid, { x: p.x, y: p.y, time: Date.now() });
+            found = true;
+          }
+        });
+        return found;
+      },
+      getPlayerPositionFn: (nickname: string) => {
+        let result: { x: number; y: number; mapName: string } | undefined;
+        this.state.players.forEach((p) => {
+          if (p.nickname === nickname && !p.isGM && !result) {
+            result = { x: p.x, y: p.y, mapName: this.mapName };
+          }
+        });
+        return result;
+      },
     });
 
     this.onMessage("get_map", (client) => {
@@ -1496,8 +1517,95 @@ export class GameRoom extends Room<GameState> {
       });
       if (!found) sendPrivate(`Player "${targetNick}" not found.`);
 
+    } else if (command === "/unstuck") {
+      const targetNick = parts.slice(1).join(" ");
+      if (!targetNick) { sendPrivate("Usage: /unstuck {nickname}"); return; }
+
+      const ok = globalBus.unstuckPlayer(this.passcode, targetNick);
+      if (!ok) {
+        sendPrivate(`Player "${targetNick}" not found.`);
+      } else {
+        sendPrivate(`Player "${targetNick}" has been teleported to spawn.`);
+      }
+
+    } else if (command === "/summon") {
+      const targetNick = parts.slice(1).join(" ");
+      if (!targetNick) { sendPrivate("Usage: /summon {nickname}"); return; }
+
+      // Case 1: player is in the same room — direct position assignment
+      let found = false;
+      this.state.players.forEach((p, sid) => {
+        if (p.nickname === targetNick && !p.isGM && !found) {
+          const offsetX = (Math.random() - 0.5) * 200;
+          const offsetY = (Math.random() - 0.5) * 200;
+          p.x = Math.max(32, Math.min(this.mapWidth  - 32, gmPlayer.x + offsetX));
+          p.y = Math.max(32, Math.min(this.mapHeight - 32, gmPlayer.y + offsetY));
+          this.lastPositions.set(sid, { x: p.x, y: p.y, time: Date.now() });
+          found = true;
+        }
+      });
+
+      // Case 2: player is on a different map — send door_travel via GlobalBus
+      if (!found) {
+        const targetPid = globalBus.findPidByNickname(this.passcode, targetNick);
+        if (targetPid) {
+          const offsetX = (Math.random() - 0.5) * 200;
+          const offsetY = (Math.random() - 0.5) * 200;
+          globalBus.sendToPlayer(this.passcode, targetPid, "door_travel", {
+            targetMap: this.mapName,
+            spawnX: Math.max(32, Math.min(this.mapWidth  - 32, gmPlayer.x + offsetX)),
+            spawnY: Math.max(32, Math.min(this.mapHeight - 32, gmPlayer.y + offsetY)),
+          });
+          found = true;
+        }
+      }
+
+      if (!found) {
+        sendPrivate(`Player "${targetNick}" not found.`);
+      } else {
+        sendPrivate(`Player "${targetNick}" has been summoned.`);
+      }
+
+    } else if (command === "/teleport") {
+      const targetNick = parts.slice(1).join(" ");
+      if (!targetNick) { sendPrivate("Usage: /teleport {nickname}"); return; }
+
+      // Case 1: player is in the same room — move GM directly
+      let found = false;
+      this.state.players.forEach((p) => {
+        if (p.nickname === targetNick && !p.isGM && !found) {
+          const offsetX = (Math.random() - 0.5) * 200;
+          const offsetY = (Math.random() - 0.5) * 200;
+          gmPlayer.x = Math.max(32, Math.min(this.mapWidth  - 32, p.x + offsetX));
+          gmPlayer.y = Math.max(32, Math.min(this.mapHeight - 32, p.y + offsetY));
+          this.lastPositions.set(client.sessionId, { x: gmPlayer.x, y: gmPlayer.y, time: Date.now() });
+          found = true;
+        }
+      });
+
+      // Case 2: player is on a different map — send door_travel to the GM client
+      if (!found) {
+        const pos = globalBus.getPlayerPosition(this.passcode, targetNick);
+        if (pos) {
+          const offsetX = (Math.random() - 0.5) * 200;
+          const offsetY = (Math.random() - 0.5) * 200;
+          client.send("door_travel", {
+            targetMap: pos.mapName,
+            spawnX: pos.x + offsetX,
+            spawnY: pos.y + offsetY,
+          });
+          found = true;
+        }
+      }
+
+      if (!found) {
+        sendPrivate(`Player "${targetNick}" not found.`);
+      } else {
+        sendPrivate(`Teleporting to "${targetNick}".`);
+      }
+
     } else {
-      sendPrivate(`Unknown command: ${command}. Available: /spawn, /kick, /exp, /gold`);
+      sendPrivate(`Unknown command: ${command}. Available: /spawn, /kick, /exp, /gold, /unstuck, /summon, /teleport`);
     }
   }
 
