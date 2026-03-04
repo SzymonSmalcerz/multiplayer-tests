@@ -280,11 +280,77 @@ export class UIManager {
     this.partyHudRenameBtn.on("pointerdown", () => {
       this.gs.ignoreNextMapClick = true;
       const current = this.gs.room.state.players.get(this.gs.mySessionId)?.partyName ?? "";
-      const newName = window.prompt("Party name (max 20 characters):", current);
-      if (newName !== null) {
-        const trimmed = newName.trim().slice(0, 20);
-        if (trimmed.length > 0) this.gs.room.send("party_rename", { name: trimmed });
-      }
+
+      // Guard: prevent multiple dialogs
+      if (document.getElementById("party-rename-dialog")) return;
+
+      const dlg = document.createElement("div");
+      dlg.id = "party-rename-dialog";
+      dlg.style.cssText = [
+        "position:fixed", "top:50%", "left:50%",
+        "transform:translate(-50%,-50%)",
+        "background:repeating-linear-gradient(-45deg,rgba(201,162,39,0.018) 0px,rgba(201,162,39,0.018) 1px,transparent 1px,transparent 7px),rgba(26,18,8,0.97)",
+        "border:2px solid #4a2e15",
+        "border-radius:10px", "padding:24px 32px",
+        "color:#e8d5a0",
+        "font-family:'Cinzel',serif",
+        "text-align:center", "z-index:9999",
+        "box-shadow:0 8px 48px rgba(0,0,0,0.85),0 0 0 1px rgba(74,46,21,0.3),inset 0 1px 0 rgba(201,162,39,0.08)",
+        "min-width:280px"
+      ].join(";");
+
+      dlg.innerHTML = `
+        <div style="font-family:'Cinzel Decorative',serif;font-size:16px;color:#c9a227;margin-bottom:12px;text-shadow:0 0 12px rgba(201,162,39,0.4)">
+          Rename Party
+        </div>
+        <input type="text" id="party-rename-input" value="${current}" maxlength="20" autocomplete="off" style="
+          width:100%; padding:8px; margin-bottom:20px; box-sizing:border-box;
+          background:rgba(0,0,0,0.5); border:1px solid #4a2e15; border-radius:4px;
+          color:#e8d5a0; font-family:'VT323',monospace; font-size:18px; outline:none;"
+        />
+        <div>
+          <button id="party-rename-ok" style="
+            font-family:'Cinzel',serif;font-weight:700;
+            background:repeating-linear-gradient(90deg,rgba(255,255,255,0.025) 0px,transparent 1px,transparent 9px),linear-gradient(180deg,#7a4a1e 0%,#5a3010 100%);
+            color:#f0c060; border-top:2px solid #9a6028;border-left:2px solid #8a5020;border-right:2px solid #3a1e08;border-bottom:4px solid #1a0e04;
+            border-radius:5px; padding:6px 20px; cursor:pointer; margin-right:8px; box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+            Save
+          </button>
+          <button id="party-rename-cancel" style="
+            font-family:'Cinzel',serif;font-weight:700;
+            background:linear-gradient(180deg,#6a2a2a,#4a1a1a);
+            color:#f0a0a0; border-top:2px solid #8a3030;border-left:2px solid #7a2828;border-right:2px solid #2a0808;border-bottom:4px solid #1a0808;
+            border-radius:5px; padding:6px 20px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+            Cancel
+          </button>
+        </div>
+      `;
+
+      document.body.appendChild(dlg);
+
+      const input = document.getElementById("party-rename-input") as HTMLInputElement;
+      // Slight delay so the initial pointerdown click isn't consumed by the input
+      setTimeout(() => input.focus(), 50);
+
+      const cleanup = () => dlg.remove();
+
+      document.getElementById("party-rename-cancel")?.addEventListener("click", cleanup);
+
+      const submit = () => {
+        const newName = input.value.trim().slice(0, 20);
+        if (newName.length > 0 && newName !== current) {
+          this.gs.room.send("party_rename", { name: newName });
+        }
+        cleanup();
+      };
+
+      document.getElementById("party-rename-ok")?.addEventListener("click", submit);
+
+      input.addEventListener("keydown", (e) => {
+        e.stopPropagation(); // prevent Phaser from consuming keyboard events
+        if (e.key === "Enter") submit();
+        if (e.key === "Escape") cleanup();
+      });
     });
 
     for (let i = 0; i < 4; i++) {
