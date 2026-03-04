@@ -5,7 +5,7 @@ import { findNearestPlayers, getShareRecipients } from "../src/shared/economy";
 
 describe("findNearestPlayers", () => {
   const coin = { x: 100, y: 100 };
-  const range = 20;
+  const range = 30;
 
   it("returns empty array when no players exist", () => {
     expect(findNearestPlayers(coin.x, coin.y, [], range)).toEqual([]);
@@ -68,12 +68,12 @@ describe("findNearestPlayers", () => {
   });
 
   it("player exactly on collect range boundary is included", () => {
-    const players = [{ id: "a", x: 120, y: 100, partyId: "" }]; // dist = 20 = range
+    const players = [{ id: "a", x: 130, y: 100, partyId: "" }]; // dist = 30 = range
     expect(findNearestPlayers(coin.x, coin.y, players, range)).toHaveLength(1);
   });
 
   it("player one pixel outside collect range is excluded", () => {
-    const players = [{ id: "a", x: 121, y: 100, partyId: "" }]; // dist = 21 > range
+    const players = [{ id: "a", x: 131, y: 100, partyId: "" }]; // dist = 31 > range
     expect(findNearestPlayers(coin.x, coin.y, players, range)).toHaveLength(0);
   });
 });

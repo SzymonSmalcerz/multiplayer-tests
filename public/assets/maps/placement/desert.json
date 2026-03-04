@@ -1,0 +1,1148 @@
+{
+  "mapWidth": 2000,
+  "mapHeight": 2000,
+  "defaultTile": "tile_0420",
+  "spawnPoint": {
+    "x": 100,
+    "y": 100
+  },
+  "tiles": [
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 160,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 192,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 224,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 224,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 256,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 256,
+      "y": 64
+    },
+    {
+      "type": "grass_basic",
+      "x": 224,
+      "y": 64
+    },
+    {
+      "type": "grass_basic",
+      "x": 192,
+      "y": 64
+    },
+    {
+      "type": "grass_basic",
+      "x": 160,
+      "y": 64
+    },
+    {
+      "type": "grass_basic",
+      "x": 160,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 64
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 64
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 64
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 64
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 96
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 96
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 96
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 96
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 64
+    },
+    {
+      "type": "grass_basic",
+      "x": 160,
+      "y": 96
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 96
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 128
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 128
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 160
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 160
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 192
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 160
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 128
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 128
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 192
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 224
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 224
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 224
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 224
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 192
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 192
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 160
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 192
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 128
+    },
+    {
+      "type": "grass_basic",
+      "x": 160,
+      "y": 192
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 224
+    },
+    {
+      "type": "grass_basic",
+      "x": 160,
+      "y": 224
+    },
+    {
+      "type": "grass_basic",
+      "x": 192,
+      "y": 224
+    },
+    {
+      "type": "grass_basic",
+      "x": 224,
+      "y": 224
+    },
+    {
+      "type": "grass_basic",
+      "x": 224,
+      "y": 192
+    },
+    {
+      "type": "grass_basic",
+      "x": 224,
+      "y": 160
+    },
+    {
+      "type": "grass_basic",
+      "x": 224,
+      "y": 128
+    },
+    {
+      "type": "grass_basic",
+      "x": 224,
+      "y": 96
+    },
+    {
+      "type": "grass_basic",
+      "x": 256,
+      "y": 96
+    },
+    {
+      "type": "grass_basic",
+      "x": 256,
+      "y": 128
+    },
+    {
+      "type": "grass_basic",
+      "x": 256,
+      "y": 160
+    },
+    {
+      "type": "grass_basic",
+      "x": 256,
+      "y": 192
+    },
+    {
+      "type": "grass_basic",
+      "x": 256,
+      "y": 224
+    },
+    {
+      "type": "grass_basic",
+      "x": 192,
+      "y": 128
+    },
+    {
+      "type": "grass_basic",
+      "x": 192,
+      "y": 96
+    },
+    {
+      "type": "grass_basic",
+      "x": 192,
+      "y": 160
+    },
+    {
+      "type": "grass_basic",
+      "x": 160,
+      "y": 160
+    },
+    {
+      "type": "grass_basic",
+      "x": 160,
+      "y": 128
+    },
+    {
+      "type": "grass_basic",
+      "x": 256,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 192,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 288,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 320,
+      "y": 0
+    },
+    {
+      "type": "grass_basic",
+      "x": 288,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 288,
+      "y": 64
+    },
+    {
+      "type": "grass_basic",
+      "x": 320,
+      "y": 32
+    },
+    {
+      "type": "grass_basic",
+      "x": 288,
+      "y": 96
+    },
+    {
+      "type": "grass_basic",
+      "x": 192,
+      "y": 192
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 256
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 256
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 256
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 288
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 320
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 288
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 256
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 256
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 288
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 320
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 352
+    },
+    {
+      "type": "grass_basic",
+      "x": 352,
+      "y": 0
+    },
+    {
+      "type": "tile_0443",
+      "x": 224,
+      "y": 256,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0443",
+      "x": 256,
+      "y": 256,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0441",
+      "x": 288,
+      "y": 224,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0441",
+      "x": 288,
+      "y": 192,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0431",
+      "x": 288,
+      "y": 256,
+      "tag": "desert"
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 320,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 352,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 288,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 160,
+      "y": 256,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 288,
+      "y": 128,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 320,
+      "y": 64,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 352,
+      "y": 32,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 384,
+      "y": 0,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 384,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 192,
+      "y": 256,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 128,
+      "y": 288,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 96,
+      "y": 320,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 64,
+      "y": 352,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 32,
+      "y": 384,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 0,
+      "y": 416,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 288,
+      "y": 160,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 320,
+      "y": 96,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 352,
+      "y": 64,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 384,
+      "y": 32,
+      "tag": "village"
+    },
+    {
+      "type": "tile_044",
+      "x": 416,
+      "y": 0,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0431",
+      "x": 352,
+      "y": 96,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0431",
+      "x": 384,
+      "y": 64,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0431",
+      "x": 416,
+      "y": 32,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0431",
+      "x": 128,
+      "y": 320,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0431",
+      "x": 96,
+      "y": 352,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0431",
+      "x": 64,
+      "y": 384,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0431",
+      "x": 32,
+      "y": 416,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0431",
+      "x": 0,
+      "y": 448,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0443",
+      "x": 160,
+      "y": 288,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0431",
+      "x": 192,
+      "y": 288,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0441",
+      "x": 320,
+      "y": 128,
+      "tag": "desert"
+    },
+    {
+      "type": "tile_0431",
+      "x": 320,
+      "y": 160,
+      "tag": "desert"
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 160,
+      "tag": "village"
+    }
+  ],
+  "objects": [
+    {
+      "type": "house_semitown_big_1",
+      "x": 1603,
+      "y": 174
+    },
+    {
+      "type": "house_semitown_big_2",
+      "x": 1292,
+      "y": 176
+    },
+    {
+      "type": "house_semitown_big_2",
+      "x": 1169,
+      "y": 506
+    },
+    {
+      "type": "house_semitown_big_2",
+      "x": 895,
+      "y": 324
+    },
+    {
+      "type": "house_semitown_small_6",
+      "x": 981,
+      "y": 638
+    },
+    {
+      "type": "house_semitown_small_6",
+      "x": 785,
+      "y": 595
+    },
+    {
+      "type": "house_semitown_small_5",
+      "x": 807,
+      "y": 884
+    },
+    {
+      "type": "house_semitown_small_4",
+      "x": 1453,
+      "y": 959
+    },
+    {
+      "type": "house_semitown_small_2",
+      "x": 1255,
+      "y": 780
+    },
+    {
+      "type": "house_semitown_small_1",
+      "x": 1764,
+      "y": 573
+    },
+    {
+      "type": "house_semitown_long_1",
+      "x": 1013,
+      "y": 1002
+    },
+    {
+      "type": "house_semitown_small_6",
+      "x": 683,
+      "y": 1303
+    },
+    {
+      "type": "house_semitown_small_6",
+      "x": 1609,
+      "y": 1464
+    },
+    {
+      "type": "house_semitown_small_6",
+      "x": 1177,
+      "y": 1380
+    },
+    {
+      "type": "tree3",
+      "x": 142,
+      "y": -25
+    },
+    {
+      "type": "tree3",
+      "x": 8,
+      "y": 77
+    },
+    {
+      "type": "tree3",
+      "x": 161,
+      "y": 107
+    },
+    {
+      "type": "bower_2",
+      "x": 1250,
+      "y": 1008,
+      "tag": "city items"
+    },
+    {
+      "type": "bower_2",
+      "x": 1667,
+      "y": 444,
+      "tag": "city items"
+    },
+    {
+      "type": "bower_2",
+      "x": 1313,
+      "y": 369,
+      "tag": "city items"
+    },
+    {
+      "type": "bower_2",
+      "x": 972,
+      "y": 118,
+      "tag": "city items"
+    },
+    {
+      "type": "bower_2",
+      "x": 295,
+      "y": 1180,
+      "tag": "city items"
+    },
+    {
+      "type": "bower_3",
+      "x": 145,
+      "y": 886,
+      "tag": "city items"
+    },
+    {
+      "type": "cage_animal_1",
+      "x": 1551,
+      "y": 585,
+      "tag": "city items"
+    },
+    {
+      "type": "cage_animal_1",
+      "x": 868,
+      "y": 1092,
+      "tag": "city items"
+    },
+    {
+      "type": "bucket_empty",
+      "x": 940,
+      "y": 1166,
+      "tag": "city items"
+    },
+    {
+      "type": "bucket_full",
+      "x": 928,
+      "y": 1171,
+      "tag": "city items"
+    }
+  ],
+  "npcs": [
+    {
+      "type": "healer",
+      "x": 2,
+      "y": -23
+    }
+  ],
+  "mobs": [
+    {
+      "type": "chicken",
+      "x": 1579,
+      "y": 607,
+      "width": 50,
+      "height": 50,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 1573,
+      "y": 609,
+      "width": 50,
+      "height": 50,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 1563,
+      "y": 600,
+      "width": 50,
+      "height": 50,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 1584,
+      "y": 603,
+      "width": 50,
+      "height": 50,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 880,
+      "y": 1114,
+      "width": 51,
+      "height": 50,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 895,
+      "y": 1107,
+      "width": 50,
+      "height": 50,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 883,
+      "y": 1111,
+      "width": 50,
+      "height": 50,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "chicken",
+      "x": 899,
+      "y": 1118,
+      "width": 50,
+      "height": 50,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 3000,
+      "chanceOfDoingSpecialAction": 0.55,
+      "howManyAnimationsPerSec": 5
+    }
+  ],
+  "enemies": [
+    {
+      "type": "hit",
+      "x": 1718,
+      "y": 508,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1354,
+      "y": 445,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1019,
+      "y": 199,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 787,
+      "y": 1888,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1276,
+      "y": 1891,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1762,
+      "y": 1818,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 1928,
+      "y": 129,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 180,
+      "y": 1759,
+      "respawnTime": 10
+    },
+    {
+      "type": "hit",
+      "x": 208,
+      "y": 978,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 187,
+      "y": 966,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 199,
+      "y": 943,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 356,
+      "y": 1246,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 328,
+      "y": 1253,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 352,
+      "y": 1265,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 1330,
+      "y": 1056,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 1294,
+      "y": 1089,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 1299,
+      "y": 1056,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 1367,
+      "y": 440,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 1391,
+      "y": 440,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 1701,
+      "y": 494,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 1732,
+      "y": 501,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 931,
+      "y": 1006,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 916,
+      "y": 681,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 1041,
+      "y": 180,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 986,
+      "y": 164,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 1041,
+      "y": 191,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "hit",
+      "x": 359,
+      "y": 1253,
+      "respawnTime": 10,
+      "tag": "village"
+    }
+  ],
+  "neutralZones": [
+    {
+      "x": 274,
+      "y": -6,
+      "width": 176,
+      "height": 185
+    },
+    {
+      "x": -3,
+      "y": -7,
+      "width": 306,
+      "height": 277
+    },
+    {
+      "x": -7,
+      "y": 260,
+      "width": 209,
+      "height": 197
+    }
+  ],
+  "doors": [
+    {
+      "id": "desert",
+      "x": 105,
+      "y": 35,
+      "targetMap": "firstMap",
+      "targetDoorId": "firstMap_desert"
+    }
+  ]
+}

@@ -223,41 +223,6 @@
     "imageWidth": 32,
     "imageHeight": 32
   },
-  "tile_055": {
-    "type": "tile_055",
-    "tag": "village",
-    "label": "tile_055",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_056": {
-    "type": "tile_056",
-    "tag": "village",
-    "label": "tile_056",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_057": {
-    "type": "tile_057",
-    "tag": "village",
-    "label": "tile_057",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_058": {
-    "type": "tile_058",
-    "tag": "village",
-    "label": "tile_058",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
-  "tile_059": {
-    "type": "tile_059",
-    "tag": "village",
-    "label": "tile_059",
-    "imageWidth": 32,
-    "imageHeight": 32
-  },
   "tile_060": {
     "type": "tile_060",
     "tag": "village",
@@ -1130,6 +1095,180 @@
     "type": "tile_191",
     "tag": "village",
     "label": "tile_191",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0081": {
+    "type": "tile_0081",
+    "tag": "village",
+    "label": "tile_0081",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0082": {
+    "type": "tile_0082",
+    "tag": "village",
+    "label": "tile_0082",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0083": {
+    "type": "tile_0083",
+    "tag": "village",
+    "label": "tile_0083",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0084": {
+    "type": "tile_0084",
+    "tag": "village",
+    "label": "tile_0084",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0085": {
+    "type": "tile_0085",
+    "tag": "village",
+    "label": "tile_0085",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0086": {
+    "type": "tile_0086",
+    "tag": "village",
+    "label": "tile_0086",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0087": {
+    "type": "tile_0087",
+    "tag": "village",
+    "label": "tile_0087",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0088": {
+    "type": "tile_0088",
+    "tag": "village",
+    "label": "tile_0088",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0251": {
+    "type": "tile_0251",
+    "tag": "village",
+    "label": "tile_0251",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0252": {
+    "type": "tile_0252",
+    "tag": "village",
+    "label": "tile_0252",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0253": {
+    "type": "tile_0253",
+    "tag": "village",
+    "label": "tile_0253",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0254": {
+    "type": "tile_0254",
+    "tag": "village",
+    "label": "tile_0254",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0255": {
+    "type": "tile_0255",
+    "tag": "village",
+    "label": "tile_0255",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0256": {
+    "type": "tile_0256",
+    "tag": "village",
+    "label": "tile_0256",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0257": {
+    "type": "tile_0257",
+    "tag": "village",
+    "label": "tile_0257",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0258": {
+    "type": "tile_0258",
+    "tag": "village",
+    "label": "tile_0258",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0420": {
+    "type": "tile_0420",
+    "label": "tile_0420",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0441": {
+    "type": "tile_0441",
+    "tag": "desert",
+    "label": "tile_0441",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0442": {
+    "type": "tile_0442",
+    "tag": "desert",
+    "label": "tile_0442",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0443": {
+    "type": "tile_0443",
+    "tag": "desert",
+    "label": "tile_0443",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0444": {
+    "type": "tile_0444",
+    "tag": "desert",
+    "label": "tile_0444",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0431": {
+    "type": "tile_0431",
+    "tag": "desert",
+    "label": "tile_0431",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0432": {
+    "type": "tile_0432",
+    "tag": "desert",
+    "label": "tile_0432",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0433": {
+    "type": "tile_0433",
+    "tag": "desert",
+    "label": "tile_0433",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "tile_0434": {
+    "type": "tile_0434",
+    "tag": "desert",
+    "label": "tile_0434",
     "imageWidth": 32,
     "imageHeight": 32
   }

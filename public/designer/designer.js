@@ -793,7 +793,7 @@ function paintTileAt(wx, wy) {
     if (placedTiles[idx].type === selectedType) return; // already there
     placedTiles.splice(idx, 1);
   }
-  placedTiles.push({ type: selectedType, x: snappedX, y: snappedY });
+  placedTiles.push({ type: selectedType, x: snappedX, y: snappedY, tag: tileRegistry[selectedType]?.tag });
   updateStatus();
 }
 
@@ -1184,6 +1184,111 @@ function renderDoor(door, alpha) {
   ctx.globalAlpha = 1;
 }
 
+// ---------------------------------------------------------------------------
+// Generic context menu (used for tile right-click)
+// ---------------------------------------------------------------------------
+function showContextMenu(screenX, screenY, items) {
+  const existing = document.getElementById('designer-ctx-menu');
+  if (existing) existing.remove();
+
+  const menu = document.createElement('div');
+  menu.id = 'designer-ctx-menu';
+  menu.style.cssText = `position:fixed;left:${screenX}px;top:${screenY}px;background:#252525;border:1px solid #555;border-radius:4px;z-index:2000;min-width:130px;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-family:sans-serif;font-size:13px;overflow:hidden;`;
+
+  items.forEach(item => {
+    const btn = document.createElement('div');
+    btn.textContent = item.label;
+    btn.style.cssText = 'padding:7px 14px;color:#eee;cursor:pointer;white-space:nowrap;';
+    btn.addEventListener('mouseover', () => btn.style.background = '#3a3a3a');
+    btn.addEventListener('mouseout',  () => btn.style.background = '');
+    btn.addEventListener('click', () => { menu.remove(); item.action(); });
+    if (item.danger) btn.style.color = '#ff7070';
+    menu.appendChild(btn);
+  });
+
+  document.body.appendChild(menu);
+
+  // Close on next click anywhere outside the menu
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu(ev) {
+      if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('click', closeMenu); }
+    });
+  }, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Tile edit modal
+// ---------------------------------------------------------------------------
+function showTileEditModal(tile) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;';
+
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#222;border:1px solid #555;border-radius:6px;padding:20px;min-width:320px;color:#eee;font-family:sans-serif;';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Edit Tile';
+    title.style.cssText = 'margin:0 0 16px 0;font-size:15px;color:#fff;';
+    box.appendChild(title);
+
+    const fieldStyle = 'display:block;margin-bottom:12px;font-size:13px;';
+    const inputStyle = 'display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:5px 8px;background:#333;border:1px solid #555;border-radius:3px;color:#eee;font-size:13px;';
+
+    // Type selector
+    const typeLabel = document.createElement('label');
+    typeLabel.style.cssText = fieldStyle;
+    typeLabel.textContent = 'Tile type:';
+    const typeSelect = document.createElement('select');
+    typeSelect.style.cssText = inputStyle;
+    Object.keys(tileRegistry).sort().forEach(key => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = tileRegistry[key].label || key;
+      if (key === tile.type) opt.selected = true;
+      typeSelect.appendChild(opt);
+    });
+    typeLabel.appendChild(typeSelect);
+    box.appendChild(typeLabel);
+
+    // Tag input
+    const tagLabel = document.createElement('label');
+    tagLabel.style.cssText = fieldStyle;
+    tagLabel.textContent = 'Tag:';
+    const tagInput = document.createElement('input');
+    tagInput.type = 'text';
+    tagInput.value = tile.tag || '';
+    tagInput.placeholder = 'e.g. village, dungeon';
+    tagInput.style.cssText = inputStyle;
+    tagLabel.appendChild(tagInput);
+    box.appendChild(tagLabel);
+
+    // Buttons
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-top:6px;';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = 'padding:6px 14px;background:#444;border:1px solid #666;border-radius:3px;color:#eee;cursor:pointer;font-size:13px;';
+    cancelBtn.addEventListener('click', () => { document.body.removeChild(overlay); resolve(null); });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save';
+    saveBtn.style.cssText = 'padding:6px 14px;background:#2a5a2a;border:1px solid #4a8a4a;border-radius:3px;color:#eee;cursor:pointer;font-size:13px;';
+    saveBtn.addEventListener('click', () => {
+      document.body.removeChild(overlay);
+      resolve({ type: typeSelect.value, tag: tagInput.value.trim() || undefined });
+    });
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(saveBtn);
+    box.appendChild(btnRow);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    setTimeout(() => typeSelect.focus(), 0);
+  });
+}
+
 function showDoorModal(wx, wy) {
   return new Promise(resolve => {
     const overlay = document.createElement('div');
@@ -1422,7 +1527,7 @@ canvas.addEventListener('mousedown', e => {
       return;
     }
 
-    if (wx < 0 || wy < 0 || wx > mapWidth || wy > mapHeight) return;
+    // Tiles are guarded earlier; objects/NPCs/enemies/doors may be placed outside map bounds.
 
     if (selectedCategory === 'door') {
       showDoorModal(wx, wy).then(doorData => {
@@ -1442,15 +1547,16 @@ canvas.addEventListener('mousedown', e => {
         x:           wx,
         y:           wy,
         respawnTime: def ? def.defaultRespawnTime : 10,
+        tag:         def?.tag,
       });
       updateStatus();
       return;
     }
 
     if (selectedCategory === 'npc') {
-      placedNpcs.push({ type: selectedType, x: wx, y: wy });
+      placedNpcs.push({ type: selectedType, x: wx, y: wy, tag: registry[selectedType]?.tag });
     } else {
-      placedObjects.push({ type: selectedType, x: wx, y: wy });
+      placedObjects.push({ type: selectedType, x: wx, y: wy, tag: registry[selectedType]?.tag });
     }
     updateStatus();
   }
@@ -1512,14 +1618,32 @@ canvas.addEventListener('contextmenu', e => {
   const wx    = world.x;
   const wy    = world.y;
 
-  // Tiles: erase at the snapped grid cell
-  if (selectedCategory === 'tile') {
+  // Tiles: context menu with Edit / Delete (works regardless of selected category)
+  {
     const snappedX = Math.floor(wx / TILE_SNAP) * TILE_SNAP;
     const snappedY = Math.floor(wy / TILE_SNAP) * TILE_SNAP;
     const idx = placedTiles.findIndex(t => t.x === snappedX && t.y === snappedY);
     if (idx !== -1) {
-      placedTiles.splice(idx, 1);
-      updateStatus();
+      const tile = placedTiles[idx];
+      showContextMenu(e.clientX, e.clientY, [
+        {
+          label: 'Edit tile\u2026',
+          action: () => {
+            showTileEditModal(tile).then(result => {
+              if (result) {
+                tile.type = result.type;
+                tile.tag  = result.tag;
+                updateStatus();
+              }
+            });
+          },
+        },
+        {
+          label: 'Delete tile',
+          danger: true,
+          action: () => { placedTiles.splice(idx, 1); updateStatus(); },
+        },
+      ]);
       return;
     }
   }

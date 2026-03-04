@@ -1605,9 +1605,9 @@ export class GameRoom extends Room<GameState> {
     }
   }
 
-  /** Returns true if any living, non-GM player is within the 20 px collect radius. */
+  /** Returns true if any living, non-GM player is within the 30 px collect radius. */
   private coinHasNearbyPlayer(coin: PendingCoin): boolean {
-    const COLLECT_RANGE = 20;
+    const COLLECT_RANGE = 30;
     let found = false;
     this.state.players.forEach((p) => {
       if (found || p.isDead || p.isGM) return;
@@ -1619,13 +1619,13 @@ export class GameRoom extends Room<GameState> {
   }
 
   /**
-   * Award gold to any living player(s) whose center is within 20 px of the coin.
+   * Award gold to any living player(s) whose center is within 30 px of the coin.
    * If nobody is close enough the coin animation plays but no gold is granted.
    * Among eligible players, the nearest one wins; ties split evenly (ceil).
    * If the winner is in a party, further splits with nearby party members.
    */
   private awardGold(amount: number, coinX: number, coinY: number): void {
-    const COLLECT_RANGE = 20; // px
+    const COLLECT_RANGE = 30; // px
 
     const allPlayers: PositionedPlayer[] = [];
     this.state.players.forEach((p, id) => {
