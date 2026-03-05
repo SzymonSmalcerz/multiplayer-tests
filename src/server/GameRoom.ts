@@ -38,7 +38,9 @@ export class PlayerState extends Schema {
   @type("number")  potionHealRemaining: number = 0;
   @type("boolean") disconnected: boolean = false;
   @type("boolean") isGM: boolean = false;
-  @type("int16")   kills: number = 0;
+  @type("int16")   playerKills:  number = 0;
+  @type("int16")   monsterKills: number = 0;
+  @type("int16")   quizScore:    number = 0;
   @type("number")  knockbackEndTime: number = 0;
   @type("number")  statPoints: number = 0;
   @type("number")  vitality:   number = 0;
@@ -293,10 +295,10 @@ export class GameRoom extends Room<GameState> {
         return true;
       },
       getPlayersFn: () => {
-        const out: Array<{ nickname: string; level: number; xp: number; gold: number; kills: number; partyName: string; isDead: boolean }> = [];
+        const out: Array<{ nickname: string; level: number; xp: number; gold: number; playerKills: number; monsterKills: number; quizScore: number; skin: string; partyName: string; isDead: boolean }> = [];
         this.state.players.forEach(p => {
           if (!p.isGM) {
-            out.push({ nickname: p.nickname, level: p.level, xp: p.xp, gold: p.gold, kills: p.kills, partyName: p.partyName, isDead: p.isDead });
+            out.push({ nickname: p.nickname, level: p.level, xp: p.xp, gold: p.gold, playerKills: p.playerKills, monsterKills: p.monsterKills, quizScore: p.quizScore, skin: p.skin, partyName: p.partyName, isDead: p.isDead });
           }
         });
         return out;
@@ -740,7 +742,9 @@ export class GameRoom extends Room<GameState> {
               level:               existingPlayer.level,
               xp:                  existingPlayer.xp,
               gold:                existingPlayer.gold,
-              kills:               existingPlayer.kills,
+              playerKills:         existingPlayer.playerKills,
+              monsterKills:        existingPlayer.monsterKills,
+              quizScore:           existingPlayer.quizScore,
               hp:                  existingPlayer.hp,
               maxHp:               existingPlayer.maxHp,
               weapon:              existingPlayer.weapon,
@@ -783,7 +787,9 @@ export class GameRoom extends Room<GameState> {
       player.weapon              = profile.weapon;
       player.potions             = profile.potions;
       player.potionHealRemaining = profile.potionHealRemaining;
-      player.kills               = profile.kills ?? 0;
+      player.playerKills         = profile.playerKills  ?? 0;
+      player.monsterKills        = profile.monsterKills ?? 0;
+      player.quizScore           = profile.quizScore    ?? 0;
       if (profile.statPoints === undefined) {
         // Retroactive migration for old saves without stat points
         player.statPoints  = player.level - 1;
@@ -819,7 +825,9 @@ export class GameRoom extends Room<GameState> {
       player.xp        = 0;
       player.attackBonus = 0;
       player.gold      = 1000;
-      player.kills     = 0;
+      player.playerKills  = 0;
+      player.monsterKills = 0;
+      player.quizScore    = 0;
     }
 
     // Apply GM overrides AFTER profile load — preserves saved weapon, but enforces
@@ -847,7 +855,9 @@ export class GameRoom extends Room<GameState> {
         level:               player.level,
         xp:                  player.xp,
         gold:                player.gold,
-        kills:               player.kills,
+        playerKills:         player.playerKills,
+        monsterKills:        player.monsterKills,
+        quizScore:           player.quizScore,
         hp:                  player.hp,
         maxHp:               player.maxHp,
         weapon:              player.weapon,
@@ -961,7 +971,9 @@ export class GameRoom extends Room<GameState> {
           level:               player.level,
           xp:                  player.xp,
           gold:                player.gold,
-          kills:               player.kills,
+          playerKills:         player.playerKills,
+        monsterKills:        player.monsterKills,
+        quizScore:           player.quizScore,
           hp:                  player.hp,
           maxHp:               player.maxHp,
           weapon:              player.weapon,
@@ -1314,6 +1326,7 @@ export class GameRoom extends Room<GameState> {
         this.playerLastDamagedAt.set(targetId, now);
 
         if (target.hp <= 0) {
+          if (!player.isGM) player.playerKills = Math.min(32767, player.playerKills + 1);
           this.handlePlayerDeath(targetId, target);
         }
       });
@@ -1421,7 +1434,9 @@ export class GameRoom extends Room<GameState> {
         level:               player.level,
         xp:                  player.xp,
         gold:                player.gold,
-        kills:               player.kills,
+        playerKills:         player.playerKills,
+        monsterKills:        player.monsterKills,
+        quizScore:           player.quizScore,
         hp:                  player.hp,
         maxHp:               player.maxHp,
         weapon:              player.weapon,
@@ -1703,7 +1718,7 @@ export class GameRoom extends Room<GameState> {
 
     // Credit kill to the killer
     const killer = this.state.players.get(killerSessionId);
-    if (killer && !killer.isGM) killer.kills = Math.min(32767, killer.kills + 1);
+    if (killer && !killer.isGM) killer.monsterKills = Math.min(32767, killer.monsterKills + 1);
 
     // Remove from state after death animation window (500 ms)
     const spawnDef = this.enemyDefById.get(enemyId) ?? null;
@@ -1942,8 +1957,9 @@ export class GameRoom extends Room<GameState> {
     this.state.players.forEach((p, sid) => {
       if (p.isDead || p.isGM) return;
       if (isPlayerOnPad(p.x, p.y, correct.x, correct.y)) {
-        p.xp   += xp;
-        p.gold += gold;
+        p.xp        += xp;
+        p.gold      += gold;
+        p.quizScore += 1;
         this.checkLevelUp(sid);
       }
     });

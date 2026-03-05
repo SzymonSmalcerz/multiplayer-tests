@@ -3,7 +3,7 @@ import { Client } from "colyseus.js";
 import {
   GameSceneData, MapDataMessage, RemotePlayer, RemotePlayerEntity,
   StaticObjectData, EnemyData, EnemyEntity, NpcData, TilePlacement, DoorData,
-  RankEntry,
+  FinalPlayerStat,
 } from "./types";
 import { StaticObjectDef } from "../shared/staticObjects";
 import { WeaponDef } from "../shared/weapons";
@@ -1527,11 +1527,11 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Session timer expired — show Hall of Fame rankings
-    this.room.onMessage("timer_end", (data: { rankings: RankEntry[] }) => {
+    this.room.onMessage("timer_end", (data: { players: FinalPlayerStat[] }) => {
       this.isSessionEnded = true;
       localStorage.removeItem("reconnToken");
       localStorage.removeItem("roomPasscode");
-      this.showFinalRankings(data.rankings);
+      this.showFinalRankings(data.players);
     });
 
     // Coin drop animation
@@ -3072,29 +3072,143 @@ export class GameScene extends Phaser.Scene {
     if (el) el.style.display = "flex";
   }
 
-  private showFinalRankings(rankings: RankEntry[]): void {
-    this.isTeleporting = true; // suppress generic disconnect banner
+  private getDenseRanking(
+    players: FinalPlayerStat[],
+    scoreSelector: (p: FinalPlayerStat) => number,
+    tieBreaker?: (p: FinalPlayerStat) => number,
+  ): Array<{ rank: number; score: number; players: FinalPlayerStat[] }> {
+    const sorted = [...players].sort((a, b) => {
+      const diff = scoreSelector(b) - scoreSelector(a);
+      if (diff !== 0) return diff;
+      return tieBreaker ? tieBreaker(b) - tieBreaker(a) : 0;
+    });
+    const ranks: Array<{ rank: number; score: number; players: FinalPlayerStat[] }> = [];
+    let currentRank = 1;
+    let currentScore = -1;
+    for (const p of sorted) {
+      const score = scoreSelector(p);
+      if (score <= 0) continue;
+      if (ranks.length === 0 || score !== currentScore) {
+        ranks.push({ rank: currentRank, score, players: [p] });
+        currentRank++;
+        currentScore = score;
+      } else {
+        ranks[ranks.length - 1].players.push(p);
+      }
+    }
+    return ranks;
+  }
 
-    const list = document.getElementById("rankings-list");
-    if (list) {
-      list.innerHTML = "";
-      rankings.forEach((entry) => {
-        const card = document.createElement("div");
-        card.className = `rank-card rank-card-${entry.rank}`;
+  private getAvatarStyle(skin: string, level: number): { backgroundImage: string; backgroundSize: string; backgroundPosition: string } {
+    const variantKey = getSkinForLevel(skin, level);
+    const [gender, variant] = variantKey.split("/");
+    return {
+      backgroundImage:    `url('/assets/player/${gender}/${variant}.png')`,
+      backgroundSize:     "576px 256px",
+      backgroundPosition: "0px -128px",
+    };
+  }
 
-        const icon = entry.rank === 1 ? "👑" : "🛡";
-        card.innerHTML = `
-          <span class="rank-icon">${icon}</span>
-          <span class="rank-name">${entry.nickname}</span>
-          <span class="rank-stat rank-level">Lv ${entry.level}</span>
-          <span class="rank-stat rank-gold">⚜ ${entry.gold}</span>
-          <span class="rank-stat rank-kills">☠ ${entry.kills}</span>
-        `;
-        list.appendChild(card);
-      });
+  private async showFinalRankings(players: FinalPlayerStat[]): Promise<void> {
+    this.isTeleporting = true;
+
+    const overlay            = document.getElementById("final-rankings-overlay")!;
+    const slideshowContainer = document.getElementById("slideshow-container")!;
+    const slideshowTitle     = document.getElementById("slideshow-title")!;
+    const slideshowRanks     = document.getElementById("slideshow-ranks")!;
+    const overviewContainer  = document.getElementById("final-overview-container")!;
+
+    overlay.style.display = "flex";
+
+    const categories = [
+      { title: "⚔ Best Player",       ranks: this.getDenseRanking(players, p => p.level * 1e6 + p.xp),  statLabel: (p: FinalPlayerStat) => `Lv ${p.level}` },
+      { title: "💰 Richest Merchant",  ranks: this.getDenseRanking(players, p => p.gold),                 statLabel: (p: FinalPlayerStat) => `${p.gold} gold` },
+      { title: "💀 Player Killer",     ranks: this.getDenseRanking(players, p => p.playerKills),           statLabel: (p: FinalPlayerStat) => `${p.playerKills} kills` },
+      { title: "🐉 Monster Slayer",    ranks: this.getDenseRanking(players, p => p.monsterKills),          statLabel: (p: FinalPlayerStat) => `${p.monsterKills} kills` },
+      { title: "🧠 Quiz Master",       ranks: this.getDenseRanking(players, p => p.quizScore),             statLabel: (p: FinalPlayerStat) => `${p.quizScore} correct` },
+    ].filter(c => c.ranks.length > 0);
+
+    const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+    const fadeOut = (el: HTMLElement) => new Promise<void>(r => {
+      el.style.transition = "opacity 0.5s";
+      el.style.opacity = "0";
+      setTimeout(() => { el.style.display = "none"; el.style.opacity = "1"; r(); }, 500);
+    });
+
+    for (const cat of categories) {
+      slideshowTitle.textContent = cat.title;
+      slideshowRanks.innerHTML = "";
+
+      const topRanks = cat.ranks.slice(0, 3).reverse();
+      const rows: HTMLElement[] = [];
+      for (const rankGroup of topRanks) {
+        const row = document.createElement("div");
+        row.className = "rank-row";
+        const rankLabel = rankGroup.rank === 1 ? "🥇" : rankGroup.rank === 2 ? "🥈" : "🥉";
+        const playerBoxes = rankGroup.players.map(p => {
+          const av = this.getAvatarStyle(p.skin, p.level);
+          return `<div class="rank-player-box">
+            <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
+            <span class="rank-player-name">${p.nickname}</span>
+            <span class="rank-player-stat">${cat.statLabel(p)}</span>
+          </div>`;
+        }).join("");
+        row.innerHTML = `<span class="rank-position-label">${rankLabel}</span><div class="rank-players">${playerBoxes}</div>`;
+        slideshowRanks.appendChild(row);
+        rows.push(row);
+      }
+
+      slideshowContainer.style.display = "block";
+
+      for (const row of rows) {
+        await delay(1000);
+        row.classList.add("visible");
+      }
+      await delay(4000);
+      await fadeOut(slideshowContainer);
     }
 
-    const overlay = document.getElementById("final-rankings-overlay");
-    if (overlay) overlay.style.display = "flex";
+    this.buildOverviewScreen(players, overviewContainer);
+    overviewContainer.style.display = "block";
+  }
+
+  private buildOverviewScreen(players: FinalPlayerStat[], container: HTMLElement): void {
+    const bestRanks = this.getDenseRanking(players, p => p.level * 1e6 + p.xp);
+    const goldRanks = this.getDenseRanking(players, p => p.gold);
+    const pvpRanks  = this.getDenseRanking(players, p => p.playerKills);
+    const pveRanks  = this.getDenseRanking(players, p => p.monsterKills);
+    const quizRanks = this.getDenseRanking(players, p => p.quizScore);
+
+    const top3Best = bestRanks.slice(0, 3);
+    const centerEl = document.getElementById("overview-best-players")!;
+    centerEl.innerHTML = `<div class="overview-section-title">⚔ Best Players</div>` +
+      top3Best.map(rg => rg.players.map(p => {
+        const av = this.getAvatarStyle(p.skin, p.level);
+        const medal = rg.rank === 1 ? "🥇" : rg.rank === 2 ? "🥈" : "🥉";
+        return `<div class="overview-player">
+          <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
+          <span>${medal} ${p.nickname} <small>Lv ${p.level}</small></span>
+        </div>`;
+      }).join("")).join("");
+
+    const corners = [
+      { id: "overview-corner-tl", label: "💰 Richest",        ranks: goldRanks },
+      { id: "overview-corner-tr", label: "💀 Player Killer",  ranks: pvpRanks  },
+      { id: "overview-corner-bl", label: "🐉 Monster Slayer", ranks: pveRanks  },
+      { id: "overview-corner-br", label: "🧠 Quiz Master",    ranks: quizRanks },
+    ];
+
+    for (const corner of corners) {
+      const el = document.getElementById(corner.id);
+      if (!el) continue;
+      const winner = corner.ranks[0]?.players[0];
+      if (!winner) { el.innerHTML = ""; continue; }
+      const av = this.getAvatarStyle(winner.skin, winner.level);
+      el.innerHTML = `<div class="corner-badge">
+        <div class="corner-title">${corner.label}</div>
+        <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
+        <div class="corner-name">${winner.nickname}</div>
+      </div>`;
+    }
   }
 }

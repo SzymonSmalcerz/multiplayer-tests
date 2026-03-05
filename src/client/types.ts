@@ -115,15 +115,17 @@ export interface RemotePlayer {
   onChange: (cb: () => void) => void;
 }
 
-/** One entry in the final session rankings */
-export interface RankEntry {
-  rank:      number;
-  nickname:  string;
-  level:     number;
-  xp:        number;
-  gold:      number;
-  kills:     number;
-  partyName: string;
+/** One player's stats sent at session end for the final slideshow */
+export interface FinalPlayerStat {
+  nickname:     string;
+  skin:         string;
+  level:        number;
+  xp:           number;
+  gold:         number;
+  playerKills:  number;
+  monsterKills: number;
+  quizScore:    number;
+  partyName:    string;
 }
 
 /** Scene init data passed from HomeScene → GameScene (or GameScene → GameScene on teleport) */

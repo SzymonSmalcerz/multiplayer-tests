@@ -18,7 +18,9 @@ export interface PlayerProfile {
   level: number;
   xp: number;
   gold: number;
-  kills: number;
+  playerKills:  number;
+  monsterKills: number;
+  quizScore:    number;
   hp: number;
   maxHp: number;
   weapon: string;
@@ -40,13 +42,16 @@ export interface GlobalParty {
 
 type BroadcastFn  = (type: string, message: unknown) => void;
 type GetPlayersFn = () => Array<{
-  nickname:  string;
-  level:     number;
-  xp:        number;
-  gold:      number;
-  kills:     number;
-  partyName: string;
-  isDead:    boolean;
+  nickname:     string;
+  level:        number;
+  xp:           number;
+  gold:         number;
+  playerKills:  number;
+  monsterKills: number;
+  quizScore:    number;
+  skin:         string;
+  partyName:    string;
+  isDead:       boolean;
 }>;
 
 interface RoomHandle {
@@ -163,18 +168,23 @@ class GlobalBus {
     return this.activeSessions.get(passcode)?.sessionEndTime ?? 0;
   }
 
-  /** Collect top-5 rankings, broadcast timer_end to all rooms, then destroy after 3 s delay. */
+  /** Collect all player stats, broadcast timer_end to all rooms, then destroy after 3 s delay. */
   private endSessionWithRankings(passcode: string): void {
-    const allPlayers: Array<{ nickname: string; level: number; xp: number; gold: number; kills: number; partyName: string }> = [];
+    const allPlayers: Array<{
+      nickname: string; skin: string; level: number; xp: number; gold: number;
+      playerKills: number; monsterKills: number; quizScore: number; partyName: string;
+    }> = [];
     this.rooms.forEach((handle) => {
       if (handle.passcode !== passcode) return;
       for (const p of handle.getPlayersFn()) {
-        allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, gold: p.gold, kills: p.kills, partyName: p.partyName });
+        allPlayers.push({
+          nickname: p.nickname, skin: p.skin, level: p.level, xp: p.xp,
+          gold: p.gold, playerKills: p.playerKills, monsterKills: p.monsterKills,
+          quizScore: p.quizScore, partyName: p.partyName,
+        });
       }
     });
-    allPlayers.sort((a, b) => b.level !== a.level ? b.level - a.level : b.xp - a.xp);
-    const top5 = allPlayers.slice(0, 5).map((p, i) => ({ rank: i + 1, ...p }));
-    this.broadcastToSession(passcode, "timer_end", { rankings: top5 });
+    this.broadcastToSession(passcode, "timer_end", { players: allPlayers });
     setTimeout(() => this.destroySession(passcode), 3000);
   }
 

@@ -4,7 +4,7 @@ import { globalBus, PlayerProfile, QuizQuestion } from "../src/server/GlobalBus"
 // Helper to build a minimal RoomHandle for registration
 function makeHandle(passcode: string, overrides: Partial<{
   broadcastFn: (type: string, msg: unknown) => void;
-  getPlayersFn: () => Array<{ nickname: string; level: number; xp: number; gold: number; kills: number; partyName: string; isDead: boolean }>;
+  getPlayersFn: () => Array<{ nickname: string; level: number; xp: number; gold: number; playerKills: number; monsterKills: number; quizScore: number; skin: string; partyName: string; isDead: boolean }>;
   endSessionFn: () => void;
   sendToPlayerFn: (pid: string, type: string, msg: unknown) => boolean;
 }> = {}) {
@@ -25,6 +25,9 @@ const BLANK_PROFILE: PlayerProfile = {
   level: 1,
   xp: 0,
   gold: 0,
+  playerKills: 0,
+  monsterKills: 0,
+  quizScore: 0,
   hp: 100,
   maxHp: 100,
   weapon: "sword",
@@ -229,7 +232,7 @@ describe("GlobalBus — Timed Sessions", () => {
     globalBus.createSession("TT1", "Timed Session", 60);
     const broadcastFn = vi.fn();
     const getPlayersFn = () => [
-      { nickname: "Alice", level: 5, xp: 400, gold: 100, kills: 3, partyName: "", isDead: false },
+      { nickname: "Alice", level: 5, xp: 400, gold: 100, playerKills: 3, monsterKills: 0, quizScore: 0, skin: "male/grey", partyName: "", isDead: false },
     ];
     globalBus.registerRoom("roomTT1", "TT1", makeHandle("TT1", { broadcastFn, getPlayersFn }));
 
@@ -245,7 +248,7 @@ describe("GlobalBus — Timed Sessions", () => {
     globalBus.createSession("TT1", "Timed Session", 60);
     const broadcastFn = vi.fn();
     const getPlayersFn = () => [
-      { nickname: "Alice", level: 5, xp: 400, gold: 100, kills: 3, partyName: "", isDead: false },
+      { nickname: "Alice", level: 5, xp: 400, gold: 100, playerKills: 3, monsterKills: 0, quizScore: 0, skin: "male/grey", partyName: "", isDead: false },
     ];
     const endSessionFn = vi.fn();
     globalBus.registerRoom("roomTT1", "TT1", makeHandle("TT1", { broadcastFn, getPlayersFn, endSessionFn }));
@@ -257,8 +260,8 @@ describe("GlobalBus — Timed Sessions", () => {
 
     const timerEndCall = broadcastFn.mock.calls.find(([type]) => type === "timer_end");
     expect(timerEndCall).toBeDefined();
-    expect(timerEndCall![1]).toMatchObject({ rankings: expect.any(Array) });
-    expect((timerEndCall![1] as { rankings: unknown[] }).rankings.length).toBeGreaterThan(0);
+    expect(timerEndCall![1]).toMatchObject({ players: expect.any(Array) });
+    expect((timerEndCall![1] as { players: unknown[] }).players.length).toBeGreaterThan(0);
 
     globalBus.unregisterRoom("roomTT1");
     // destroySession may be called by the timer — guard before calling
@@ -269,7 +272,7 @@ describe("GlobalBus — Timed Sessions", () => {
     globalBus.createSession("TT1", "Timed Session", 60);
     const endSessionFn = vi.fn();
     const getPlayersFn = () => [
-      { nickname: "Alice", level: 5, xp: 400, gold: 100, kills: 3, partyName: "", isDead: false },
+      { nickname: "Alice", level: 5, xp: 400, gold: 100, playerKills: 3, monsterKills: 0, quizScore: 0, skin: "male/grey", partyName: "", isDead: false },
     ];
     globalBus.registerRoom("roomTT1", "TT1", makeHandle("TT1", { endSessionFn, getPlayersFn }));
 
