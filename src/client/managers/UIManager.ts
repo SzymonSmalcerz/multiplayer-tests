@@ -574,7 +574,7 @@ export class UIManager {
     } else {
       const allPlayers: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
       this.gs.room.state.players.forEach((p: any) => {
-        if (!p.isDead) {
+        if (!p.isGM) {
           allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName });
         }
       });

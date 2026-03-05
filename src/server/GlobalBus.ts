@@ -76,6 +76,7 @@ class GlobalBus {
     durationSeconds: number;
     questions: QuizQuestion[];
     timerHandle?: ReturnType<typeof setTimeout>;
+    sessionEndTime?: number;
   }>();
 
   // ── Per-session state ────────────────────────────────────────────────────────
@@ -153,8 +154,13 @@ class GlobalBus {
   scheduleSessionEnd(passcode: string): void {
     const session = this.activeSessions.get(passcode);
     if (!session) return;
+    session.sessionEndTime = Date.now() + session.durationSeconds * 1000;
     this.broadcastToSession(passcode, "session_timer_start", { durationSeconds: session.durationSeconds });
     session.timerHandle = setTimeout(() => this.endSessionWithRankings(passcode), session.durationSeconds * 1000);
+  }
+
+  getSessionEndTime(passcode: string): number {
+    return this.activeSessions.get(passcode)?.sessionEndTime ?? 0;
   }
 
   /** Collect top-5 rankings, broadcast timer_end to all rooms, then destroy after 3 s delay. */
@@ -383,9 +389,7 @@ class GlobalBus {
 
       for (const handle of handles) {
         for (const p of handle.getPlayersFn()) {
-          if (!p.isDead) {
-            allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName });
-          }
+          allPlayers.push({ nickname: p.nickname, level: p.level, xp: p.xp, partyName: p.partyName });
         }
       }
 

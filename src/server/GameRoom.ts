@@ -789,7 +789,8 @@ export class GameRoom extends Room<GameState> {
         player.statPoints  = player.level - 1;
         player.vitality    = 0;
         player.strength    = 0;
-        player.maxHp       = profile.maxHp;
+        player.maxHp       = 100; // reset to base — old auto-gains are wiped
+        player.hp          = Math.min(profile.hp, 100); // clamp to new max
         player.attackBonus = 0;
       } else {
         player.statPoints  = profile.statPoints;
@@ -875,6 +876,12 @@ export class GameRoom extends Room<GameState> {
       } else if (stage === "m1") {
         setTimeout(() => client.send("door_travel", { targetMap: "m1" }), 200);
       }
+    }
+
+    // Late-joiner timer sync
+    const endTime = globalBus.getSessionEndTime(this.passcode);
+    if (endTime > Date.now()) {
+      client.send("session_timer_start", { durationSeconds: (endTime - Date.now()) / 1000 });
     }
 
     this.broadcast("chat", {
