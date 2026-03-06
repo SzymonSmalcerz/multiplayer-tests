@@ -3,8 +3,8 @@
   "mapHeight": 2000,
   "defaultTile": "tile_0420",
   "spawnPoint": {
-    "x": 100,
-    "y": 100
+    "x": 129,
+    "y": 128
   },
   "tiles": [
     {
@@ -1139,8 +1139,8 @@
   "doors": [
     {
       "id": "desert",
-      "x": 105,
-      "y": 35,
+      "x": 111,
+      "y": 33,
       "targetMap": "firstMap",
       "targetDoorId": "firstMap_desert"
     }

@@ -21,7 +21,7 @@
     #overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.82);
+      background: #0e0c08;
       display: none;
       align-items: flex-start;  /* flex-start + margin:auto on card = centers when fits, scrolls when tall */
       justify-content: center;
@@ -29,8 +29,33 @@
       z-index: 200;
       padding: 16px;
     }
-
+    /* Stone grid */
+    #overlay::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        repeating-linear-gradient(0deg,   transparent 0, transparent 29px, rgba(0,0,0,0.2) 29px, rgba(0,0,0,0.2) 30px),
+        repeating-linear-gradient(90deg,  transparent 0, transparent 29px, rgba(0,0,0,0.2) 29px, rgba(0,0,0,0.2) 30px),
+        repeating-linear-gradient(0deg,   transparent 0, transparent 14px, rgba(0,0,0,0.07) 14px, rgba(0,0,0,0.07) 15px),
+        repeating-linear-gradient(90deg,  transparent 0, transparent 59px, rgba(0,0,0,0.07) 59px, rgba(0,0,0,0.07) 60px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    /* Torchlight vignette */
+    #overlay::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 50%, rgba(201,162,39,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.65) 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
     .menu-card {
+      position: relative;
+      z-index: 1;
       background:
         repeating-linear-gradient(-45deg, rgba(201,162,39,0.018) 0px, rgba(201,162,39,0.018) 1px, transparent 1px, transparent 7px),
         rgba(26,18,8,0.97);
@@ -475,10 +500,41 @@
     /* ── Overlay wrapper ───────────────────────────────────── */
     #final-rankings-overlay {
       position: fixed; inset: 0;
-      background: rgba(0,0,0,0.92);
+      background: #0e0c08;
       display: none; flex-direction: column;
       align-items: center; justify-content: center;
       z-index: 500;
+      overflow: hidden;
+    }
+    /* Stone grid */
+    #final-rankings-overlay::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(0deg,   transparent 0, transparent 29px, rgba(0,0,0,0.2) 29px, rgba(0,0,0,0.2) 30px),
+        repeating-linear-gradient(90deg,  transparent 0, transparent 29px, rgba(0,0,0,0.2) 29px, rgba(0,0,0,0.2) 30px),
+        repeating-linear-gradient(0deg,   transparent 0, transparent 14px, rgba(0,0,0,0.07) 14px, rgba(0,0,0,0.07) 15px),
+        repeating-linear-gradient(90deg,  transparent 0, transparent 59px, rgba(0,0,0,0.07) 59px, rgba(0,0,0,0.07) 60px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    /* Torchlight vignette */
+    #final-rankings-overlay::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 50%, rgba(201,162,39,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.65) 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    /* Lift content above pseudo-elements */
+    #slideshow-container,
+    #final-overview-container {
+      position: relative;
+      z-index: 1;
     }
 
     /* ── Slideshow ─────────────────────────────────────────── */
@@ -718,6 +774,36 @@
         repeating-linear-gradient(0deg,   transparent 0px, transparent 29px, rgba(0,0,0,0.25) 29px, rgba(0,0,0,0.25) 30px),
         repeating-linear-gradient(90deg,  transparent 0px, transparent 29px, rgba(0,0,0,0.25) 29px, rgba(0,0,0,0.25) 30px),
         radial-gradient(ellipse at center, #1e1408 0%, #0a0806 100%);
+    }
+
+    #waiting-area-bg {
+      position: fixed;
+      inset: 0;
+      display: none;
+      background: #0e0c08;
+      overflow: hidden;
+    }
+    /* Stone grid — identical to #home-screen::before */
+    #waiting-area-bg::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(0deg,   transparent 0, transparent 29px, rgba(0,0,0,0.2) 29px, rgba(0,0,0,0.2) 30px),
+        repeating-linear-gradient(90deg,  transparent 0, transparent 29px, rgba(0,0,0,0.2) 29px, rgba(0,0,0,0.2) 30px),
+        repeating-linear-gradient(0deg,   transparent 0, transparent 14px, rgba(0,0,0,0.07) 14px, rgba(0,0,0,0.07) 15px),
+        repeating-linear-gradient(90deg,  transparent 0, transparent 59px, rgba(0,0,0,0.07) 59px, rgba(0,0,0,0.07) 60px);
+      pointer-events: none;
+    }
+    /* Torchlight vignette — identical to #home-screen::after */
+    #waiting-area-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 50%, rgba(201,162,39,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.65) 100%);
+      pointer-events: none;
     }
 
     /* ══════════════════════════════════════════════════════════════════════════
@@ -1451,6 +1537,7 @@
   </style>
 </head>
 <body>
+  <div id="waiting-area-bg"></div>
   <div id="game"></div>
 
   <!-- Chat UI -->

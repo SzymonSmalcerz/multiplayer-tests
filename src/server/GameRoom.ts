@@ -19,7 +19,6 @@ export class PlayerState extends Schema {
   @type("string") nickname: string = "";
   @type("string") skin: string = "male/grey";
   @type("number") direction: number = 0;    // 0=down 1=left 2=up 3=right
-  @type("boolean") showWeapon: boolean = false;
   @type("number") hp: number = 100;
   @type("number") maxHp: number = 100;
   @type("number") level: number = 1;
@@ -45,6 +44,7 @@ export class PlayerState extends Schema {
   @type("number")  statPoints: number = 0;
   @type("number")  vitality:   number = 0;
   @type("number")  strength:   number = 0;
+  @type("number")  maxLevelReached: number = 1;
 }
 
 export class EnemyState extends Schema {
@@ -468,10 +468,6 @@ export class GameRoom extends Room<GameState> {
       globalBus.publishChat(payload, this.roomId);
     });
 
-    this.onMessage("toggle_weapon", (client) => {
-      const player = this.state.players.get(client.sessionId);
-      if (player) player.showWeapon = !player.showWeapon;
-    });
 
     this.onMessage<MoveMessage>("move", (client, data) => {
       const player = this.state.players.get(client.sessionId);
@@ -648,9 +644,6 @@ export class GameRoom extends Room<GameState> {
       // Ignore if already attacking (server-side gate)
       if (this.playerAttacks.has(client.sessionId)) return;
 
-      // Auto-equip weapon if not equipped
-      if (!player.showWeapon) player.showWeapon = true;
-
       player.isAttacking     = true;
       player.attackDirection = direction;
 
@@ -678,7 +671,6 @@ export class GameRoom extends Room<GameState> {
 
       player.gold   -= info.cost;
       player.weapon  = weaponKey;
-      player.showWeapon = true; // auto-equip on purchase
     });
 
     this.onMessage("buy_potion", (client) => {
@@ -806,6 +798,8 @@ export class GameRoom extends Room<GameState> {
         player.attackBonus = player.strength * 2;
       }
 
+      player.maxLevelReached = Math.max(profile.level, profile.maxLevelReached ?? 1);
+
       // Validate party still exists in GlobalBus (may have been disbanded in transit)
       if (profile.partyId && !isGMLogin) {
         const party = globalBus.getParty(this.passcode, profile.partyId);
@@ -819,12 +813,12 @@ export class GameRoom extends Room<GameState> {
     } else {
       player.nickname  = String(options.nickname ?? "Player").slice(0, 15);
       player.skin      = String(options.skin ?? "male/grey");
-      player.hp        = 100;
-      player.maxHp     = 100;
+      player.hp        = 150;
+      player.maxHp     = 150;
       player.level     = 1;
       player.xp        = 0;
       player.attackBonus = 0;
-      player.gold      = 1000;
+      player.gold      = 0;
       player.playerKills  = 0;
       player.monsterKills = 0;
       player.quizScore    = 0;
@@ -985,6 +979,7 @@ export class GameRoom extends Room<GameState> {
           statPoints:          player.statPoints,
           vitality:            player.vitality,
           strength:            player.strength,
+          maxLevelReached:     player.maxLevelReached,
         };
         globalBus.saveProfile(this.passcode, pid, profile);
       }
@@ -1326,7 +1321,26 @@ export class GameRoom extends Room<GameState> {
         this.playerLastDamagedAt.set(targetId, now);
 
         if (target.hp <= 0) {
-          if (!player.isGM) player.playerKills = Math.min(32767, player.playerKills + 1);
+          if (!player.isGM) {
+            player.playerKills = Math.min(32767, player.playerKills + 1);
+
+            const stolenGold = Math.floor(target.gold * 0.10);
+            const targetTotalXp = this.getTotalXp(target.level, target.xp);
+            const lostXp = Math.floor(targetTotalXp * 0.05);
+
+            target.gold = Math.max(0, target.gold - stolenGold);
+            this.applyTotalXp(target, Math.max(0, targetTotalXp - lostXp));
+
+            player.gold += stolenGold;
+            player.xp += lostXp;
+            this.checkLevelUp(sessionId);
+
+            this.broadcast("chat", {
+              sessionId: "server",
+              nickname: "Server",
+              message: `${player.nickname} assassinated ${target.nickname} and stole ${stolenGold} gold and ${lostXp} XP!`,
+            });
+          }
           this.handlePlayerDeath(targetId, target);
         }
       });
@@ -1448,6 +1462,7 @@ export class GameRoom extends Room<GameState> {
         statPoints:          player.statPoints,
         vitality:            player.vitality,
         strength:            player.strength,
+        maxLevelReached:     player.maxLevelReached,
       });
 
       if (player.partyId) partiesNeedingRefresh.add(player.partyId);
@@ -1705,8 +1720,22 @@ export class GameRoom extends Room<GameState> {
         sendPrivate(`Teleporting to "${targetNick}".`);
       }
 
+    } else if (command === "/time") {
+      const delta = parseInt(parts[1] ?? "", 10);
+      if (isNaN(delta)) {
+        sendPrivate("Usage: /time {seconds} (can be negative)");
+        return;
+      }
+
+      const success = globalBus.modifySessionTime(this.passcode, delta);
+      if (success) {
+        sendPrivate(`World timer adjusted by ${delta} seconds.`);
+      } else {
+        sendPrivate("Cannot modify time: the world session timer is not currently active.");
+      }
+
     } else {
-      sendPrivate(`Unknown command: ${command}. Available: /spawn, /kick, /exp, /gold, /unstuck, /summon, /teleport`);
+      sendPrivate(`Unknown command: ${command}. Available: /spawn, /kick, /exp, /gold, /unstuck, /summon, /teleport, /time`);
     }
   }
 
@@ -1982,15 +2011,32 @@ export class GameRoom extends Room<GameState> {
 
     while (player.xp >= xpForNextLevel(player.level)) {
       player.xp -= xpForNextLevel(player.level);
-      player.level  += 1;
-      player.statPoints += 1;
-      player.hp          = player.maxHp; // full heal on level-up
-      this.broadcast("chat", {
-        sessionId: "server",
-        nickname: "Server",
-        message: `${player.nickname} has reached level ${player.level}`,
-      });
-      console.log(`[Room] ${player.nickname} reached level ${player.level}!`);
+      player.level += 1;
+      if (player.level > player.maxLevelReached) {
+        player.maxLevelReached = player.level;
+        player.statPoints += 1;
+        player.hp = player.maxHp; // full heal on level-up
+        this.broadcast("chat", {
+          sessionId: "server",
+          nickname: "Server",
+          message: `${player.nickname} has reached level ${player.level}`,
+        });
+        console.log(`[Room] ${player.nickname} reached level ${player.level}!`);
+      }
     }
+  }
+
+  private getTotalXp(level: number, currentXp: number): number {
+    let total = currentXp;
+    for (let i = 1; i < level; i++) total += xpForNextLevel(i);
+    return total;
+  }
+
+  private applyTotalXp(player: PlayerState, totalXp: number): void {
+    let lvl = 1;
+    let xp = totalXp;
+    while (xp >= xpForNextLevel(lvl)) { xp -= xpForNextLevel(lvl); lvl++; }
+    player.level = lvl;
+    player.xp = xp;
   }
 }

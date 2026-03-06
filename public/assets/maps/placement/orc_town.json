@@ -1,10 +1,433 @@
 {
+  "mapWidth": 1966,
+  "mapHeight": 2000,
   "defaultTile": "dirt",
   "spawnPoint": {
-    "x": 100,
-    "y": 100
+    "x": 75,
+    "y": 977
   },
-  "tiles": [],
+  "tiles": [
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 128,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 96,
+      "y": 1152,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 64,
+      "y": 1152,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 1152,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 1184,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 1184,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 1152,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 32,
+      "y": 864,
+      "tag": "village"
+    },
+    {
+      "type": "grass_basic",
+      "x": 0,
+      "y": 864,
+      "tag": "village"
+    },
+    {
+      "type": "tile_008",
+      "x": 64,
+      "y": 1184,
+      "tag": "village"
+    },
+    {
+      "type": "tile_008",
+      "x": 0,
+      "y": 1216,
+      "tag": "village"
+    },
+    {
+      "type": "tile_008",
+      "x": 128,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_010",
+      "x": 128,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "tile_010",
+      "x": 64,
+      "y": 864,
+      "tag": "village"
+    },
+    {
+      "type": "tile_010",
+      "x": 0,
+      "y": 832,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0085",
+      "x": 0,
+      "y": 1248,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0087",
+      "x": 0,
+      "y": 800,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 128,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 128,
+      "y": 1152,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 96,
+      "y": 1184,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0085",
+      "x": 128,
+      "y": 1184,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0085",
+      "x": 64,
+      "y": 1216,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 32,
+      "y": 1216,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 160,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 160,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 160,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 160,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 160,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0087",
+      "x": 160,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0085",
+      "x": 160,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 96,
+      "y": 864,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0087",
+      "x": 128,
+      "y": 864,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 32,
+      "y": 832,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0087",
+      "x": 64,
+      "y": 832,
+      "tag": "village"
+    }
+  ],
   "objects": [
     {
       "type": "tree2",
@@ -23,11 +446,6 @@
     },
     {
       "type": "tree2",
-      "x": 978,
-      "y": 500
-    },
-    {
-      "type": "tree2",
       "x": 937,
       "y": 806
     },
@@ -38,8 +456,8 @@
     },
     {
       "type": "tree2",
-      "x": 40,
-      "y": 806
+      "x": 360,
+      "y": 748
     },
     {
       "type": "tree1",
@@ -70,11 +488,6 @@
       "type": "tree1",
       "x": 225,
       "y": 621
-    },
-    {
-      "type": "tree1",
-      "x": 306,
-      "y": 810
     },
     {
       "type": "tree1",
@@ -268,8 +681,8 @@
     },
     {
       "type": "tree2",
-      "x": 63,
-      "y": 924
+      "x": 259,
+      "y": 927
     },
     {
       "type": "tree2",
@@ -298,8 +711,8 @@
     },
     {
       "type": "tree2",
-      "x": 210,
-      "y": 1038
+      "x": 117,
+      "y": 774
     },
     {
       "type": "tree2",
@@ -365,6 +778,198 @@
       "type": "fence_vertical",
       "x": 1538,
       "y": 0
+    },
+    {
+      "type": "tree3",
+      "x": 18,
+      "y": 825,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 5,
+      "y": 1064,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 82,
+      "y": 993,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 106,
+      "y": 175,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 282,
+      "y": 209,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 302,
+      "y": 425,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 58,
+      "y": 549,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 858,
+      "y": 650,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1110,
+      "y": 554,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 956,
+      "y": 436,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 931,
+      "y": 13,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 762,
+      "y": 7,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1158,
+      "y": 1388,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1091,
+      "y": 1480,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 574,
+      "y": 1295,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 355,
+      "y": 1466,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 181,
+      "y": 1298,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1584,
+      "y": 860,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1382,
+      "y": 1073,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1158,
+      "y": 958,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1276,
+      "y": 400,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1509,
+      "y": 310,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1584,
+      "y": 7,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1708,
+      "y": 153,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1862,
+      "y": 386,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1823,
+      "y": 756,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1688,
+      "y": 1202,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1764,
+      "y": 1542,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1309,
+      "y": 1553,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1301,
+      "y": 1152,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 855,
+      "y": 380,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 507,
+      "y": 781,
+      "tag": "tree"
     }
   ],
   "npcs": [],
@@ -504,252 +1109,306 @@
   ],
   "enemies": [
     {
-      "type": "orc",
-      "x": 673,
-      "y": 871,
-      "respawnTime": 10
+      "type": "orc_commander",
+      "x": 1764,
+      "y": 271,
+      "respawnTime": 20,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1758,
+      "y": 178,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1893,
+      "y": 262,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1685,
+      "y": 366,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1537,
+      "y": 753,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1119,
+      "y": 473,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1189,
+      "y": 1275,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1357,
+      "y": 995,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1382,
+      "y": 332,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1784,
+      "y": 1362,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1638,
+      "y": 568,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc_warrior",
+      "x": 1697,
+      "y": 142,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 821,
-      "y": 762,
-      "respawnTime": 10
+      "x": 773,
+      "y": 422,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 1122,
-      "y": 709,
-      "respawnTime": 10
+      "x": 776,
+      "y": 571,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 1234,
-      "y": 957,
-      "respawnTime": 10
+      "x": 810,
+      "y": 911,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 1461,
-      "y": 1140,
-      "respawnTime": 10
+      "x": 420,
+      "y": 1166,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 1104,
-      "y": 1074,
-      "respawnTime": 10
+      "x": 611,
+      "y": 1486,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 686,
-      "y": 1806,
-      "respawnTime": 10
+      "x": 998,
+      "y": 1082,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 122,
-      "y": 1650,
-      "respawnTime": 10
+      "x": 322,
+      "y": 641,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 7,
-      "y": 573,
-      "respawnTime": 10
+      "x": 184,
+      "y": 299,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 1755,
-      "y": 1128,
-      "respawnTime": 10
+      "x": 193,
+      "y": 108,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 1796,
-      "y": 1502,
-      "respawnTime": 10
+      "x": 454,
+      "y": 63,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 1249,
-      "y": 1806,
-      "respawnTime": 10
+      "x": 900,
+      "y": 147,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 543,
+      "y": 481,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1180,
+      "y": 787,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1276,
+      "y": 1188,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1439,
+      "y": 1354,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1228,
+      "y": 1522,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 266,
+      "y": 1590,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1772,
+      "y": 986,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1652,
+      "y": 779,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1427,
+      "y": 546,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 978,
+      "y": 666,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 785,
+      "y": 781,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 518,
+      "y": 975,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1573,
+      "y": 453,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1483,
+      "y": 1511,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1262,
+      "y": 257,
+      "respawnTime": 10,
+      "tag": "village"
+    },
+    {
+      "type": "orc",
+      "x": 1598,
+      "y": 321,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
       "x": 1767,
-      "y": 1844,
-      "respawnTime": 10
+      "y": 492,
+      "respawnTime": 10,
+      "tag": "village"
     },
     {
       "type": "orc",
-      "x": 1821,
-      "y": 922,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc",
-      "x": 1438,
-      "y": 647,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc",
-      "x": 1072,
-      "y": 256,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc",
-      "x": 842,
-      "y": 71,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc",
-      "x": 1072,
-      "y": 548,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc",
-      "x": 414,
-      "y": 1687,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 469,
-      "y": 1023,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1375,
-      "y": 452,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1771,
-      "y": 857,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1485,
-      "y": 996,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1020,
-      "y": 558,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 940,
-      "y": 256,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1349,
-      "y": 342,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1731,
-      "y": 339,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1834,
-      "y": 256,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1744,
-      "y": 146,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1658,
-      "y": 63,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1747,
-      "y": 252,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1528,
-      "y": 398,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1830,
-      "y": 491,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1890,
-      "y": 628,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_warrior",
-      "x": 1581,
-      "y": 624,
-      "respawnTime": 10
-    },
-    {
-      "type": "orc_commander",
-      "x": 1575,
-      "y": 329,
-      "respawnTime": 20
-    },
-    {
-      "type": "orc_commander",
-      "x": 1688,
-      "y": 538,
-      "respawnTime": 20
-    },
-    {
-      "type": "orc_commander",
-      "x": 1894,
-      "y": 535,
-      "respawnTime": 20
-    },
-    {
-      "type": "orc_commander",
-      "x": 1369,
-      "y": 232,
-      "respawnTime": 20
-    },
-    {
-      "type": "orc_commander",
-      "x": 1611,
-      "y": 830,
-      "respawnTime": 20
+      "x": 1873,
+      "y": 664,
+      "respawnTime": 10,
+      "tag": "village"
     }
   ],
-  "neutralZones": [],
+  "neutralZones": [
+    {
+      "x": -1,
+      "y": 858,
+      "width": 168,
+      "height": 370
+    }
+  ],
   "doors": [
     {
       "id": "orc_town",
-      "x": 17,
-      "y": 996,
+      "x": 20,
+      "y": 1017,
       "targetMap": "firstMap",
       "targetDoorId": "firstMap_orc_town"
     }

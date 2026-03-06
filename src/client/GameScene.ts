@@ -14,6 +14,7 @@ import { EquipmentUI } from "./ui/EquipmentUI";
 import { StatsUI } from "./ui/StatsUI";
 import { HealerShopUI } from "./ui/HealerShopUI";
 import { ActionBarUI } from "./ui/ActionBarUI";
+import { HelpUI } from "./ui/HelpUI";
 import { UIManager } from "./managers/UIManager";
 import { SKINS_TO_LOAD, getSkinForLevel, isTierBoundary, FRAME_W as FRAME_SIZE } from "./skins";
 import {
@@ -130,7 +131,6 @@ export class GameScene extends Phaser.Scene {
   private keyS!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
   private keyI!: Phaser.Input.Keyboard.Key;
-  private keyU!: Phaser.Input.Keyboard.Key;
   private keySpace!: Phaser.Input.Keyboard.Key;
   private keyEnter!: Phaser.Input.Keyboard.Key;
 
@@ -181,6 +181,8 @@ export class GameScene extends Phaser.Scene {
   private minimapCloseBtn!:   Phaser.GameObjects.Text;
   private minimapNorthLabel!: Phaser.GameObjects.Text;
   private keyM!:              Phaser.Input.Keyboard.Key;
+  private keyH!:              Phaser.Input.Keyboard.Key;
+  private helpUI!:            HelpUI;
 
   // Pending UI states to restore after map change
   private pendingActionBarState: any = null;
@@ -290,6 +292,8 @@ export class GameScene extends Phaser.Scene {
     const wrOverlay = document.getElementById("waiting-room-overlay");
     if (wrOverlay) wrOverlay.style.display = "none";
     document.body.classList.remove("waiting-area-bg");
+    const initBgEl = document.getElementById("waiting-area-bg");
+    if (initBgEl) initBgEl.style.display = "none";
 
     console.log(`[DIAG] init() complete — map=${this.currentMapName} isCreated=${this.isCreated}`);
   }
@@ -625,6 +629,16 @@ export class GameScene extends Phaser.Scene {
       () => { this.ignoreNextMapClick = true; },
     );
 
+    // ── Help UI ───────────────────────────────────────────────────────────────
+    this.helpUI = new HelpUI(
+      this,
+      () => {
+        const ps = this.room.state.players.get(this.mySessionId);
+        return { isGM: ps?.isGM ?? false };
+      },
+      () => { this.ignoreNextMapClick = true; },
+    );
+
     // ── Healer Shop UI ────────────────────────────────────────────────────────
     this.healerShopUI = new HealerShopUI(
       this,
@@ -687,8 +701,8 @@ export class GameScene extends Phaser.Scene {
     this.keyS     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keyD     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyI     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I);
-    this.keyU     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.U);
     this.keyM     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+    this.keyH     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.H);
     this.keySpace = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyEnter = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
@@ -722,16 +736,14 @@ export class GameScene extends Phaser.Scene {
       this.triggerAttack();
     });
 
-    // ── U key → un-equip weapon ───────────────────────────────────────────────
-    this.keyU.on("down", () => {
-      if (this.isTyping) return;
-      const ps = this.room.state.players.get(this.mySessionId);
-      if (ps?.showWeapon) this.room.send("toggle_weapon");
-    });
-
     this.keyM.on("down", () => {
       if (this.isTyping) return;
       this.toggleMinimap();
+    });
+
+    this.keyH.on("down", () => {
+      if (this.isTyping) return;
+      this.toggleHelpUI();
     });
 
     // ── Click / tap to move ──────────────────────────────────────────────────
@@ -752,13 +764,18 @@ export class GameScene extends Phaser.Scene {
   // ── Panel toggle helpers ────────────────────────────────────────────────────
 
   public toggleStatsUI(): void {
-    this.shopUI.close(); this.healerShopUI.close(); this.equipmentUI.close();
+    this.shopUI.close(); this.healerShopUI.close(); this.equipmentUI.close(); this.helpUI.close();
     this.statsUI.toggle();
   }
 
   public toggleEquipmentUI(): void {
-    this.shopUI.close(); this.healerShopUI.close(); this.statsUI.close();
+    this.shopUI.close(); this.healerShopUI.close(); this.statsUI.close(); this.helpUI.close();
     this.equipmentUI.toggle();
+  }
+
+  public toggleHelpUI(): void {
+    this.shopUI.close(); this.healerShopUI.close(); this.statsUI.close(); this.equipmentUI.close();
+    this.helpUI.toggle();
   }
 
   // ── Attack ─────────────────────────────────────────────────────────────────
@@ -797,6 +814,7 @@ export class GameScene extends Phaser.Scene {
       this.healerShopUI?.close();
       this.equipmentUI?.close();
       this.statsUI?.close();
+      this.helpUI?.close();
     });
   }
 
@@ -931,6 +949,8 @@ export class GameScene extends Phaser.Scene {
     if (!overlay || !gmUi || !plUi) return;
 
     document.body.classList.add("waiting-area-bg");
+    const bgEl = document.getElementById("waiting-area-bg");
+    if (bgEl) bgEl.style.display = "block";
     overlay.style.display = "block";
 
     if (this.localSkin === "gm") {
@@ -1737,7 +1757,6 @@ export class GameScene extends Phaser.Scene {
       targetX: player.x,
       targetY: player.y,
       direction: player.direction ?? 0,
-      showWeapon: player.showWeapon || false,
       skinKey: safeKey,
       level: lv,
       isAttacking: player.isAttacking || false,
@@ -1771,7 +1790,6 @@ export class GameScene extends Phaser.Scene {
       e.targetX         = player.x;
       e.targetY         = player.y;
       e.direction       = player.direction ?? 0;
-      e.showWeapon      = player.showWeapon || false;
       e.isAttacking     = player.isAttacking || false;
       e.attackDirection = player.attackDirection ?? 0;
       e.isDead          = isDeadNow;
@@ -2654,6 +2672,8 @@ export class GameScene extends Phaser.Scene {
     const quizOverlay = document.getElementById("quiz-overlay");
     if (quizOverlay) quizOverlay.style.display = "none";
     document.body.classList.remove("waiting-area-bg");
+    const transBgEl = document.getElementById("waiting-area-bg");
+    if (transBgEl) transBgEl.style.display = "none";
 
     // Show loading overlay
     const w = this.cameras.main.width;
@@ -2718,7 +2738,8 @@ export class GameScene extends Phaser.Scene {
       this.healerShopUI.close();
       this.equipmentUI.close();
       this.statsUI.close();
-      
+      this.helpUI.close();
+
       this.scene.start("GameScene", data);
     } catch (err) {
       console.error("[Door] Travel failed:", err);
@@ -3084,22 +3105,39 @@ export class GameScene extends Phaser.Scene {
     });
     const ranks: Array<{ rank: number; score: number; players: FinalPlayerStat[] }> = [];
     let currentRank = 1;
-    let currentScore = -1;
-    for (const p of sorted) {
+    for (let i = 0; i < sorted.length; i++) {
+      const p = sorted[i];
       const score = scoreSelector(p);
       if (score <= 0) continue;
-      if (ranks.length === 0 || score !== currentScore) {
-        ranks.push({ rank: currentRank, score, players: [p] });
-        currentRank++;
-        currentScore = score;
-      } else {
-        ranks[ranks.length - 1].players.push(p);
+      if (i > 0) {
+        const prev = sorted[i - 1];
+        const isTied = scoreSelector(p) === scoreSelector(prev) &&
+                       (!tieBreaker || tieBreaker(p) === tieBreaker(prev));
+        if (isTied) {
+          ranks[ranks.length - 1].players.push(p);
+          continue;
+        }
       }
+      ranks.push({ rank: currentRank, score, players: [p] });
+      currentRank++;
     }
     return ranks;
   }
 
+  private escapeHTML(str: string): string {
+    return str.replace(/[&<>'"]/g,
+      tag => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[tag] ?? tag),
+    );
+  }
+
   private getAvatarStyle(skin: string, level: number): { backgroundImage: string; backgroundSize: string; backgroundPosition: string } {
+    if (skin === "gm") {
+      return {
+        backgroundImage:    "url('/assets/player/gm.png')",
+        backgroundSize:     "576px 256px",
+        backgroundPosition: "0px -128px",
+      };
+    }
     const variantKey = getSkinForLevel(skin, level);
     const [gender, variant] = variantKey.split("/");
     return {
@@ -3121,7 +3159,7 @@ export class GameScene extends Phaser.Scene {
     overlay.style.display = "flex";
 
     const categories = [
-      { title: "⚔ Best Player",       ranks: this.getDenseRanking(players, p => p.level * 1e6 + p.xp),  statLabel: (p: FinalPlayerStat) => `Lv ${p.level}` },
+      { title: "⚔ Best Player",       ranks: this.getDenseRanking(players, p => p.level, p => p.xp),    statLabel: (p: FinalPlayerStat) => `Lv ${p.level}` },
       { title: "💰 Richest Merchant",  ranks: this.getDenseRanking(players, p => p.gold),                 statLabel: (p: FinalPlayerStat) => `${p.gold} gold` },
       { title: "💀 Player Killer",     ranks: this.getDenseRanking(players, p => p.playerKills),           statLabel: (p: FinalPlayerStat) => `${p.playerKills} kills` },
       { title: "🐉 Monster Slayer",    ranks: this.getDenseRanking(players, p => p.monsterKills),          statLabel: (p: FinalPlayerStat) => `${p.monsterKills} kills` },
@@ -3149,7 +3187,7 @@ export class GameScene extends Phaser.Scene {
           const av = this.getAvatarStyle(p.skin, p.level);
           return `<div class="rank-player-box">
             <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
-            <span class="rank-player-name">${p.nickname}</span>
+            <span class="rank-player-name">${this.escapeHTML(p.nickname)}</span>
             <span class="rank-player-stat">${cat.statLabel(p)}</span>
           </div>`;
         }).join("");
@@ -3173,7 +3211,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buildOverviewScreen(players: FinalPlayerStat[], container: HTMLElement): void {
-    const bestRanks = this.getDenseRanking(players, p => p.level * 1e6 + p.xp);
+    const bestRanks = this.getDenseRanking(players, p => p.level, p => p.xp);
     const goldRanks = this.getDenseRanking(players, p => p.gold);
     const pvpRanks  = this.getDenseRanking(players, p => p.playerKills);
     const pveRanks  = this.getDenseRanking(players, p => p.monsterKills);
@@ -3187,7 +3225,7 @@ export class GameScene extends Phaser.Scene {
         const medal = rg.rank === 1 ? "🥇" : rg.rank === 2 ? "🥈" : "🥉";
         return `<div class="overview-player">
           <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
-          <span>${medal} ${p.nickname} <small>Lv ${p.level}</small></span>
+          <span>${medal} ${this.escapeHTML(p.nickname)} <small>Lv ${p.level}</small></span>
         </div>`;
       }).join("")).join("");
 
@@ -3207,7 +3245,7 @@ export class GameScene extends Phaser.Scene {
       el.innerHTML = `<div class="corner-badge">
         <div class="corner-title">${corner.label}</div>
         <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
-        <div class="corner-name">${winner.nickname}</div>
+        <div class="corner-name">${this.escapeHTML(winner.nickname)}</div>
       </div>`;
     }
   }

@@ -41,7 +41,7 @@ const BLANK_PROFILE: PlayerProfile = {
 // Use unique passcodes per test to avoid singleton state bleed
 afterEach(() => {
   // Clean up any sessions that may not have been destroyed by tests
-  ["T1A", "T1B", "T2A", "T2B", "T3A", "PA1", "SS1", "TT1"].forEach((pc) => {
+  ["T1A", "T1B", "T2A", "T2B", "T3A", "PA1", "SS1", "TT1", "MT1"].forEach((pc) => {
     if (globalBus.isValidSession(pc)) globalBus.destroySession(pc);
   });
 });
@@ -284,5 +284,115 @@ describe("GlobalBus — Timed Sessions", () => {
     expect(globalBus.isValidSession("TT1")).toBe(false);
 
     globalBus.unregisterRoom("roomTT1");
+  });
+});
+
+describe("GlobalBus — modifySessionTime", () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("returns false when no timer is active (scheduleSessionEnd not yet called)", () => {
+    globalBus.createSession("MT1", "Timer Session", 300);
+    expect(globalBus.modifySessionTime("MT1", 60)).toBe(false);
+    globalBus.destroySession("MT1");
+  });
+
+  it("returns false for an unknown passcode", () => {
+    expect(globalBus.modifySessionTime("XXXXX", 60)).toBe(false);
+  });
+
+  it("adds time: broadcasts session_timer_start with correct new remaining seconds", () => {
+    globalBus.createSession("MT1", "Timer Session", 300);
+    const broadcastFn = vi.fn();
+    globalBus.registerRoom("roomMT1", "MT1", makeHandle("MT1", { broadcastFn }));
+
+    globalBus.scheduleSessionEnd("MT1"); // 300 s timer starts
+    broadcastFn.mockClear();
+    vi.advanceTimersByTime(100_000); // 200 s remain
+
+    expect(globalBus.modifySessionTime("MT1", 60)).toBe(true);
+
+    const call = broadcastFn.mock.calls.find(([type]) => type === "session_timer_start");
+    expect(call).toBeDefined();
+    expect((call![1] as { durationSeconds: number }).durationSeconds).toBe(260);
+
+    globalBus.unregisterRoom("roomMT1");
+    if (globalBus.isValidSession("MT1")) globalBus.destroySession("MT1");
+  });
+
+  it("subtracts time: broadcasts session_timer_start with correct new remaining seconds", () => {
+    globalBus.createSession("MT1", "Timer Session", 300);
+    const broadcastFn = vi.fn();
+    globalBus.registerRoom("roomMT1", "MT1", makeHandle("MT1", { broadcastFn }));
+
+    globalBus.scheduleSessionEnd("MT1");
+    broadcastFn.mockClear();
+    vi.advanceTimersByTime(100_000); // 200 s remain
+
+    globalBus.modifySessionTime("MT1", -60);
+
+    const call = broadcastFn.mock.calls.find(([type]) => type === "session_timer_start");
+    expect((call![1] as { durationSeconds: number }).durationSeconds).toBe(140);
+
+    globalBus.unregisterRoom("roomMT1");
+    if (globalBus.isValidSession("MT1")) globalBus.destroySession("MT1");
+  });
+
+  it("clamps to 1 s minimum when subtraction would make time non-positive", () => {
+    globalBus.createSession("MT1", "Timer Session", 300);
+    const broadcastFn = vi.fn();
+    globalBus.registerRoom("roomMT1", "MT1", makeHandle("MT1", { broadcastFn }));
+
+    globalBus.scheduleSessionEnd("MT1");
+    broadcastFn.mockClear();
+    vi.advanceTimersByTime(100_000); // 200 s remain
+
+    globalBus.modifySessionTime("MT1", -99999);
+
+    const call = broadcastFn.mock.calls.find(([type]) => type === "session_timer_start");
+    expect((call![1] as { durationSeconds: number }).durationSeconds).toBe(1);
+
+    globalBus.unregisterRoom("roomMT1");
+    if (globalBus.isValidSession("MT1")) globalBus.destroySession("MT1");
+  });
+
+  it("clamps to 5400 s (90 min) maximum when addition would exceed cap", () => {
+    globalBus.createSession("MT1", "Timer Session", 300);
+    const broadcastFn = vi.fn();
+    globalBus.registerRoom("roomMT1", "MT1", makeHandle("MT1", { broadcastFn }));
+
+    globalBus.scheduleSessionEnd("MT1");
+    broadcastFn.mockClear();
+    vi.advanceTimersByTime(100_000); // 200 s remain
+
+    globalBus.modifySessionTime("MT1", 99999);
+
+    const call = broadcastFn.mock.calls.find(([type]) => type === "session_timer_start");
+    expect((call![1] as { durationSeconds: number }).durationSeconds).toBe(5400);
+
+    globalBus.unregisterRoom("roomMT1");
+    if (globalBus.isValidSession("MT1")) globalBus.destroySession("MT1");
+  });
+
+  it("new setTimeout fires at the adjusted time, not the original deadline", () => {
+    globalBus.createSession("MT1", "Timer Session", 300);
+    const broadcastFn = vi.fn();
+    const getPlayersFn = () => [];
+    globalBus.registerRoom("roomMT1", "MT1", makeHandle("MT1", { broadcastFn, getPlayersFn }));
+
+    globalBus.scheduleSessionEnd("MT1");
+    vi.advanceTimersByTime(100_000); // 200 s remain
+
+    globalBus.modifySessionTime("MT1", -190); // now 10 s remain
+
+    broadcastFn.mockClear();
+    vi.advanceTimersByTime(9_000); // 9 s — should NOT fire yet
+    expect(broadcastFn.mock.calls.find(([type]) => type === "timer_end")).toBeUndefined();
+
+    vi.advanceTimersByTime(1_000); // 10 s total — timer_end fires now
+    expect(broadcastFn.mock.calls.find(([type]) => type === "timer_end")).toBeDefined();
+
+    globalBus.unregisterRoom("roomMT1");
+    if (globalBus.isValidSession("MT1")) globalBus.destroySession("MT1");
   });
 });
