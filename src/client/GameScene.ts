@@ -3084,22 +3084,39 @@ export class GameScene extends Phaser.Scene {
     });
     const ranks: Array<{ rank: number; score: number; players: FinalPlayerStat[] }> = [];
     let currentRank = 1;
-    let currentScore = -1;
-    for (const p of sorted) {
+    for (let i = 0; i < sorted.length; i++) {
+      const p = sorted[i];
       const score = scoreSelector(p);
       if (score <= 0) continue;
-      if (ranks.length === 0 || score !== currentScore) {
-        ranks.push({ rank: currentRank, score, players: [p] });
-        currentRank++;
-        currentScore = score;
-      } else {
-        ranks[ranks.length - 1].players.push(p);
+      if (i > 0) {
+        const prev = sorted[i - 1];
+        const isTied = scoreSelector(p) === scoreSelector(prev) &&
+                       (!tieBreaker || tieBreaker(p) === tieBreaker(prev));
+        if (isTied) {
+          ranks[ranks.length - 1].players.push(p);
+          continue;
+        }
       }
+      ranks.push({ rank: currentRank, score, players: [p] });
+      currentRank++;
     }
     return ranks;
   }
 
+  private escapeHTML(str: string): string {
+    return str.replace(/[&<>'"]/g,
+      tag => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[tag] ?? tag),
+    );
+  }
+
   private getAvatarStyle(skin: string, level: number): { backgroundImage: string; backgroundSize: string; backgroundPosition: string } {
+    if (skin === "gm") {
+      return {
+        backgroundImage:    "url('/assets/player/gm.png')",
+        backgroundSize:     "576px 256px",
+        backgroundPosition: "0px -128px",
+      };
+    }
     const variantKey = getSkinForLevel(skin, level);
     const [gender, variant] = variantKey.split("/");
     return {
@@ -3121,7 +3138,7 @@ export class GameScene extends Phaser.Scene {
     overlay.style.display = "flex";
 
     const categories = [
-      { title: "⚔ Best Player",       ranks: this.getDenseRanking(players, p => p.level * 1e6 + p.xp),  statLabel: (p: FinalPlayerStat) => `Lv ${p.level}` },
+      { title: "⚔ Best Player",       ranks: this.getDenseRanking(players, p => p.level, p => p.xp),    statLabel: (p: FinalPlayerStat) => `Lv ${p.level}` },
       { title: "💰 Richest Merchant",  ranks: this.getDenseRanking(players, p => p.gold),                 statLabel: (p: FinalPlayerStat) => `${p.gold} gold` },
       { title: "💀 Player Killer",     ranks: this.getDenseRanking(players, p => p.playerKills),           statLabel: (p: FinalPlayerStat) => `${p.playerKills} kills` },
       { title: "🐉 Monster Slayer",    ranks: this.getDenseRanking(players, p => p.monsterKills),          statLabel: (p: FinalPlayerStat) => `${p.monsterKills} kills` },
@@ -3149,7 +3166,7 @@ export class GameScene extends Phaser.Scene {
           const av = this.getAvatarStyle(p.skin, p.level);
           return `<div class="rank-player-box">
             <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
-            <span class="rank-player-name">${p.nickname}</span>
+            <span class="rank-player-name">${this.escapeHTML(p.nickname)}</span>
             <span class="rank-player-stat">${cat.statLabel(p)}</span>
           </div>`;
         }).join("");
@@ -3173,7 +3190,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buildOverviewScreen(players: FinalPlayerStat[], container: HTMLElement): void {
-    const bestRanks = this.getDenseRanking(players, p => p.level * 1e6 + p.xp);
+    const bestRanks = this.getDenseRanking(players, p => p.level, p => p.xp);
     const goldRanks = this.getDenseRanking(players, p => p.gold);
     const pvpRanks  = this.getDenseRanking(players, p => p.playerKills);
     const pveRanks  = this.getDenseRanking(players, p => p.monsterKills);
@@ -3187,7 +3204,7 @@ export class GameScene extends Phaser.Scene {
         const medal = rg.rank === 1 ? "🥇" : rg.rank === 2 ? "🥈" : "🥉";
         return `<div class="overview-player">
           <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
-          <span>${medal} ${p.nickname} <small>Lv ${p.level}</small></span>
+          <span>${medal} ${this.escapeHTML(p.nickname)} <small>Lv ${p.level}</small></span>
         </div>`;
       }).join("")).join("");
 
@@ -3207,7 +3224,7 @@ export class GameScene extends Phaser.Scene {
       el.innerHTML = `<div class="corner-badge">
         <div class="corner-title">${corner.label}</div>
         <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
-        <div class="corner-name">${winner.nickname}</div>
+        <div class="corner-name">${this.escapeHTML(winner.nickname)}</div>
       </div>`;
     }
   }

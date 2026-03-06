@@ -3785,8 +3785,8 @@
   "doors": [
     {
       "id": "m1_east",
-      "x": 1950,
-      "y": 1040,
+      "x": 1947,
+      "y": 1041,
       "targetMap": "firstMap",
       "targetDoorId": "firstMap_west"
     }
