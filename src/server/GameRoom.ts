@@ -1729,8 +1729,22 @@ export class GameRoom extends Room<GameState> {
         sendPrivate(`Teleporting to "${targetNick}".`);
       }
 
+    } else if (command === "/time") {
+      const delta = parseInt(parts[1] ?? "", 10);
+      if (isNaN(delta)) {
+        sendPrivate("Usage: /time {seconds} (can be negative)");
+        return;
+      }
+
+      const success = globalBus.modifySessionTime(this.passcode, delta);
+      if (success) {
+        sendPrivate(`World timer adjusted by ${delta} seconds.`);
+      } else {
+        sendPrivate("Cannot modify time: the world session timer is not currently active.");
+      }
+
     } else {
-      sendPrivate(`Unknown command: ${command}. Available: /spawn, /kick, /exp, /gold, /unstuck, /summon, /teleport`);
+      sendPrivate(`Unknown command: ${command}. Available: /spawn, /kick, /exp, /gold, /unstuck, /summon, /teleport, /time`);
     }
   }
 

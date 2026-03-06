@@ -169,6 +169,28 @@ class GlobalBus {
     return this.activeSessions.get(passcode)?.sessionEndTime ?? 0;
   }
 
+  /** Modifies the active session timer by deltaSeconds. Returns true if successful. */
+  modifySessionTime(passcode: string, deltaSeconds: number): boolean {
+    const session = this.activeSessions.get(passcode);
+    if (!session || !session.timerHandle || !session.sessionEndTime) return false;
+
+    const now = Date.now();
+    const currentRemainingMs = session.sessionEndTime - now;
+
+    if (currentRemainingMs <= 0) return false;
+
+    let newRemainingSeconds = (currentRemainingMs / 1000) + deltaSeconds;
+    newRemainingSeconds = Math.max(1, newRemainingSeconds);
+    newRemainingSeconds = Math.min(90 * 60, newRemainingSeconds);
+
+    session.sessionEndTime = now + newRemainingSeconds * 1000;
+    clearTimeout(session.timerHandle);
+    session.timerHandle = setTimeout(() => this.endSessionWithRankings(passcode), newRemainingSeconds * 1000);
+    this.broadcastToSession(passcode, "session_timer_start", { durationSeconds: newRemainingSeconds });
+
+    return true;
+  }
+
   /** Collect all player stats, broadcast timer_end to all rooms, then destroy after 3 s delay. */
   private endSessionWithRankings(passcode: string): void {
     const allPlayers: Array<{
