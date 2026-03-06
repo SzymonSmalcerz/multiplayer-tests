@@ -875,6 +875,18 @@ export class UIManager {
     this.lastTimerSeconds = -1;
   }
 
+  repositionTimerDisplay(): void {
+    if (!this.timerText?.active) return;
+    const x = this.scene.cameras.main.width / 2;
+    const y = this.gs.localSkin === "gm" ? 38 : 12;
+    this.timerText.setPosition(x, y + 14);
+    if (this.timerBg?.active) {
+      this.timerBg.clear()
+        .fillStyle(0x000000, 0.55)
+        .fillRoundedRect(x - 52, y, 104, 28, 6);
+    }
+  }
+
   updateTimerDisplay(secondsLeft: number): void {
     if (!this.timerText?.active) return;
     if (secondsLeft === this.lastTimerSeconds) return;

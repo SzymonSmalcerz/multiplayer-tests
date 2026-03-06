@@ -173,7 +173,8 @@ export class GameScene extends Phaser.Scene {
   private localPartyLabel?: Phaser.GameObjects.Text;
 
   // Minimap
-  private minimapOpen       = false;
+  private minimapOpen         = false;
+  private pendingMinimapOpen  = false;
   private minimapIcon!:       Phaser.GameObjects.Image;
   private minimapBg!:         Phaser.GameObjects.Graphics;
   private minimapDots!:       Phaser.GameObjects.Graphics;
@@ -183,6 +184,13 @@ export class GameScene extends Phaser.Scene {
   private keyM!:              Phaser.Input.Keyboard.Key;
   private keyH!:              Phaser.Input.Keyboard.Key;
   private helpUI!:            HelpUI;
+
+  // Current map dimensions — kept in sync so recalcCameraBounds() can read them
+  private mapWidth  = 2000;
+  private mapHeight = 2000;
+
+  // GM passcode badge (stored so it can be repositioned on resize)
+  private gmBadgeText: Phaser.GameObjects.Text | null = null;
 
   // Pending UI states to restore after map change
   private pendingActionBarState: any = null;
@@ -248,6 +256,7 @@ export class GameScene extends Phaser.Scene {
     this.isSessionEnded       = false;
     this.isCreated            = false;
     this.sessionTimerEndTime  = data.sessionTimerEndTime ?? 0;
+    this.pendingMinimapOpen   = data.minimapOpen ?? false;
     this.localLevel       = 0;
     this.localPotions     = 0;
     this.localIsDead      = false;
@@ -490,7 +499,7 @@ export class GameScene extends Phaser.Scene {
     } else if (this.localSkin === "gm" && this.passcode) {
       // GM passcode badge (shown on normal maps only)
       const w = this.cameras.main.width;
-      this.add.text(w / 2, 10, `Session: ${this.passcode}`, {
+      this.gmBadgeText = this.add.text(w / 2, 10, `Session: ${this.passcode}`, {
         fontSize:        "13px",
         color:           "#ff8800",
         backgroundColor: "rgba(0,0,0,0.55)",
@@ -534,21 +543,11 @@ export class GameScene extends Phaser.Scene {
     this.ui.createDeathUI();
 
     // ── Camera ──────────────────────────────────────────────────────────────
-    {
-      const mapW = (this.room.state.mapWidth  as number) || 2000;
-      const mapH = (this.room.state.mapHeight as number) || 2000;
-      const camW = this.cameras.main.width;
-      const camH = this.cameras.main.height;
-      // Center small maps (e.g. waitingArea 300×300) inside the viewport
-      if (mapW < camW || mapH < camH) {
-        const offsetX = mapW < camW ? -Math.floor((camW - mapW) / 2) : 0;
-        const offsetY = mapH < camH ? -Math.floor((camH - mapH) / 2) : 0;
-        this.cameras.main.setBounds(offsetX, offsetY, Math.max(mapW, camW), Math.max(mapH, camH));
-      } else {
-        this.cameras.main.setBounds(0, 0, mapW, mapH);
-      }
-    }
+    this.mapWidth  = (this.room.state.mapWidth  as number) || 2000;
+    this.mapHeight = (this.room.state.mapHeight as number) || 2000;
+    this.recalcCameraBounds();
     this.cameras.main.startFollow(this.localSprite, true, 0.08, 0.08);
+    this.scale.on("resize", this.recalcCameraBounds, this);
 
     // NPCs are placed after map_data is received (see setupRoomListeners)
 
@@ -676,7 +675,10 @@ export class GameScene extends Phaser.Scene {
 
     // ── Mob system ───────────────────────────────────────────────────────────
     this.mobSystem = new MobSystem(this);
-    this.events.once("shutdown", () => this.mobSystem.destroy());
+    this.events.once("shutdown", () => {
+      this.mobSystem.destroy();
+      this.scale.off("resize", this.recalcCameraBounds, this);
+    });
 
     // ── Input ────────────────────────────────────────────────────────────────
     this.input.enabled = true;
@@ -1171,6 +1173,12 @@ export class GameScene extends Phaser.Scene {
     if (this.globalLeaderboardData && this.globalLeaderboardData.length > 0) {
       this.ui.updateLeaderboard();
     }
+
+    // Restore minimap visibility from before map travel
+    if (this.pendingMinimapOpen) {
+      this.openMinimap();
+      this.pendingMinimapOpen = false;
+    }
   }
 
   private openMinimap(): void {
@@ -1194,6 +1202,24 @@ export class GameScene extends Phaser.Scene {
   private toggleMinimap(): void {
     if (this.minimapOpen) this.closeMinimap();
     else this.openMinimap();
+  }
+
+  private recalcCameraBounds(): void {
+    const camW = this.cameras.main.width;
+    const camH = this.cameras.main.height;
+    if (this.mapWidth < camW || this.mapHeight < camH) {
+      const offsetX = this.mapWidth  < camW ? -Math.floor((camW - this.mapWidth)  / 2) : 0;
+      const offsetY = this.mapHeight < camH ? -Math.floor((camH - this.mapHeight) / 2) : 0;
+      this.cameras.main.setBounds(offsetX, offsetY, Math.max(this.mapWidth, camW), Math.max(this.mapHeight, camH));
+    } else {
+      this.cameras.main.setBounds(0, 0, this.mapWidth, this.mapHeight);
+    }
+
+    // Reposition GM passcode badge
+    this.gmBadgeText?.setPosition(this.cameras.main.width / 2, 10);
+
+    // Reposition session timer
+    if (this.ui) this.ui.repositionTimerDisplay();
   }
 
   private repositionMinimapUI(): void {
@@ -1434,15 +1460,9 @@ export class GameScene extends Phaser.Scene {
 
     // Fix physics and camera bounds using the authoritative dimensions from the payload
     this.physics.world.setBounds(0, 0, mapW, mapH);
-    const camW = this.cameras.main.width;
-    const camH = this.cameras.main.height;
-    if (mapW < camW || mapH < camH) {
-      const offsetX = mapW < camW ? -Math.floor((camW - mapW) / 2) : 0;
-      const offsetY = mapH < camH ? -Math.floor((camH - mapH) / 2) : 0;
-      this.cameras.main.setBounds(offsetX, offsetY, Math.max(mapW, camW), Math.max(mapH, camH));
-    } else {
-      this.cameras.main.setBounds(0, 0, mapW, mapH);
-    }
+    this.mapWidth  = mapW;
+    this.mapHeight = mapH;
+    this.recalcCameraBounds();
 
     console.log(`[Map] Applying map data. Tiles: ${data.tiles?.length ?? 0}, Objects: ${data.objects.length}`);
 
@@ -2731,6 +2751,7 @@ export class GameScene extends Phaser.Scene {
         actionBarState: this.actionBarUI.exportState(),
         equipmentState: this.equipmentUI.exportState(),
         sessionTimerEndTime: this.sessionTimerEndTime || undefined,
+        minimapOpen: this.minimapOpen,
       };
       
       // Clean up UI before switching

@@ -19,8 +19,8 @@ export class PlayerState extends Schema {
   @type("string") nickname: string = "";
   @type("string") skin: string = "male/grey";
   @type("number") direction: number = 0;    // 0=down 1=left 2=up 3=right
-  @type("number") hp: number = 100;
-  @type("number") maxHp: number = 100;
+  @type("number") hp: number = 150;
+  @type("number") maxHp: number = 150;
   @type("number") level: number = 1;
   @type("number") xp: number = 0;
   @type("number") attackBonus: number = 0;  // extra DPS added to weapon
@@ -787,14 +787,14 @@ export class GameRoom extends Room<GameState> {
         player.statPoints  = player.level - 1;
         player.vitality    = 0;
         player.strength    = 0;
-        player.maxHp       = 100; // reset to base — old auto-gains are wiped
-        player.hp          = Math.min(profile.hp, 100); // clamp to new max
+        player.maxHp       = 150; // reset to base — old auto-gains are wiped
+        player.hp          = Math.min(profile.hp, 150); // clamp to new max
         player.attackBonus = 0;
       } else {
         player.statPoints  = profile.statPoints;
         player.vitality    = profile.vitality!;
         player.strength    = profile.strength!;
-        player.maxHp       = 100 + player.vitality * 4;
+        player.maxHp       = 150 + player.vitality * 4;
         player.attackBonus = player.strength * 2;
       }
 

@@ -140,6 +140,7 @@ export interface GameSceneData {
   actionBarState?: any;
   equipmentState?: any;
   sessionTimerEndTime?: number;
+  minimapOpen?: boolean;
 }
 
 /** Represents one remote player entity in the GameScene */

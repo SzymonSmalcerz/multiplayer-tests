@@ -1,67 +1,1463 @@
 {
-  "mapWidth": 600,
-  "mapHeight": 400,
-  "defaultTile": "dirt",
+  "mapWidth": 2000,
+  "mapHeight": 2000,
+  "defaultTile": "grass_basic",
   "spawnPoint": {
-    "x": 100,
-    "y": 100
+    "x": 971,
+    "y": 1001
   },
-  "tiles": [],
+  "tiles": [
+    {
+      "type": "dirt",
+      "x": 736,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 736,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 736,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 768,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 800,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 832,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 864,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 896,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 896,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 928,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 832,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 800,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 768,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 800,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 832,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 864,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 896,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 928,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 960,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 960,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 864,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 768,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 736,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 736,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 736,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 768,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 768,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 768,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 800,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 832,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 832,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 800,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 800,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 832,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 864,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 864,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 864,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 896,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 896,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 896,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 928,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 928,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 928,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 960,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 960,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 992,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 992,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1024,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1024,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 960,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 992,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 992,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 992,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 960,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 928,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 992,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1024,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1024,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1056,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1088,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1088,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1056,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1120,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1152,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1152,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1152,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1152,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1152,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1152,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1120,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1088,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1056,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1056,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1056,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1024,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1088,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1088,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1120,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1056,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1088,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1120,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1120,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 832,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 864,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 896,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 928,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 960,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 992,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 1024,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 1056,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 1088,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 1120,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 1152,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 800,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 768,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0084",
+      "x": 736,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_010",
+      "x": 704,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 704,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 704,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 704,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 704,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 704,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0083",
+      "x": 704,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "tile_009",
+      "x": 1184,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_011",
+      "x": 1184,
+      "y": 1120,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0082",
+      "x": 1184,
+      "y": 1088,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0082",
+      "x": 1184,
+      "y": 1056,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0082",
+      "x": 1184,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0082",
+      "x": 1184,
+      "y": 992,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0082",
+      "x": 1184,
+      "y": 960,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0082",
+      "x": 1184,
+      "y": 928,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 736,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 768,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 800,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 832,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 864,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 896,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 928,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 960,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 992,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 1024,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 1056,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 1088,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 1120,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_0081",
+      "x": 1152,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "tile_008",
+      "x": 704,
+      "y": 896,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1120,
+      "y": 1024,
+      "tag": "village"
+    },
+    {
+      "type": "dirt",
+      "x": 1024,
+      "y": 992,
+      "tag": "village"
+    }
+  ],
   "objects": [
     {
-      "type": "tree3",
-      "x": 478,
-      "y": 263
+      "type": "fence",
+      "x": 964,
+      "y": 1111,
+      "tag": "city items"
+    },
+    {
+      "type": "fence",
+      "x": 843,
+      "y": 1111,
+      "tag": "city items"
+    },
+    {
+      "type": "fence",
+      "x": 1085,
+      "y": 1111,
+      "tag": "city items"
+    },
+    {
+      "type": "fence_vertical",
+      "x": 1204,
+      "y": 1065,
+      "tag": "city items"
+    },
+    {
+      "type": "fence_vertical",
+      "x": 1204,
+      "y": 1006,
+      "tag": "city items"
+    },
+    {
+      "type": "fence_vertical",
+      "x": 1204,
+      "y": 948,
+      "tag": "city items"
+    },
+    {
+      "type": "fence_vertical",
+      "x": 1204,
+      "y": 892,
+      "tag": "city items"
+    },
+    {
+      "type": "fence",
+      "x": 1084,
+      "y": 882,
+      "tag": "city items"
+    },
+    {
+      "type": "fence",
+      "x": 963,
+      "y": 882,
+      "tag": "city items"
+    },
+    {
+      "type": "fence",
+      "x": 842,
+      "y": 882,
+      "tag": "city items"
+    },
+    {
+      "type": "fence",
+      "x": 721,
+      "y": 882,
+      "tag": "city items"
+    },
+    {
+      "type": "fence",
+      "x": 722,
+      "y": 1111,
+      "tag": "city items"
+    },
+    {
+      "type": "fence_vertical",
+      "x": 713,
+      "y": 889,
+      "tag": "city items"
+    },
+    {
+      "type": "fence_vertical",
+      "x": 713,
+      "y": 948,
+      "tag": "city items"
+    },
+    {
+      "type": "fence_vertical",
+      "x": 713,
+      "y": 1006,
+      "tag": "city items"
+    },
+    {
+      "type": "fence_vertical",
+      "x": 713,
+      "y": 1066,
+      "tag": "city items"
+    },
+    {
+      "type": "barell",
+      "x": 704,
+      "y": 1114,
+      "tag": "city items"
+    },
+    {
+      "type": "cart_full",
+      "x": 730,
+      "y": 1137,
+      "tag": "city items"
+    },
+    {
+      "type": "bucket_full",
+      "x": 728,
+      "y": 1130,
+      "tag": "city items"
+    },
+    {
+      "type": "bucket_empty",
+      "x": 705,
+      "y": 1154,
+      "tag": "city items"
+    },
+    {
+      "type": "toitoi",
+      "x": 1149,
+      "y": 853,
+      "tag": "city items"
+    },
+    {
+      "type": "house_town_5",
+      "x": 1360,
+      "y": 705,
+      "tag": "house"
+    },
+    {
+      "type": "house_cottage_small",
+      "x": 514,
+      "y": 1361,
+      "tag": "house"
     },
     {
       "type": "tree3",
-      "x": 378,
-      "y": 182
+      "x": 565,
+      "y": 1016,
+      "tag": "tree"
     },
     {
       "type": "tree3",
-      "x": 128,
-      "y": 247
+      "x": 509,
+      "y": 798,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 404,
+      "y": 928,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 724,
+      "y": 669,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 944,
+      "y": 678,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 893,
+      "y": 563,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 377,
+      "y": 604,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1192,
+      "y": 576,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1448,
+      "y": 557,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1771,
+      "y": 774,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1625,
+      "y": 844,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1258,
+      "y": 763,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1286,
+      "y": 1315,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1110,
+      "y": 1313,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 921,
+      "y": 1453,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 786,
+      "y": 1447,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 651,
+      "y": 1544,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 314,
+      "y": 1509,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 380,
+      "y": 1331,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 305,
+      "y": 995,
+      "tag": "tree"
     },
     {
       "type": "tree3",
       "x": 345,
-      "y": 73
+      "y": 766,
+      "tag": "tree"
     },
     {
       "type": "tree3",
-      "x": 268,
-      "y": 185
+      "x": 574,
+      "y": 586,
+      "tag": "tree"
     },
     {
       "type": "tree3",
-      "x": 113,
-      "y": 48
+      "x": 1593,
+      "y": 1373,
+      "tag": "tree"
     },
     {
       "type": "tree3",
-      "x": 2,
-      "y": 214
+      "x": 1603,
+      "y": 1493,
+      "tag": "tree"
     },
     {
       "type": "tree3",
-      "x": 8,
-      "y": 3
+      "x": 1859,
+      "y": 1527,
+      "tag": "tree"
     },
     {
       "type": "tree3",
-      "x": 503,
-      "y": 14
+      "x": 1799,
+      "y": 1441,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1914,
+      "y": 1109,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1845,
+      "y": 1208,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1862,
+      "y": 948,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1892,
+      "y": 588,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1654,
+      "y": 618,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1584,
+      "y": 546,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1529,
+      "y": 737,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1765,
+      "y": 526,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1066,
+      "y": 560,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 763,
+      "y": 174,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 262,
+      "y": 284,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 122,
+      "y": 153,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 88,
+      "y": 734,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 241,
+      "y": 794,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 122,
+      "y": 1235,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 49,
+      "y": 1626,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 389,
+      "y": 1732,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 826,
+      "y": 1690,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1234,
+      "y": 1741,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1591,
+      "y": 1681,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1480,
+      "y": 293,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1183,
+      "y": 250,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1132,
+      "y": 4,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 517,
+      "y": 25,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 529,
+      "y": 276,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 181,
+      "y": 480,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 88,
+      "y": 314,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 105,
+      "y": -17,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1591,
+      "y": 127,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1816,
+      "y": 68,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1782,
+      "y": 365,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1429,
+      "y": 46,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 911,
+      "y": 271,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 911,
+      "y": 63,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 703,
+      "y": 416,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 308,
+      "y": 68,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 32,
+      "y": 913,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 215,
+      "y": 1817,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1077,
+      "y": 1626,
+      "tag": "tree"
+    },
+    {
+      "type": "tree3",
+      "x": 1756,
+      "y": 1843,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 139,
+      "y": 1392,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 151,
+      "y": 1082,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 79,
+      "y": 569,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 364,
+      "y": 433,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 432,
+      "y": 85,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 941,
+      "y": 407,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1132,
+      "y": 136,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1480,
+      "y": 170,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1336,
+      "y": 356,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 601,
+      "y": 1796,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1022,
+      "y": 1838,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1502,
+      "y": 1851,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1323,
+      "y": 1473,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 1141,
+      "y": 1448,
+      "tag": "tree"
+    },
+    {
+      "type": "tree1",
+      "x": 219,
+      "y": 1647,
+      "tag": "tree"
     }
   ],
   "npcs": [],
   "mobs": [
     {
+      "type": "pig",
+      "x": 765,
+      "y": 938,
+      "width": 212,
+      "height": 139,
+      "speed": 1,
+      "changeTime": 4000,
+      "specialTime": 4000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 4
+    },
+    {
+      "type": "pig",
+      "x": 944,
+      "y": 972,
+      "width": 207,
+      "height": 120,
+      "speed": 1,
+      "changeTime": 4000,
+      "specialTime": 4000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 4
+    },
+    {
+      "type": "pig",
+      "x": 986,
+      "y": 943,
+      "width": 141,
+      "height": 50,
+      "speed": 1,
+      "changeTime": 4000,
+      "specialTime": 4000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 4
+    },
+    {
+      "type": "pig",
+      "x": 810,
+      "y": 1016,
+      "width": 154,
+      "height": 89,
+      "speed": 1,
+      "changeTime": 4000,
+      "specialTime": 4000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 4
+    },
+    {
       "type": "butterfly",
-      "x": 72,
-      "y": 159,
-      "width": 266,
-      "height": 228,
+      "x": 392,
+      "y": 915,
+      "width": 305,
+      "height": 298,
       "speed": 1,
       "changeTime": 3000,
       "specialTime": 2000,
@@ -70,25 +1466,114 @@
     },
     {
       "type": "butterfly",
-      "x": 280,
-      "y": 35,
-      "width": 287,
-      "height": 214,
+      "x": 936,
+      "y": 1247,
+      "width": 626,
+      "height": 388,
       "speed": 1,
       "changeTime": 3000,
       "specialTime": 2000,
       "chanceOfDoingSpecialAction": 0.3,
       "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "butterfly",
+      "x": 1214,
+      "y": 552,
+      "width": 608,
+      "height": 471,
+      "speed": 1,
+      "changeTime": 3000,
+      "specialTime": 2000,
+      "chanceOfDoingSpecialAction": 0.3,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "butterfly",
+      "x": 688,
+      "y": 669,
+      "width": 601,
+      "height": 588,
+      "speed": 1,
+      "changeTime": 3000,
+      "specialTime": 2000,
+      "chanceOfDoingSpecialAction": 0.3,
+      "howManyAnimationsPerSec": 5
+    },
+    {
+      "type": "cow",
+      "x": 1432,
+      "y": 1028,
+      "width": 395,
+      "height": 321,
+      "speed": 1,
+      "changeTime": 2000,
+      "specialTime": 10000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 1.5
+    },
+    {
+      "type": "cow",
+      "x": 1279,
+      "y": 897,
+      "width": 386,
+      "height": 283,
+      "speed": 1,
+      "changeTime": 2000,
+      "specialTime": 10000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 1.5
+    },
+    {
+      "type": "cow",
+      "x": 656,
+      "y": 1239,
+      "width": 434,
+      "height": 243,
+      "speed": 1,
+      "changeTime": 2000,
+      "specialTime": 10000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 1.5
+    },
+    {
+      "type": "cow",
+      "x": 323,
+      "y": 1145,
+      "width": 367,
+      "height": 225,
+      "speed": 1,
+      "changeTime": 2000,
+      "specialTime": 10000,
+      "chanceOfDoingSpecialAction": 0.4,
+      "howManyAnimationsPerSec": 1.5
+    },
+    {
+      "type": "dog",
+      "x": 1248,
+      "y": 894,
+      "width": 382,
+      "height": 174,
+      "speed": 1,
+      "changeTime": 3000,
+      "specialTime": 2000,
+      "chanceOfDoingSpecialAction": 0.2,
+      "howManyAnimationsPerSec": 2
+    },
+    {
+      "type": "cat",
+      "x": 850,
+      "y": 1168,
+      "width": 494,
+      "height": 174,
+      "speed": 1,
+      "changeTime": 5000,
+      "specialTime": 4000,
+      "chanceOfDoingSpecialAction": 0.3,
+      "howManyAnimationsPerSec": 4
     }
   ],
   "enemies": [],
-  "neutralZones": [
-    {
-      "x": -14,
-      "y": -13,
-      "width": 655,
-      "height": 443
-    }
-  ],
+  "neutralZones": [],
   "doors": []
 }

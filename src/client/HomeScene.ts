@@ -204,6 +204,7 @@ export class HomeScene extends Phaser.Scene {
     }
 
     this.wireCheckCodeButton();
+    this.wireSessionBackButton();
 
     // Support ?code=ABC123 direct links (e.g. shared by GM)
     const urlCode = new URLSearchParams(window.location.search).get("code");
@@ -213,6 +214,18 @@ export class HomeScene extends Phaser.Scene {
     } else if (passcodeInput) {
       passcodeInput.focus();
     }
+  }
+
+  // ── Session Back Button ───────────────────────────────────────────────────
+
+  private wireSessionBackButton(): void {
+    const btn = document.getElementById("session-back-btn");
+    if (!btn) return;
+    const fresh = btn.cloneNode(true) as HTMLElement;
+    btn.parentNode?.replaceChild(fresh, btn);
+    fresh.addEventListener("click", () => {
+      window.location.href = "/";
+    });
   }
 
   // ── GM Login ──────────────────────────────────────────────────────────────
