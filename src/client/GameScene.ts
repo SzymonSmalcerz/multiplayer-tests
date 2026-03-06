@@ -292,6 +292,8 @@ export class GameScene extends Phaser.Scene {
     const wrOverlay = document.getElementById("waiting-room-overlay");
     if (wrOverlay) wrOverlay.style.display = "none";
     document.body.classList.remove("waiting-area-bg");
+    const initBgEl = document.getElementById("waiting-area-bg");
+    if (initBgEl) initBgEl.style.display = "none";
 
     console.log(`[DIAG] init() complete — map=${this.currentMapName} isCreated=${this.isCreated}`);
   }
@@ -947,6 +949,8 @@ export class GameScene extends Phaser.Scene {
     if (!overlay || !gmUi || !plUi) return;
 
     document.body.classList.add("waiting-area-bg");
+    const bgEl = document.getElementById("waiting-area-bg");
+    if (bgEl) bgEl.style.display = "block";
     overlay.style.display = "block";
 
     if (this.localSkin === "gm") {
@@ -2668,6 +2672,8 @@ export class GameScene extends Phaser.Scene {
     const quizOverlay = document.getElementById("quiz-overlay");
     if (quizOverlay) quizOverlay.style.display = "none";
     document.body.classList.remove("waiting-area-bg");
+    const transBgEl = document.getElementById("waiting-area-bg");
+    if (transBgEl) transBgEl.style.display = "none";
 
     // Show loading overlay
     const w = this.cameras.main.width;
