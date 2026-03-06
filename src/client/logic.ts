@@ -66,7 +66,7 @@ export function findPath(
   if (grid[tr * cols + tc]) return null;
 
   const start = sr * cols + sc;
-  const goal  = tr * cols + tc;
+  let   goal  = tr * cols + tc;
 
   if (start === goal) return [{ x: toX, y: toY }];
 
@@ -96,6 +96,12 @@ export function findPath(
     Math.SQRT2 * cellSize, cellSize, Math.SQRT2 * cellSize,
   ];
 
+  let hitCap = false;
+  let iterations = 0;
+  const MAX_ITERATIONS = 1000;
+  let closestNode = start;
+  let closestDist = fScore[start];
+
   while (open.length > 0) {
     let bestIdx = 0;
     for (let i = 1; i < open.length; i++) {
@@ -105,6 +111,9 @@ export function findPath(
     open[bestIdx] = open[open.length - 1];
     open.pop();
     inOpen[cur] = 0;
+    iterations++;
+    if (fScore[cur] < closestDist) { closestDist = fScore[cur]; closestNode = cur; }
+    if (iterations > MAX_ITERATIONS) { goal = closestNode; hitCap = true; break; }
 
     if (cur === goal) {
       const path: { x: number; y: number }[] = [];
@@ -145,5 +154,17 @@ export function findPath(
     }
   }
 
+  if (hitCap && closestNode !== start) {
+    const path: { x: number; y: number }[] = [];
+    let node = closestNode;
+    while (node !== -1) {
+      const c = node % cols;
+      const r = Math.floor(node / cols);
+      path.push({ x: c * cellSize + cellSize / 2, y: r * cellSize + cellSize / 2 });
+      node = parent[node];
+    }
+    path.reverse();
+    return path;
+  }
   return null;
 }

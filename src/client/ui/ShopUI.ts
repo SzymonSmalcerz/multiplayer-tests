@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { WeaponDef } from "../../shared/weapons";
+import { makeDraggable } from "./DragHelper";
 
 interface ScrollItem {
   obj: Phaser.GameObjects.Image; // widest concrete type that has setY + setMask
@@ -35,10 +36,8 @@ export class ShopUI {
 
   // ── Drag-to-reposition ────────────────────────────────────────────────────
   private static readonly LS_KEY = "shop_pos";
-  private savedPos: SavedPos | null = null;
-  private dragPreview:     Phaser.GameObjects.Graphics | null            = null;
-  private dragMoveHandler: ((ptr: Phaser.Input.Pointer) => void) | null = null;
-  private dragUpHandler:   ((ptr: Phaser.Input.Pointer) => void) | null = null;
+  private savedPos:     SavedPos | null          = null;
+  private panelCleanup: (() => void) | null      = null;
 
   /** Returns current player gold and equipped weapon from live game state. */
   private getPlayerState: () => { gold: number; weapon: string } | null;
@@ -152,9 +151,10 @@ export class ShopUI {
       0x000000, 0,
     ).setScrollFactor(0).setDepth(D + 2).setInteractive({ useHandCursor: true })) as Phaser.GameObjects.Rectangle;
 
-    dragHandle.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
-      this.onInteract();
-      this.beginPanelDrag(ptr, px, py, PANEL_W, panelH);
+    dragHandle.on("pointerdown", () => this.onInteract());
+    this.panelCleanup = makeDraggable(this.scene, dragHandle, () => ({ x: px, y: py }), {
+      panelW: PANEL_W, panelH: panelH, lsKey: ShopUI.LS_KEY, borderColor: 0x998844, borderRadius: 8,
+      onDone: (pos) => { this.savedPos = pos; this.close(); this.open(); },
     });
 
     // ── Divider ──────────────────────────────────────────────────────────────
@@ -305,47 +305,6 @@ export class ShopUI {
     };
   }
 
-  private beginPanelDrag(ptr: Phaser.Input.Pointer, panelX: number, panelY: number, panelW: number, panelH: number): void {
-    const { width, height } = this.scene.scale;
-    const startX = ptr.x;
-    const startY = ptr.y;
-
-    const preview = this.scene.add.graphics()
-      .lineStyle(2, 0x998844, 0.8)
-      .strokeRoundedRect(panelX, panelY, panelW, panelH, 8)
-      .setScrollFactor(0).setDepth(300000);
-    this.dragPreview = preview;
-
-    this.dragMoveHandler = (p: Phaser.Input.Pointer) => {
-      const newPx = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
-      const newPy = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
-      preview.clear()
-        .lineStyle(2, 0x998844, 0.8)
-        .strokeRoundedRect(newPx, newPy, panelW, panelH, 8);
-    };
-
-    this.dragUpHandler = (p: Phaser.Input.Pointer) => {
-      const newPx = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
-      const newPy = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
-
-      this.savedPos = { rightOffset: width - newPx, topOffset: newPy };
-      localStorage.setItem(ShopUI.LS_KEY, JSON.stringify(this.savedPos));
-
-      this.cleanupDrag();
-      this.close();
-      this.open();
-    };
-
-    this.scene.input.on("pointermove", this.dragMoveHandler);
-    this.scene.input.on("pointerup",   this.dragUpHandler);
-  }
-
-  private cleanupDrag(): void {
-    if (this.dragMoveHandler) { this.scene.input.off("pointermove", this.dragMoveHandler); this.dragMoveHandler = null; }
-    if (this.dragUpHandler)   { this.scene.input.off("pointerup",   this.dragUpHandler);   this.dragUpHandler   = null; }
-    if (this.dragPreview)     { this.dragPreview.destroy(); this.dragPreview = null; }
-  }
-
   private applyScroll(): void {
     for (const { obj, baseY } of this.scrollItems) {
       obj.setY(baseY - this.scrollOffset);
@@ -365,7 +324,7 @@ export class ShopUI {
     if (!this.isOpen) return;
     this.isOpen = false;
 
-    this.cleanupDrag();
+    this.panelCleanup?.(); this.panelCleanup = null;
 
     if (this.wheelHandler) {
       this.scene.input.off("wheel", this.wheelHandler);

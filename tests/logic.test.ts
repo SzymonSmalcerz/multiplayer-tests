@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { getTotalXp, getLevelAndXpFromTotal } from "../src/shared/formulas";
 import {
   xpForNextLevel,
   worldToMinimapOffset,
@@ -192,5 +193,25 @@ describe("findPath", () => {
     for (let i = 1; i < path.length; i++) {
       expect(path[i].x).toBeGreaterThanOrEqual(path[i - 1].x);
     }
+  });
+});
+
+// ── XP Math ───────────────────────────────────────────────────────────────────
+
+describe("XP Math", () => {
+  it("getTotalXp level 1 returns currentXp unchanged", () => {
+    expect(getTotalXp(1, 50)).toBe(50);
+  });
+
+  it("getTotalXp level 2 adds level-1 threshold (100 XP)", () => {
+    expect(getTotalXp(2, 10)).toBe(110);
+  });
+
+  it("getLevelAndXpFromTotal round-trips correctly", () => {
+    expect(getLevelAndXpFromTotal(110)).toEqual({ level: 2, xp: 10 });
+  });
+
+  it("getLevelAndXpFromTotal(0) gives level 1 with 0 XP", () => {
+    expect(getLevelAndXpFromTotal(0)).toEqual({ level: 1, xp: 0 });
   });
 });

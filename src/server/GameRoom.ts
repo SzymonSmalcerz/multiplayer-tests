@@ -2,7 +2,7 @@ import { Room, Client } from "@colyseus/core";
 import { Schema, MapSchema, ArraySchema, type } from "@colyseus/schema";
 import fs   from "fs";
 import path from "path";
-import { xpForNextLevel }                    from "../shared/formulas";
+import { xpForNextLevel, getTotalXp, getLevelAndXpFromTotal } from "../shared/formulas";
 import { getHitbox, isInsideHitbox }          from "../shared/combat";
 import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../shared/economy";
 import { OBJECT_REGISTRY }                    from "../shared/objects";
@@ -1325,11 +1325,13 @@ export class GameRoom extends Room<GameState> {
             player.playerKills = Math.min(32767, player.playerKills + 1);
 
             const stolenGold = Math.floor(target.gold * 0.10);
-            const targetTotalXp = this.getTotalXp(target.level, target.xp);
+            const targetTotalXp = getTotalXp(target.level, target.xp);
             const lostXp = Math.floor(targetTotalXp * 0.05);
 
             target.gold = Math.max(0, target.gold - stolenGold);
-            this.applyTotalXp(target, Math.max(0, targetTotalXp - lostXp));
+            const { level: newLevel, xp: newXp } = getLevelAndXpFromTotal(Math.max(0, targetTotalXp - lostXp));
+            target.level = newLevel;
+            target.xp    = newXp;
 
             player.gold += stolenGold;
             player.xp += lostXp;
@@ -2026,17 +2028,4 @@ export class GameRoom extends Room<GameState> {
     }
   }
 
-  private getTotalXp(level: number, currentXp: number): number {
-    let total = currentXp;
-    for (let i = 1; i < level; i++) total += xpForNextLevel(i);
-    return total;
-  }
-
-  private applyTotalXp(player: PlayerState, totalXp: number): void {
-    let lvl = 1;
-    let xp = totalXp;
-    while (xp >= xpForNextLevel(lvl)) { xp -= xpForNextLevel(lvl); lvl++; }
-    player.level = lvl;
-    player.xp = xp;
-  }
 }

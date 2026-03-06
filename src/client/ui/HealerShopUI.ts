@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { makeDraggable } from "./DragHelper";
 
 interface SavedPos { rightOffset: number; topOffset: number; }
 
@@ -18,10 +19,8 @@ export class HealerShopUI {
 
   // ── Drag-to-reposition ────────────────────────────────────────────────────
   private static readonly LS_KEY = "healer_shop_pos";
-  private savedPos:            SavedPos | null                              = null;
-  private dragPreview:         Phaser.GameObjects.Graphics | null          = null;
-  private dragMoveHandler:     ((ptr: Phaser.Input.Pointer) => void) | null = null;
-  private dragUpHandler:       ((ptr: Phaser.Input.Pointer) => void) | null = null;
+  private savedPos:     SavedPos | null     = null;
+  private panelCleanup: (() => void) | null = null;
 
   private getPlayerState: () => { gold: number; potions: number } | null;
   private onBuy:      () => void;
@@ -107,9 +106,10 @@ export class HealerShopUI {
       0x000000, 0,
     ).setScrollFactor(0).setDepth(D + 3).setInteractive({ useHandCursor: true })) as Phaser.GameObjects.Rectangle;
 
-    dragHandle.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
-      this.onInteract();
-      this.beginPanelDrag(ptr, px, py, PANEL_W, PANEL_H);
+    dragHandle.on("pointerdown", () => this.onInteract());
+    this.panelCleanup = makeDraggable(this.scene, dragHandle, () => ({ x: px, y: py }), {
+      panelW: PANEL_W, panelH: PANEL_H, lsKey: HealerShopUI.LS_KEY, borderColor: 0x88ffcc, borderRadius: 10,
+      onDone: (pos) => { this.savedPos = pos; this.close(); this.open(); },
     });
 
     // Header divider
@@ -199,51 +199,10 @@ export class HealerShopUI {
     };
   }
 
-  private beginPanelDrag(ptr: Phaser.Input.Pointer, panelX: number, panelY: number, panelW: number, panelH: number): void {
-    const { width, height } = this.scene.scale;
-    const startX = ptr.x;
-    const startY = ptr.y;
-
-    const preview = this.scene.add.graphics()
-      .lineStyle(2, 0x88ffcc, 0.8)
-      .strokeRoundedRect(panelX, panelY, panelW, panelH, 10)
-      .setScrollFactor(0).setDepth(300000);
-    this.dragPreview = preview;
-
-    this.dragMoveHandler = (p: Phaser.Input.Pointer) => {
-      const newPx = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
-      const newPy = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
-      preview.clear()
-        .lineStyle(2, 0x88ffcc, 0.8)
-        .strokeRoundedRect(newPx, newPy, panelW, panelH, 10);
-    };
-
-    this.dragUpHandler = (p: Phaser.Input.Pointer) => {
-      const newPx = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
-      const newPy = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
-
-      this.savedPos = { rightOffset: width - newPx, topOffset: newPy };
-      localStorage.setItem(HealerShopUI.LS_KEY, JSON.stringify(this.savedPos));
-
-      this.cleanupDrag();
-      this.close();
-      this.open();
-    };
-
-    this.scene.input.on("pointermove", this.dragMoveHandler);
-    this.scene.input.on("pointerup",   this.dragUpHandler);
-  }
-
-  private cleanupDrag(): void {
-    if (this.dragMoveHandler) { this.scene.input.off("pointermove", this.dragMoveHandler); this.dragMoveHandler = null; }
-    if (this.dragUpHandler)   { this.scene.input.off("pointerup",   this.dragUpHandler);   this.dragUpHandler   = null; }
-    if (this.dragPreview)     { this.dragPreview.destroy(); this.dragPreview = null; }
-  }
-
   close(): void {
     if (!this.isOpen) return;
     this.isOpen = false;
-    this.cleanupDrag();
+    this.panelCleanup?.(); this.panelCleanup = null;
     for (const obj of this.objects) obj.destroy();
     this.objects   = [];
     this.ownedText = null;

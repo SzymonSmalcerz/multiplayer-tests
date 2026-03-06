@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { makeDraggable } from "./DragHelper";
 
 export interface StatsSnapshot {
   statPoints: number;
@@ -35,10 +36,8 @@ export class StatsUI {
 
   // Panel drag state
   private static readonly LS_KEY = "stats_pos";
-  private savedPos:             SavedPos | null                              = null;
-  private panelDragPreview:     Phaser.GameObjects.Graphics | null          = null;
-  private panelDragMoveHandler: ((ptr: Phaser.Input.Pointer) => void) | null = null;
-  private panelDragUpHandler:   ((ptr: Phaser.Input.Pointer) => void) | null = null;
+  private savedPos:     SavedPos | null     = null;
+  private panelCleanup: (() => void) | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -117,9 +116,10 @@ export class StatsUI {
       PANEL_W - 32, HEADER_H,
       0x000000, 0,
     ).setScrollFactor(0).setDepth(D + 3).setInteractive({ useHandCursor: true })) as Phaser.GameObjects.Rectangle;
-    dragHandle.on("pointerdown", (ptr: Phaser.Input.Pointer) => {
-      this.onInteract();
-      this.beginPanelDrag(ptr, px, py);
+    dragHandle.on("pointerdown", () => this.onInteract());
+    this.panelCleanup = makeDraggable(this.scene, dragHandle, () => ({ x: px, y: py }), {
+      panelW: PANEL_W, panelH: PANEL_H, lsKey: StatsUI.LS_KEY, borderColor: 0xc8a84b, borderRadius: 10,
+      onDone: (pos) => { this.savedPos = pos; this.close(); this.open(); },
     });
 
     // ── Header divider ────────────────────────────────────────────────────────
@@ -215,7 +215,7 @@ export class StatsUI {
     this.strValText = null;
     this.vitPlusBtn = null;
     this.strPlusBtn = null;
-    this.cleanupPanelDrag();
+    this.panelCleanup?.(); this.panelCleanup = null;
     for (const obj of this.objects) obj.destroy();
     this.objects = [];
   }
@@ -249,46 +249,5 @@ export class StatsUI {
       px: Math.round((width  - PANEL_W) / 2),
       py: Math.round((height - PANEL_H) / 2),
     };
-  }
-
-  private beginPanelDrag(ptr: Phaser.Input.Pointer, panelX: number, panelY: number): void {
-    const { width, height } = this.scene.scale;
-    const startX = ptr.x;
-    const startY = ptr.y;
-
-    const preview = this.scene.add.graphics()
-      .lineStyle(2, 0xc8a84b, 0.8)
-      .strokeRoundedRect(panelX, panelY, PANEL_W, PANEL_H, 10)
-      .setScrollFactor(0).setDepth(300000);
-    this.panelDragPreview = preview;
-
-    this.panelDragMoveHandler = (p: Phaser.Input.Pointer) => {
-      const newPx = Math.max(0, Math.min(width  - PANEL_W, panelX + p.x - startX));
-      const newPy = Math.max(0, Math.min(height - PANEL_H, panelY + p.y - startY));
-      preview.clear()
-        .lineStyle(2, 0xc8a84b, 0.8)
-        .strokeRoundedRect(newPx, newPy, PANEL_W, PANEL_H, 10);
-    };
-
-    this.panelDragUpHandler = (p: Phaser.Input.Pointer) => {
-      const newPx = Math.max(0, Math.min(width  - PANEL_W, panelX + p.x - startX));
-      const newPy = Math.max(0, Math.min(height - PANEL_H, panelY + p.y - startY));
-
-      this.savedPos = { rightOffset: width - newPx, topOffset: newPy };
-      localStorage.setItem(StatsUI.LS_KEY, JSON.stringify(this.savedPos));
-
-      this.cleanupPanelDrag();
-      this.close();
-      this.open();
-    };
-
-    this.scene.input.on("pointermove", this.panelDragMoveHandler);
-    this.scene.input.on("pointerup",   this.panelDragUpHandler);
-  }
-
-  private cleanupPanelDrag(): void {
-    if (this.panelDragMoveHandler) { this.scene.input.off("pointermove", this.panelDragMoveHandler); this.panelDragMoveHandler = null; }
-    if (this.panelDragUpHandler)   { this.scene.input.off("pointerup",   this.panelDragUpHandler);   this.panelDragUpHandler   = null; }
-    if (this.panelDragPreview)     { this.panelDragPreview.destroy(); this.panelDragPreview = null; }
   }
 }
