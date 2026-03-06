@@ -90,7 +90,6 @@ export interface RemotePlayer {
   nickname: string;
   skin: string;
   direction: number;
-  showWeapon: boolean;
   hp: number;
   maxHp: number;
   level: number;
@@ -152,7 +151,6 @@ export interface RemotePlayerEntity {
   targetX: number;
   targetY: number;
   direction: number;
-  showWeapon: boolean;
   skinKey: string;
   level: number;
   isAttacking: boolean;

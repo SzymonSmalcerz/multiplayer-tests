@@ -14,6 +14,7 @@ import { EquipmentUI } from "./ui/EquipmentUI";
 import { StatsUI } from "./ui/StatsUI";
 import { HealerShopUI } from "./ui/HealerShopUI";
 import { ActionBarUI } from "./ui/ActionBarUI";
+import { HelpUI } from "./ui/HelpUI";
 import { UIManager } from "./managers/UIManager";
 import { SKINS_TO_LOAD, getSkinForLevel, isTierBoundary, FRAME_W as FRAME_SIZE } from "./skins";
 import {
@@ -130,7 +131,6 @@ export class GameScene extends Phaser.Scene {
   private keyS!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
   private keyI!: Phaser.Input.Keyboard.Key;
-  private keyU!: Phaser.Input.Keyboard.Key;
   private keySpace!: Phaser.Input.Keyboard.Key;
   private keyEnter!: Phaser.Input.Keyboard.Key;
 
@@ -181,6 +181,8 @@ export class GameScene extends Phaser.Scene {
   private minimapCloseBtn!:   Phaser.GameObjects.Text;
   private minimapNorthLabel!: Phaser.GameObjects.Text;
   private keyM!:              Phaser.Input.Keyboard.Key;
+  private keyH!:              Phaser.Input.Keyboard.Key;
+  private helpUI!:            HelpUI;
 
   // Pending UI states to restore after map change
   private pendingActionBarState: any = null;
@@ -625,6 +627,16 @@ export class GameScene extends Phaser.Scene {
       () => { this.ignoreNextMapClick = true; },
     );
 
+    // ── Help UI ───────────────────────────────────────────────────────────────
+    this.helpUI = new HelpUI(
+      this,
+      () => {
+        const ps = this.room.state.players.get(this.mySessionId);
+        return { isGM: ps?.isGM ?? false };
+      },
+      () => { this.ignoreNextMapClick = true; },
+    );
+
     // ── Healer Shop UI ────────────────────────────────────────────────────────
     this.healerShopUI = new HealerShopUI(
       this,
@@ -687,8 +699,8 @@ export class GameScene extends Phaser.Scene {
     this.keyS     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keyD     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyI     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.I);
-    this.keyU     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.U);
     this.keyM     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+    this.keyH     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.H);
     this.keySpace = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyEnter = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
@@ -722,16 +734,14 @@ export class GameScene extends Phaser.Scene {
       this.triggerAttack();
     });
 
-    // ── U key → un-equip weapon ───────────────────────────────────────────────
-    this.keyU.on("down", () => {
-      if (this.isTyping) return;
-      const ps = this.room.state.players.get(this.mySessionId);
-      if (ps?.showWeapon) this.room.send("toggle_weapon");
-    });
-
     this.keyM.on("down", () => {
       if (this.isTyping) return;
       this.toggleMinimap();
+    });
+
+    this.keyH.on("down", () => {
+      if (this.isTyping) return;
+      this.toggleHelpUI();
     });
 
     // ── Click / tap to move ──────────────────────────────────────────────────
@@ -752,13 +762,18 @@ export class GameScene extends Phaser.Scene {
   // ── Panel toggle helpers ────────────────────────────────────────────────────
 
   public toggleStatsUI(): void {
-    this.shopUI.close(); this.healerShopUI.close(); this.equipmentUI.close();
+    this.shopUI.close(); this.healerShopUI.close(); this.equipmentUI.close(); this.helpUI.close();
     this.statsUI.toggle();
   }
 
   public toggleEquipmentUI(): void {
-    this.shopUI.close(); this.healerShopUI.close(); this.statsUI.close();
+    this.shopUI.close(); this.healerShopUI.close(); this.statsUI.close(); this.helpUI.close();
     this.equipmentUI.toggle();
+  }
+
+  public toggleHelpUI(): void {
+    this.shopUI.close(); this.healerShopUI.close(); this.statsUI.close(); this.equipmentUI.close();
+    this.helpUI.toggle();
   }
 
   // ── Attack ─────────────────────────────────────────────────────────────────
@@ -797,6 +812,7 @@ export class GameScene extends Phaser.Scene {
       this.healerShopUI?.close();
       this.equipmentUI?.close();
       this.statsUI?.close();
+      this.helpUI?.close();
     });
   }
 
@@ -1737,7 +1753,6 @@ export class GameScene extends Phaser.Scene {
       targetX: player.x,
       targetY: player.y,
       direction: player.direction ?? 0,
-      showWeapon: player.showWeapon || false,
       skinKey: safeKey,
       level: lv,
       isAttacking: player.isAttacking || false,
@@ -1771,7 +1786,6 @@ export class GameScene extends Phaser.Scene {
       e.targetX         = player.x;
       e.targetY         = player.y;
       e.direction       = player.direction ?? 0;
-      e.showWeapon      = player.showWeapon || false;
       e.isAttacking     = player.isAttacking || false;
       e.attackDirection = player.attackDirection ?? 0;
       e.isDead          = isDeadNow;
@@ -2718,7 +2732,8 @@ export class GameScene extends Phaser.Scene {
       this.healerShopUI.close();
       this.equipmentUI.close();
       this.statsUI.close();
-      
+      this.helpUI.close();
+
       this.scene.start("GameScene", data);
     } catch (err) {
       console.error("[Door] Travel failed:", err);

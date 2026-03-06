@@ -19,7 +19,6 @@ export class PlayerState extends Schema {
   @type("string") nickname: string = "";
   @type("string") skin: string = "male/grey";
   @type("number") direction: number = 0;    // 0=down 1=left 2=up 3=right
-  @type("boolean") showWeapon: boolean = false;
   @type("number") hp: number = 100;
   @type("number") maxHp: number = 100;
   @type("number") level: number = 1;
@@ -469,10 +468,6 @@ export class GameRoom extends Room<GameState> {
       globalBus.publishChat(payload, this.roomId);
     });
 
-    this.onMessage("toggle_weapon", (client) => {
-      const player = this.state.players.get(client.sessionId);
-      if (player) player.showWeapon = !player.showWeapon;
-    });
 
     this.onMessage<MoveMessage>("move", (client, data) => {
       const player = this.state.players.get(client.sessionId);
@@ -649,9 +644,6 @@ export class GameRoom extends Room<GameState> {
       // Ignore if already attacking (server-side gate)
       if (this.playerAttacks.has(client.sessionId)) return;
 
-      // Auto-equip weapon if not equipped
-      if (!player.showWeapon) player.showWeapon = true;
-
       player.isAttacking     = true;
       player.attackDirection = direction;
 
@@ -679,7 +671,6 @@ export class GameRoom extends Room<GameState> {
 
       player.gold   -= info.cost;
       player.weapon  = weaponKey;
-      player.showWeapon = true; // auto-equip on purchase
     });
 
     this.onMessage("buy_potion", (client) => {
