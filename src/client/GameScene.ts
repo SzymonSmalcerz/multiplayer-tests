@@ -547,6 +547,7 @@ export class GameScene extends Phaser.Scene {
     this.mapHeight = (this.room.state.mapHeight as number) || 2000;
     this.recalcCameraBounds();
     this.cameras.main.startFollow(this.localSprite, true, 0.08, 0.08);
+    this.cameras.main.roundPixels = true;
     this.scale.on("resize", this.recalcCameraBounds, this);
 
     // NPCs are placed after map_data is received (see setupRoomListeners)
@@ -874,6 +875,13 @@ export class GameScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     // Safety check: if scene is shutting down or room is disposed, stop updates immediately
     if (!this.scene.isActive() || !this.room || !this.room.state) return;
+
+    // Snap camera scroll to integer pixels to eliminate subpixel jitter on HiDPI screens.
+    // Phaser's camera lerp produces fractional scrollX/scrollY; rounding here (after the
+    // internal camera preUpdate) ensures the whole scene renders at whole-pixel offsets.
+    const cam = this.cameras.main;
+    cam.scrollX = Math.round(cam.scrollX);
+    cam.scrollY = Math.round(cam.scrollY);
 
     // Always read party state from live server state — never rely on cached value alone
     const myState = this.room.state.players.get(this.mySessionId);
