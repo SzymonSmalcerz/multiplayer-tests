@@ -32,6 +32,7 @@ export interface PlayerProfile {
   statPoints?: number;
   vitality?:   number;
   strength?:   number;
+  maxLevelReached?: number;
 }
 
 export interface GlobalParty {
