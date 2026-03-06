@@ -546,7 +546,7 @@ export class GameScene extends Phaser.Scene {
     this.mapWidth  = (this.room.state.mapWidth  as number) || 2000;
     this.mapHeight = (this.room.state.mapHeight as number) || 2000;
     this.recalcCameraBounds();
-    this.cameras.main.startFollow(this.localSprite, true, 0.08, 0.08);
+    this.cameras.main.startFollow(this.localSprite, true, 1, 1);
     this.cameras.main.roundPixels = true;
     this.scale.on("resize", this.recalcCameraBounds, this);
 
