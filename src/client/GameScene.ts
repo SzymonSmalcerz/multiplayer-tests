@@ -2171,7 +2171,7 @@ export class GameScene extends Phaser.Scene {
       const depth = sprite.y + 24;
       sprite.setDepth(depth);
       hpBar.setDepth(depth + 1);
-      entity.label.setPosition(sprite.x, sprite.y - 36).setDepth(depth + 2);
+      entity.label.setPosition(Math.round(sprite.x), Math.round(sprite.y) - 36).setDepth(depth + 2);
 
       // ── HP bar — only redraw when sprite moved or HP ratio changed ──────────
       const hpRatio = (entity.hp > 0 && entity.maxHp > 0)
@@ -2331,19 +2331,21 @@ export class GameScene extends Phaser.Scene {
     // Position nickname + optional party label
     const myState = this.room.state.players.get(this.mySessionId);
     const localPartyName = myState?.partyName ?? "";
+    const lx = Math.round(this.localSprite.x);
+    const ly = Math.round(this.localSprite.y);
     if (localPartyName && this.localPartyLabel) {
-      this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 54);
+      this.localLabel.setPosition(lx, ly - 54);
       this.localPartyLabel
         .setText(`(${localPartyName})`)
-        .setPosition(this.localSprite.x, this.localSprite.y - 42)
+        .setPosition(lx, ly - 42)
         .setVisible(true);
     } else {
-      this.localLabel.setPosition(this.localSprite.x, this.localSprite.y - 42);
+      this.localLabel.setPosition(lx, ly - 42);
       this.localPartyLabel?.setVisible(false);
     }
 
     if (this.localChatBubble) {
-      this.localChatBubble.setPosition(this.localSprite.x, this.localSprite.y - 65);
+      this.localChatBubble.setPosition(lx, ly - 65);
     }
 
     // ── Weapon texture sync (reads live server state every frame) ──────────
@@ -2443,17 +2445,19 @@ export class GameScene extends Phaser.Scene {
       // Position nickname and optional party name label
       const rState = this.room.state.players.get(sessionId);
       const remotePartyName = rState?.partyName ?? "";
+      const rx = Math.round(sprite.x);
+      const ry = Math.round(sprite.y);
       if (remotePartyName && entity.partyLabel) {
-        label.setPosition(sprite.x, sprite.y - 54);
+        label.setPosition(rx, ry - 54);
         entity.partyLabel
           .setText(`(${remotePartyName})`)
-          .setPosition(sprite.x, sprite.y - 42)
+          .setPosition(rx, ry - 42)
           .setVisible(true);
       } else {
-        label.setPosition(sprite.x, sprite.y - 42);
+        label.setPosition(rx, ry - 42);
         entity.partyLabel?.setVisible(false);
       }
-      if (chatBubble) chatBubble.setPosition(sprite.x, sprite.y - 65);
+      if (chatBubble) chatBubble.setPosition(rx, ry - 65);
 
       const playerDepth = sprite.y + FRAME_SIZE / 2;
       sprite.setDepth(playerDepth);

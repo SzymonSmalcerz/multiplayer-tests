@@ -8,6 +8,7 @@ const config: Phaser.Types.Core.GameConfig = {
   width: window.innerWidth,
   height: window.innerHeight,
   transparent: true,
+  roundPixels: true,
   physics: {
     default: "arcade",
     arcade: { debug: false },
