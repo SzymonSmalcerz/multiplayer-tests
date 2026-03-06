@@ -546,7 +546,7 @@ export class GameScene extends Phaser.Scene {
     this.mapWidth  = (this.room.state.mapWidth  as number) || 2000;
     this.mapHeight = (this.room.state.mapHeight as number) || 2000;
     this.recalcCameraBounds();
-    this.cameras.main.startFollow(this.localSprite, true, 1, 1);
+    this.cameras.main.startFollow(this.localSprite, false, 1, 1);
     this.cameras.main.roundPixels = true;
     this.scale.on("resize", this.recalcCameraBounds, this);
 
@@ -708,6 +708,9 @@ export class GameScene extends Phaser.Scene {
     this.keyH     = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.H);
     this.keySpace = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyEnter = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+
+    // ── Sync attachments post-physics ────────────────────────────────────────
+    this.events.on("postupdate", this.syncLocalAttachments, this);
 
     // ── Disable right-click context menu on canvas ───────────────────────────
     this.input.mouse?.disableContextMenu();
@@ -2326,14 +2329,40 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const playerDepth = this.localSprite.y + FRAME_SIZE / 2;
+    // ── Weapon texture sync (reads live server state every frame) ──────────
+    const myState = this.room.state.players.get(this.mySessionId);
+    const serverWeapon = (myState?.weapon ?? "sword") as string;
+    if (serverWeapon !== this.localWeaponKey) {
+      this.localWeaponKey = serverWeapon;
+      this.localWeapon.setTexture(serverWeapon);
+    }
+
+    // ── Weapon animation timers ──────────────────────────────────────────────
+    if (this.localAttackCooldownTimer > 0) {
+      this.localAttackCooldownTimer -= delta;
+    }
+
+    if (this.localIsAttacking) {
+      this.localAttackTimer -= delta;
+      if (this.localAttackTimer <= 0) {
+        this.localIsAttacking = false;
+      }
+    }
+  }
+
+  private syncLocalAttachments(): void {
+    if (!this.localSprite || !this.localSprite.active) return;
+
+    const lx = this.localSprite.x;
+    const ly = this.localSprite.y;
+    const playerDepth = ly + FRAME_SIZE / 2;
+
     this.localSprite.setDepth(playerDepth);
 
     // Position nickname + optional party label
-    const myState = this.room.state.players.get(this.mySessionId);
+    const myState = this.room?.state?.players?.get(this.mySessionId);
     const localPartyName = myState?.partyName ?? "";
-    const lx = this.localSprite.x;
-    const ly = this.localSprite.y;
+
     if (localPartyName && this.localPartyLabel) {
       this.localLabel.setPosition(lx, ly - 54);
       this.localPartyLabel
@@ -2349,41 +2378,19 @@ export class GameScene extends Phaser.Scene {
       this.localChatBubble.setPosition(lx, ly - 65);
     }
 
-    // ── Weapon texture sync (reads live server state every frame) ──────────
-    const serverWeapon = (myState?.weapon ?? "sword") as string;
-    if (serverWeapon !== this.localWeaponKey) {
-      this.localWeaponKey = serverWeapon;
-      this.localWeapon.setTexture(serverWeapon);
-    }
-
-    // ── Weapon animation (sword orbits clockwise) ────────────────────────────
-    // Tick cooldown
-    if (this.localAttackCooldownTimer > 0) {
-      this.localAttackCooldownTimer -= delta;
-    }
-
-    // Tick attack animation timer
-    if (this.localIsAttacking) {
-      this.localAttackTimer -= delta;
-      if (this.localAttackTimer <= 0) {
-        this.localIsAttacking = false;
-      }
-    }
-
-    if (this.localIsAttacking) {
-      // progress 0→1 over the animation duration
+    // Weapon orbit positioning
+    if (this.localIsAttacking && !this.localIsDead) {
       const progress = 1 - this.localAttackTimer / ATTACK_ANIM_MS;
-      // start at top (−π/2), sweep clockwise (increasing angle)
       const angle = -Math.PI / 2 + progress * 2 * Math.PI;
       const localOrbitR = this.localWeapon.height / 2 + 10;
-      const wx = this.localSprite.x + localOrbitR * Math.cos(angle);
-      const wy = this.localSprite.y + localOrbitR * Math.sin(angle);
+      const wx = lx + localOrbitR * Math.cos(angle);
+      const wy = ly + localOrbitR * Math.sin(angle);
       this.localWeapon.setPosition(wx, wy);
       this.localWeapon.setRotation(angle + Math.PI / 2);
       this.localWeapon.setDepth(playerDepth + 1);
       this.localWeapon.setVisible(true);
     } else {
-      this.localWeapon.setVisible(false);
+      if (this.localWeapon) this.localWeapon.setVisible(false);
     }
   }
 
