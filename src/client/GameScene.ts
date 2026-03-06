@@ -876,13 +876,6 @@ export class GameScene extends Phaser.Scene {
     // Safety check: if scene is shutting down or room is disposed, stop updates immediately
     if (!this.scene.isActive() || !this.room || !this.room.state) return;
 
-    // Snap camera scroll to integer pixels to eliminate subpixel jitter on HiDPI screens.
-    // Phaser's camera lerp produces fractional scrollX/scrollY; rounding here (after the
-    // internal camera preUpdate) ensures the whole scene renders at whole-pixel offsets.
-    const cam = this.cameras.main;
-    cam.scrollX = Math.round(cam.scrollX);
-    cam.scrollY = Math.round(cam.scrollY);
-
     // Always read party state from live server state — never rely on cached value alone
     const myState = this.room.state.players.get(this.mySessionId);
     if (!myState) return;
@@ -2179,7 +2172,7 @@ export class GameScene extends Phaser.Scene {
       const depth = sprite.y + 24;
       sprite.setDepth(depth);
       hpBar.setDepth(depth + 1);
-      entity.label.setPosition(Math.round(sprite.x), Math.round(sprite.y) - 36).setDepth(depth + 2);
+      entity.label.setPosition(sprite.x, sprite.y - 36).setDepth(depth + 2);
 
       // ── HP bar — only redraw when sprite moved or HP ratio changed ──────────
       const hpRatio = (entity.hp > 0 && entity.maxHp > 0)
@@ -2339,8 +2332,8 @@ export class GameScene extends Phaser.Scene {
     // Position nickname + optional party label
     const myState = this.room.state.players.get(this.mySessionId);
     const localPartyName = myState?.partyName ?? "";
-    const lx = Math.round(this.localSprite.x);
-    const ly = Math.round(this.localSprite.y);
+    const lx = this.localSprite.x;
+    const ly = this.localSprite.y;
     if (localPartyName && this.localPartyLabel) {
       this.localLabel.setPosition(lx, ly - 54);
       this.localPartyLabel
@@ -2453,8 +2446,8 @@ export class GameScene extends Phaser.Scene {
       // Position nickname and optional party name label
       const rState = this.room.state.players.get(sessionId);
       const remotePartyName = rState?.partyName ?? "";
-      const rx = Math.round(sprite.x);
-      const ry = Math.round(sprite.y);
+      const rx = sprite.x;
+      const ry = sprite.y;
       if (remotePartyName && entity.partyLabel) {
         label.setPosition(rx, ry - 54);
         entity.partyLabel
