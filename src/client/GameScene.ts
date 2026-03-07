@@ -806,6 +806,10 @@ export class GameScene extends Phaser.Scene {
     this.equipmentUI.toggle();
   }
 
+  public toggleWorldMap(): void {
+    this.worldMapUI?.toggle();
+  }
+
   public toggleHelpUI(): void {
     this.shopUI.close(); this.healerShopUI.close(); this.statsUI.close(); this.equipmentUI.close();
     this.helpUI.toggle();

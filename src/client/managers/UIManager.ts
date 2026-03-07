@@ -87,6 +87,18 @@ export class UIManager {
   private equipBtnLabel!: Phaser.GameObjects.Text;
   private equipBtnHit!:   Phaser.GameObjects.Rectangle;
 
+  // ── Collapsible tray (World Map + Toggle arrow) ───────────────────────────
+  private panelOpen     = false;
+  private panelProgress = 0;   // 0 = fully closed, 1 = fully open
+
+  private worldMapBtnBg!:    Phaser.GameObjects.Graphics;
+  private worldMapBtnLabel!: Phaser.GameObjects.Text;
+  private worldMapBtnHit!:   Phaser.GameObjects.Rectangle;
+
+  private toggleBtnBg!:    Phaser.GameObjects.Graphics;
+  private toggleBtnLabel!: Phaser.GameObjects.Text;
+  private toggleBtnHit!:   Phaser.GameObjects.Rectangle;
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
   }
@@ -761,6 +773,7 @@ export class UIManager {
     this.statsBtnHit = this.scene.add.rectangle(0, 0, R * 2, R * 2, 0x000000, 0)
       .setScrollFactor(0).setDepth(D + 3)
       .setInteractive({ useHandCursor: true }) as Phaser.GameObjects.Rectangle;
+    this.statsBtnHit.disableInteractive();
     this.statsBtnHit.on("pointerdown", () => {
       this.gs.ignoreNextMapClick = true;
       this.gs.toggleStatsUI();
@@ -776,9 +789,47 @@ export class UIManager {
     this.equipBtnHit = this.scene.add.rectangle(0, 0, R * 2, R * 2, 0x000000, 0)
       .setScrollFactor(0).setDepth(D + 3)
       .setInteractive({ useHandCursor: true }) as Phaser.GameObjects.Rectangle;
+    this.equipBtnHit.disableInteractive();
     this.equipBtnHit.on("pointerdown", () => {
       this.gs.ignoreNextMapClick = true;
       this.gs.toggleEquipmentUI();
+    });
+
+    // ── World Map button (M) ──────────────────────────────────────────────────
+    this.worldMapBtnBg    = this.scene.add.graphics().setScrollFactor(0).setDepth(D);
+    this.worldMapBtnLabel = this.scene.add.text(0, 0, "M", {
+      fontSize: "18px", color: "#c9a227",
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
+    }).setScrollFactor(0).setDepth(D + 2).setOrigin(0.5, 0.5);
+    this.worldMapBtnHit = this.scene.add.rectangle(0, 0, R * 2, R * 2, 0x000000, 0)
+      .setScrollFactor(0).setDepth(D + 3) as Phaser.GameObjects.Rectangle;
+    this.worldMapBtnHit.disableInteractive();
+    this.worldMapBtnHit.on("pointerdown", () => {
+      this.gs.ignoreNextMapClick = true;
+      this.gs.toggleWorldMap();
+    });
+
+    // ── Toggle arrow button (always visible) ─────────────────────────────────
+    this.toggleBtnBg    = this.scene.add.graphics().setScrollFactor(0).setDepth(D);
+    this.toggleBtnLabel = this.scene.add.text(0, 0, "▲", {
+      fontSize: "16px", color: "#c9a227",
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
+    }).setScrollFactor(0).setDepth(D + 2).setOrigin(0.5, 0.5);
+    this.toggleBtnHit = this.scene.add.rectangle(0, 0, R * 2, R * 2, 0x000000, 0)
+      .setScrollFactor(0).setDepth(D + 3)
+      .setInteractive({ useHandCursor: true }) as Phaser.GameObjects.Rectangle;
+    this.toggleBtnHit.on("pointerdown", () => {
+      this.gs.ignoreNextMapClick = true;
+      this.panelOpen = !this.panelOpen;
+      if (this.panelOpen) {
+        this.statsBtnHit.setInteractive({ useHandCursor: true });
+        this.equipBtnHit.setInteractive({ useHandCursor: true });
+        this.worldMapBtnHit.setInteractive({ useHandCursor: true });
+      } else {
+        this.statsBtnHit.disableInteractive();
+        this.equipBtnHit.disableInteractive();
+        this.worldMapBtnHit.disableInteractive();
+      }
     });
   }
 
@@ -828,29 +879,63 @@ export class UIManager {
       .lineStyle(2, borderColor, 1)
       .strokeCircle(cx, cy, R);
 
-    const cy_stats = cy - (R * 2 + 10);
-    const cy_equip = cy - (R * 4 + 20);
+    // ── Animate tray panel ────────────────────────────────────────────────────
+    const dt = this.scene.game.loop.delta / 1000;
+    const speed = 10;
+    this.panelProgress = this.panelOpen
+      ? Math.min(1, this.panelProgress + speed * dt)
+      : Math.max(0, this.panelProgress - speed * dt);
+    // Smoothstep ease
+    const t = this.panelProgress * this.panelProgress * (3 - 2 * this.panelProgress);
 
+    const cy_toggle = cy - (R * 2 + 10);
+    const cy_stats  = cy - (R * 4 + 20);
+    const cy_equip  = cy - (R * 6 + 30);
+    const cy_wmap   = cy - (R * 8 + 40);
+
+    // Secondary buttons slide from toggle slot → their target slot
+    const statsY = cy_toggle + (cy_stats - cy_toggle) * t;
+    const equipY = cy_toggle + (cy_equip - cy_toggle) * t;
+    const wmapY  = cy_toggle + (cy_wmap  - cy_toggle) * t;
+
+    // ── Stats button ──────────────────────────────────────────────────────────
     this.statsBtnBg.clear()
-      .fillStyle(0x111111, 0.85).fillCircle(cx, cy_stats, R)
-      .lineStyle(2, 0xbbaa44, 1).strokeCircle(cx, cy_stats, R);
-    this.statsBtnLabel.setPosition(cx, cy_stats);
-    this.statsBtnHit.setPosition(cx, cy_stats);
+      .fillStyle(0x111111, 0.85 * t).fillCircle(cx, statsY, R)
+      .lineStyle(2, 0xbbaa44, t).strokeCircle(cx, statsY, R);
+    this.statsBtnLabel.setPosition(cx, statsY).setAlpha(t);
+    this.statsBtnHit.setPosition(cx, statsY);
 
     const myState = this.gs.room?.state?.players?.get(this.gs.mySessionId);
     const pts = (myState?.statPoints as number) ?? 0;
-    if (pts > 0) {
+    if (pts > 0 && t > 0.01) {
       this.statsBtnDot.setVisible(true).clear()
-        .fillStyle(0xff2222, 1).fillCircle(cx + R - 4, cy_stats - R + 4, 5);
+        .fillStyle(0xff2222, t).fillCircle(cx + R - 4, statsY - R + 4, 5);
     } else {
       this.statsBtnDot.setVisible(false);
     }
 
+    // ── Equipment button ──────────────────────────────────────────────────────
     this.equipBtnBg.clear()
-      .fillStyle(0x111111, 0.85).fillCircle(cx, cy_equip, R)
-      .lineStyle(2, 0xbbaa44, 1).strokeCircle(cx, cy_equip, R);
-    this.equipBtnLabel.setPosition(cx, cy_equip);
-    this.equipBtnHit.setPosition(cx, cy_equip);
+      .fillStyle(0x111111, 0.85 * t).fillCircle(cx, equipY, R)
+      .lineStyle(2, 0xbbaa44, t).strokeCircle(cx, equipY, R);
+    this.equipBtnLabel.setPosition(cx, equipY).setAlpha(t);
+    this.equipBtnHit.setPosition(cx, equipY);
+
+    // ── World Map button ──────────────────────────────────────────────────────
+    this.worldMapBtnBg.clear()
+      .fillStyle(0x111111, 0.85 * t).fillCircle(cx, wmapY, R)
+      .lineStyle(2, 0xbbaa44, t).strokeCircle(cx, wmapY, R);
+    this.worldMapBtnLabel.setPosition(cx, wmapY).setAlpha(t);
+    this.worldMapBtnHit.setPosition(cx, wmapY);
+
+    // ── Toggle arrow button ───────────────────────────────────────────────────
+    this.toggleBtnBg.clear()
+      .fillStyle(0x111111, 0.85).fillCircle(cx, cy_toggle, R)
+      .lineStyle(2, 0xbbaa44, 1).strokeCircle(cx, cy_toggle, R);
+    this.toggleBtnLabel
+      .setText(this.panelOpen || t >= 0.5 ? "▼" : "▲")
+      .setPosition(cx, cy_toggle);
+    this.toggleBtnHit.setPosition(cx, cy_toggle);
   }
 
   // ── Session timer display ────────────────────────────────────────────────────
