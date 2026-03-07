@@ -1633,6 +1633,27 @@ export class GameRoom extends Room<GameState> {
       });
       if (!found) sendPrivate(`Player "${targetNick}" not found.`);
 
+    } else if (command === "/gold_all") {
+      const amount = parseInt(parts[1] ?? "", 10);
+      if (isNaN(amount) || amount <= 0) { sendPrivate("Usage: /gold_all {amount}"); return; }
+
+      let count = 0;
+      this.state.players.forEach((p, sid) => {
+        if (!p.isGM) {
+          p.gold += amount;
+          const targetClient = this.clients.find((c: Client) => c.sessionId === sid);
+          if (targetClient) {
+            targetClient.send("chat", {
+              sessionId: "server",
+              nickname:  "Server",
+              message:   `You received ${amount} gold from the Game Master.`,
+            });
+          }
+          count++;
+        }
+      });
+      sendPrivate(`Gave ${amount} gold to ${count} players on this map.`);
+
     } else if (command === "/unstuck") {
       const targetNick = parts.slice(1).join(" ");
       if (!targetNick) { sendPrivate("Usage: /unstuck {nickname}"); return; }
@@ -1686,6 +1707,25 @@ export class GameRoom extends Room<GameState> {
       } else {
         sendPrivate(`Player "${targetNick}" has been summoned.`);
       }
+
+    } else if (command === "/summon_all") {
+      let count = 0;
+      this.state.players.forEach((p, sid) => {
+        if (!p.isGM) {
+          const offsetX = (Math.random() - 0.5) * 200;
+          const offsetY = (Math.random() - 0.5) * 200;
+          const targetClient = this.clients.find((c: Client) => c.sessionId === sid);
+          if (targetClient) {
+            targetClient.send("door_travel", {
+              targetMap: this.mapName,
+              spawnX: Math.max(32, Math.min(this.mapWidth  - 32, gmPlayer.x + offsetX)),
+              spawnY: Math.max(32, Math.min(this.mapHeight - 32, gmPlayer.y + offsetY)),
+            });
+            count++;
+          }
+        }
+      });
+      sendPrivate(`Summoned ${count} players to your location.`);
 
     } else if (command === "/teleport") {
       const targetNick = parts.slice(1).join(" ");
@@ -1742,7 +1782,7 @@ export class GameRoom extends Room<GameState> {
       }
 
     } else {
-      sendPrivate(`Unknown command: ${command}. Available: /spawn, /kick, /exp, /gold, /unstuck, /summon, /teleport, /time`);
+      sendPrivate(`Unknown command: ${command}. Available: /spawn, /kick, /exp, /gold, /gold_all, /unstuck, /summon, /summon_all, /teleport, /time`);
     }
   }
 

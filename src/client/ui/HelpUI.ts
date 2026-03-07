@@ -40,7 +40,7 @@ export class HelpUI {
     const { width, height } = s.scale;
     const isGM          = this.getPlayerState()?.isGM ?? false;
     const HEADER_H      = 40;
-    const CONTENT_H     = isGM ? 460 : 280;
+    const CONTENT_H     = isGM ? 496 : 280;
     const panelH        = HEADER_H + CONTENT_H;
 
     const { px, py } = this.getPanelOrigin(width, height, PANEL_W, panelH);
@@ -149,14 +149,16 @@ export class HelpUI {
       cy += 4;
       divider();
       section("GM Commands (Chat)");
-      row("/spawn",    "[mob] [amount] - Spawn enemies");
-      row("/kick",     "[name] - Kick player from server");
-      row("/exp",      "[amount] [name] - Give XP");
-      row("/gold",     "[amount] [name] - Give Gold");
-      row("/summon",   "[name] - Bring player to you");
-      row("/teleport", "[name] - Go to player");
-      row("/unstuck",  "[name] - Send player to spawn");
-      row("/time",     "[seconds] - Add/remove session time");
+      row("/spawn",      "[mob] [amount] - Spawn enemies");
+      row("/kick",       "[name] - Kick player from server");
+      row("/exp",        "[amount] [name] - Give XP");
+      row("/gold",       "[amount] [name] - Give Gold");
+      row("/gold_all",   "[amount] - Give Gold to all on map");
+      row("/summon",     "[name] - Bring player to you");
+      row("/summon_all", "- Bring all on map to you");
+      row("/teleport",   "[name] - Go to player");
+      row("/unstuck",    "[name] - Send player to spawn");
+      row("/time",       "[seconds] - Add/remove session time");
     }
   }
 
