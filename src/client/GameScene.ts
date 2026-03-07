@@ -94,6 +94,7 @@ export class GameScene extends Phaser.Scene {
   private currentDisplayName = "";
   private doors: DoorData[] = [];
   private doorSprites = new Map<string, Phaser.GameObjects.Image>();
+  private neutralZones: Array<{ x: number; y: number; width: number; height: number }> = [];
   private isTeleporting = false;
   private quizPads: Phaser.GameObjects.Image[] = [];
   private quizPadLabels: Phaser.GameObjects.Text[] = [];
@@ -1291,6 +1292,23 @@ export class GameScene extends Phaser.Scene {
     const localX = this.localSprite.x;
     const localY = this.localSprite.y;
 
+    // 0. Neutral zones — drawn first so they sit behind all entities
+    this.minimapDots.fillStyle(0x2a4a7a, 1);
+    for (const zone of this.neutralZones) {
+      const ix  = Math.max(zone.x, localX - VIEW_RADIUS);
+      const iy  = Math.max(zone.y, localY - VIEW_RADIUS);
+      const ix2 = Math.min(zone.x + zone.width,  localX + VIEW_RADIUS);
+      const iy2 = Math.min(zone.y + zone.height, localY + VIEW_RADIUS);
+      if (ix < ix2 && iy < iy2) {
+        this.minimapDots.fillRect(
+          mmCenterX + (ix  - localX) * MINIMAP_SCALE,
+          mmCenterY + (iy  - localY) * MINIMAP_SCALE,
+          (ix2 - ix) * MINIMAP_SCALE,
+          (iy2 - iy) * MINIMAP_SCALE,
+        );
+      }
+    }
+
     // 1. Enemies
     this.enemyMap.forEach((e) => {
       if (e.isDead) return;
@@ -1482,6 +1500,7 @@ export class GameScene extends Phaser.Scene {
     
     this.doors = [];
     this.doorSprites.clear();
+    this.neutralZones = [];
   }
 
   private applyMapData(data: MapDataMessage): void {
@@ -1519,6 +1538,7 @@ export class GameScene extends Phaser.Scene {
     this.placeNpcs(data.npcs ?? []);
     if (this.mobSystem) this.mobSystem.createMobs(data.mobs ?? []);
     this.placeDoors(data.doors ?? []);
+    this.neutralZones = data.neutralZones ?? [];
 
     this.currentDisplayName = data.displayName || this.currentMapName;
 

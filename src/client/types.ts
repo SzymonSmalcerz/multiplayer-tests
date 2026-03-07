@@ -75,6 +75,7 @@ export interface MapDataMessage {
   npcs:         NpcData[];
   mobs:         MobPlacement[];
   doors?:       DoorData[];
+  neutralZones?: { x: number; y: number; width: number; height: number }[];
 }
 
 /** Chat message payload */

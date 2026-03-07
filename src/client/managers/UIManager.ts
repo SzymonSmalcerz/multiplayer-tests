@@ -637,7 +637,13 @@ export class UIManager {
       top5 = sortLeaderboard(allPlayers).slice(0, 5);
     }
 
-    if (top5.length === 0 && this.leaderboardRows.some(r => r.visible)) return;
+    if (top5.length === 0) {
+      this.leaderboardBg.clear()
+        .fillStyle(0x111111, 0.85).fillRect(0, 0, MINIMAP_SIZE, 120)
+        .lineStyle(1, 0x334433, 1).strokeRect(0, 0, MINIMAP_SIZE, 120);
+      this.leaderboardRows.forEach(r => r.setVisible(false));
+      return;
+    }
 
     let currentY = lbY + 32;
     for (let i = 0; i < 5; i++) {

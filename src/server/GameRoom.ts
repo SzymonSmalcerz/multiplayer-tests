@@ -351,9 +351,10 @@ export class GameRoom extends Room<GameState> {
         spawnPoint:  this.spawnPoint,
         tiles:       this.tileData,
         objects:     this.objectData,
-        npcs:        this.npcData,
-        mobs:        this.mobData,
-        doors:       this.doorData,
+        npcs:         this.npcData,
+        mobs:         this.mobData,
+        doors:        this.doorData,
+        neutralZones: this.neutralZones,
       });
     });
 
