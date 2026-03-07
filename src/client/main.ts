@@ -6,7 +6,7 @@ import { GameScene } from "./GameScene";
 // offscreen canvas at resolution=1 by default. Patch the factory so every
 // scene.add.text() call automatically renders at the physical pixel density.
 const baseDpr = window.devicePixelRatio || 1;
-const bestRes = Math.max(baseDpr, 2);
+const bestRes = Math.ceil(Math.max(baseDpr, 2));
 
 const _origText = Phaser.GameObjects.GameObjectFactory.prototype.text;
 Phaser.GameObjects.GameObjectFactory.prototype.text = function (
@@ -15,7 +15,9 @@ Phaser.GameObjects.GameObjectFactory.prototype.text = function (
   text: string | string[],
   style?: Phaser.Types.GameObjects.Text.TextStyle
 ) {
-  return _origText.call(this, x, y, text, Object.assign({ resolution: bestRes }, style));
+  const t = _origText.call(this, x, y, text, style);
+  t.setResolution(bestRes);
+  return t;
 };
 
 const config: Phaser.Types.Core.GameConfig = {
