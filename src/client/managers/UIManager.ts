@@ -982,7 +982,7 @@ export class UIManager {
       onComplete: () => {
         bg.destroy();
         txt.destroy();
-        this.mapBannerObjects = [];
+        this.mapBannerObjects = this.mapBannerObjects.filter(o => o !== bg && o !== txt);
       },
     });
   }
