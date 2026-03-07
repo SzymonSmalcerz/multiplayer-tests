@@ -1677,6 +1677,7 @@ export class GameScene extends Phaser.Scene {
     // Track local player's own state changes
     this.room.state.players.onChange((player: RemotePlayer, sessionId: string) => {
       if (sessionId !== this.mySessionId) return;
+      if (!this.isCreated) return; // scene not ready yet — stale objects would crash
 
       // Position reconciliation
       if (this.localSprite) {
