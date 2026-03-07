@@ -5,18 +5,18 @@ import { GameScene } from "./GameScene";
 // Phaser 3.60+ ignores root `resolution`; Text objects render into their own
 // offscreen canvas at resolution=1 by default. Patch the factory so every
 // scene.add.text() call automatically renders at the physical pixel density.
-const _dpr = window.devicePixelRatio || 1;
-if (_dpr > 1) {
-  const _origText = Phaser.GameObjects.GameObjectFactory.prototype.text;
-  Phaser.GameObjects.GameObjectFactory.prototype.text = function (
-    x: number,
-    y: number,
-    text: string | string[],
-    style?: Phaser.Types.GameObjects.Text.TextStyle
-  ) {
-    return _origText.call(this, x, y, text, Object.assign({ resolution: _dpr }, style));
-  };
-}
+const baseDpr = window.devicePixelRatio || 1;
+const bestRes = Math.max(baseDpr, 2);
+
+const _origText = Phaser.GameObjects.GameObjectFactory.prototype.text;
+Phaser.GameObjects.GameObjectFactory.prototype.text = function (
+  x: number,
+  y: number,
+  text: string | string[],
+  style?: Phaser.Types.GameObjects.Text.TextStyle
+) {
+  return _origText.call(this, x, y, text, Object.assign({ resolution: bestRes }, style));
+};
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -25,6 +25,7 @@ const config: Phaser.Types.Core.GameConfig = {
   height: window.innerHeight,
   transparent: true,
   roundPixels: true,
+  resolution: bestRes,
   physics: {
     default: "arcade",
     arcade: { debug: false },
