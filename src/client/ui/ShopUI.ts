@@ -197,21 +197,21 @@ export class ShopUI {
       // Weapon name
       addS(s.add.text(px + 84, 0, item.label, {
         fontSize: "14px", color: "#ffdd88",
-        stroke: "#000000", strokeThickness: 2, resolution: 2,
+        stroke: "#000000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
       }).setScrollFactor(0).setDepth(D + 2) as unknown as Phaser.GameObjects.Image,
         rowBase + 16);
 
       // Damage
       addS(s.add.text(px + 84, 0, `Damage: ${item.damage}`, {
         fontSize: "12px", color: "#ff9988",
-        stroke: "#000000", strokeThickness: 2, resolution: 2,
+        stroke: "#000000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
       }).setScrollFactor(0).setDepth(D + 2) as unknown as Phaser.GameObjects.Image,
         rowBase + 38);
 
       // Cost
       addS(s.add.text(px + 84, 0, `Cost: ${item.cost} gold`, {
         fontSize: "12px", color: "#ffd700",
-        stroke: "#000000", strokeThickness: 2, resolution: 2,
+        stroke: "#000000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
       }).setScrollFactor(0).setDepth(D + 2) as unknown as Phaser.GameObjects.Image,
         rowBase + 57);
 
@@ -222,7 +222,7 @@ export class ShopUI {
       if (equipped) {
         addS(s.add.text(btnX, 0, "Equipped", {
           fontSize: "12px", color: "#44ff44",
-          stroke: "#000000", strokeThickness: 2, resolution: 2,
+          stroke: "#000000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
         }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(D + 2) as unknown as Phaser.GameObjects.Image,
           rowBase + btnRelY);
       } else {
@@ -232,7 +232,7 @@ export class ShopUI {
         const buyBtn = addS(s.add.text(btnX, 0, "Buy", {
           fontSize: "13px", color: txtColor, backgroundColor: bgColor,
           padding: { x: 16, y: 7 },
-          stroke: "#000000", strokeThickness: 1, resolution: 2,
+          stroke: "#000000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
         }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(D + 2) as unknown as Phaser.GameObjects.Image,
           rowBase + btnRelY);
 

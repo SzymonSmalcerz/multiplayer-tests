@@ -51,8 +51,8 @@ export function makeDraggable(
     };
 
     upHandler = (p: Phaser.Input.Pointer) => {
-      const nx  = Math.max(0, Math.min(width  - panelW, panelX + p.x - startX));
-      const ny  = Math.max(0, Math.min(height - panelH, panelY + p.y - startY));
+      const nx  = Math.round(Math.max(0, Math.min(width  - panelW, panelX + p.x - startX)));
+      const ny  = Math.round(Math.max(0, Math.min(height - panelH, panelY + p.y - startY)));
       const pos = { rightOffset: width - nx, topOffset: ny };
       localStorage.setItem(cfg.lsKey, JSON.stringify(pos));
       cleanup();

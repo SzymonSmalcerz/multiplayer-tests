@@ -535,7 +535,9 @@ export class UIManager {
       fontSize: "13px",
       color: "#ffcc44",
       stroke: "#000000",
-      strokeThickness: 2,
+      strokeThickness: 3,
+      fontStyle: "bold",
+      resolution: 2,
     })
     .setOrigin(0.5, 0)
     .setScrollFactor(0)
@@ -547,7 +549,9 @@ export class UIManager {
         fontSize: "11px",
         color: i === 0 ? "#ffcc44" : "#cccccc",
         stroke: "#000000",
-        strokeThickness: 1,
+        strokeThickness: 2,
+        fontStyle: "bold",
+        resolution: 2,
       })
       .setScrollFactor(0)
       .setDepth(D + 1)

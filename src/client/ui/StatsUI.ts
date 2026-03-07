@@ -133,7 +133,7 @@ export class StatsUI {
     const ptsColor = pts > 0 ? "#88ff88" : "#8a7040";
     add(s.add.text(px + 14, py + HEADER_H + 12, "Available Points:", {
       fontSize: "12px", color: "#c8a84b",
-      stroke: "#000", strokeThickness: 2, resolution: 2,
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
     }).setScrollFactor(0).setDepth(D + 2));
 
     this.pointsText = add(s.add.text(px + PANEL_W - 14, py + HEADER_H + 12, String(pts), {
@@ -179,7 +179,7 @@ export class StatsUI {
 
     add(s.add.text(px + 60, rowY + 28, desc, {
       fontSize: "10px", color: "#8a7040",
-      stroke: "#000", strokeThickness: 1, resolution: 2,
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
     }).setScrollFactor(0).setDepth(D + 2));
 
     if (stat === "vitality") this.vitValText = valText;

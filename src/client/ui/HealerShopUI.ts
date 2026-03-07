@@ -136,25 +136,25 @@ export class HealerShopUI {
     // Name
     add(s.add.text(px + 82, rowY + 10, "Health Potion", {
       fontSize: "14px", color: "#e8c96a",
-      stroke: "#000", strokeThickness: 2, resolution: 2,
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
     }).setScrollFactor(0).setDepth(D + 2));
 
     // Description
     add(s.add.text(px + 82, rowY + 30, "Heals 30% of HP", {
       fontSize: "11px", color: "#88ffcc",
-      stroke: "#000", strokeThickness: 1, resolution: 2,
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
     }).setScrollFactor(0).setDepth(D + 2));
 
     // Cost
     add(s.add.text(px + 82, rowY + 48, `Cost: 20 gold`, {
       fontSize: "11px", color: "#ffd700",
-      stroke: "#000", strokeThickness: 1, resolution: 2,
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
     }).setScrollFactor(0).setDepth(D + 2));
 
     // Owned
     this.ownedText = add(s.add.text(px + 82, rowY + 64, `Owned: ${owned}`, {
       fontSize: "11px", color: "#aaaaaa",
-      stroke: "#000", strokeThickness: 1, resolution: 2,
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
     }).setScrollFactor(0).setDepth(D + 2)) as Phaser.GameObjects.Text;
 
     // Buy button
@@ -164,7 +164,7 @@ export class HealerShopUI {
       color:           canAfford ? "#ffffff" : "#666666",
       backgroundColor: canAfford ? "#336633" : "#333333",
       padding: { x: 16, y: 7 },
-      stroke: "#000", strokeThickness: 1, resolution: 2,
+      stroke: "#000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
     }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(D + 2)) as Phaser.GameObjects.Text;
 
     if (canAfford) {

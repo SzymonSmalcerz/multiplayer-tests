@@ -123,7 +123,7 @@ export class HelpUI {
       }).setScrollFactor(0).setDepth(D + 1));
       add(s.add.text(COL_DESC, cy, desc, {
         fontSize: "11px", color: "#e8d5a0",
-        stroke: "#000000", strokeThickness: 2, resolution: 2,
+        stroke: "#000000", strokeThickness: 2, resolution: 2, fontStyle: "bold",
       }).setScrollFactor(0).setDepth(D + 1));
       cy += ROW_H;
     };

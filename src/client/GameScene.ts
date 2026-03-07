@@ -3051,14 +3051,14 @@ export class GameScene extends Phaser.Scene {
     this.fitNpcSprite(sprite);
     const labelX = traderX + sprite.displayWidth / 2;
 
-    const nameLabel = this.add.text(labelX, traderY - 40, "Trader", {
+    const nameLabel = this.add.text(Math.round(labelX), Math.round(traderY - 40), "Trader", {
       fontSize: "13px", color: "#ffd700",
-      stroke: "#000000", strokeThickness: 3, resolution: 2,
+      stroke: "#000000", strokeThickness: 3, resolution: 2, fontStyle: "bold",
     }).setOrigin(0.5, 1).setDepth(depth + 1);
 
-    const tradeLabel = this.add.text(labelX, traderY - 54, "[click to trade]", {
+    const tradeLabel = this.add.text(Math.round(labelX), Math.round(traderY - 54), "[click to trade]", {
       fontSize: "10px", color: "#aaaaaa",
-      stroke: "#000000", strokeThickness: 2, resolution: 2,
+      stroke: "#000000", strokeThickness: 3, resolution: 2, fontStyle: "bold",
     }).setOrigin(0.5, 1).setDepth(depth + 1);
 
     this.mapVisualsGroup.add(sprite);
@@ -3086,14 +3086,14 @@ export class GameScene extends Phaser.Scene {
     this.fitNpcSprite(sprite);
     const labelX = healerX + sprite.displayWidth / 2;
 
-    const nameLabel = this.add.text(labelX, healerY - 40, "Healer", {
+    const nameLabel = this.add.text(Math.round(labelX), Math.round(healerY - 40), "Healer", {
       fontSize: "13px", color: "#88ffcc",
-      stroke: "#000000", strokeThickness: 3, resolution: 2,
+      stroke: "#000000", strokeThickness: 3, resolution: 2, fontStyle: "bold",
     }).setOrigin(0.5, 1).setDepth(depth + 1);
 
-    const tradeLabel = this.add.text(labelX, healerY - 54, "[click to trade]", {
+    const tradeLabel = this.add.text(Math.round(labelX), Math.round(healerY - 54), "[click to trade]", {
       fontSize: "10px", color: "#aaaaaa",
-      stroke: "#000000", strokeThickness: 2, resolution: 2,
+      stroke: "#000000", strokeThickness: 3, resolution: 2, fontStyle: "bold",
     }).setOrigin(0.5, 1).setDepth(depth + 1);
 
     this.mapVisualsGroup.add(sprite);
