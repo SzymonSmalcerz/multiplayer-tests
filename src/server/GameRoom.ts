@@ -139,6 +139,7 @@ export class GameRoom extends Room<GameState> {
   maxClients = 50;
 
   private mapName: string = "m1";
+  private displayName: string = "";
   private mapWidth:  number = 2000;
   private mapHeight: number = 2000;
   private objectData: Array<{ type: string; x: number; y: number }> = [];
@@ -228,6 +229,7 @@ export class GameRoom extends Room<GameState> {
     const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
       mapWidth?:     number;
       mapHeight?:    number;
+      displayName?:  string;
       defaultTile?:  string;
       spawnPoint?:   { x: number; y: number };
       tiles?:        Array<{ type: string; x: number; y: number }>;
@@ -254,6 +256,7 @@ export class GameRoom extends Room<GameState> {
     this.doorData     = mapJson.doors ?? [];
     this.defaultTile  = mapJson.defaultTile ?? "grass_basic";
     this.spawnPoint   = mapJson.spawnPoint   ?? { x: 100, y: 100 };
+    this.displayName  = mapJson.displayName || this.mapName;
 
     // ── Spawn enemies from map definition (or fall back to random placement) ──
     const rawEnemies = mapJson.enemies;
@@ -343,6 +346,7 @@ export class GameRoom extends Room<GameState> {
       client.send("map_data", {
         mapWidth:    this.mapWidth,
         mapHeight:   this.mapHeight,
+        displayName: this.displayName,
         defaultTile: this.defaultTile,
         spawnPoint:  this.spawnPoint,
         tiles:       this.tileData,

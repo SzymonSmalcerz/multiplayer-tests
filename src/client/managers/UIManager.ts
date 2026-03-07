@@ -906,4 +906,84 @@ export class UIManager {
     else if (secondsLeft <= 120) color = "#ff8800";
     this.timerText.setColor(color);
   }
+
+  // ── Map Cinematic Banner ──────────────────────────────────────────────
+  private mapBannerObjects: Phaser.GameObjects.GameObject[] = [];
+
+  showMapBanner(rawName: string): void {
+    // Destroy any previous banner (fast map transitions)
+    for (const obj of this.mapBannerObjects) obj.destroy();
+    this.mapBannerObjects = [];
+
+    // Format: "orc_town" → "Orc Town"
+    const displayName = rawName
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, l => l.toUpperCase());
+
+    const cam  = this.scene.cameras.main;
+    const w    = cam.width;
+    const isMobile = w < 500;
+
+    const bannerW  = Math.min(w * 0.82, 420);
+    const bannerH  = isMobile ? 44 : 58;
+    const centerY  = 88;
+    const DEPTH    = 999_990;
+
+    // Background — dark fill + gold border
+    const bg = this.scene.add.graphics()
+      .setScrollFactor(0)
+      .setDepth(DEPTH)
+      .setAlpha(0);
+
+    const bx = w / 2 - bannerW / 2;
+    const by = centerY - bannerH / 2;
+
+    bg.fillStyle(0x1a1208, 0.90);
+    bg.fillRoundedRect(bx, by, bannerW, bannerH, 8);
+    bg.lineStyle(2, 0xc9a227, 1.0);
+    bg.strokeRoundedRect(bx, by, bannerW, bannerH, 8);
+    bg.lineStyle(1, 0xc9a227, 0.18);
+    bg.strokeRoundedRect(bx + 3, by + 3, bannerW - 6, bannerH - 6, 6);
+
+    // Text — gold with torch-glow shadow
+    const txt = this.scene.add.text(
+      w / 2, centerY,
+      `\u2726  ${displayName}  \u2726`,
+      {
+        fontFamily: "'Cinzel Decorative', serif",
+        fontSize:   isMobile ? "16px" : "22px",
+        color:      "#f0c060",
+        stroke:     "#1a0e00",
+        strokeThickness: 4,
+        shadow: {
+          offsetX: 0, offsetY: 0,
+          color:   "#c9a227",
+          blur:    18,
+          fill:    true,
+        },
+        resolution: 2,
+      }
+    )
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH + 1)
+      .setAlpha(0);
+
+    this.mapBannerObjects.push(bg, txt);
+
+    // Tween: 0.5s fade-in → 2s hold → 0.5s fade-out
+    this.scene.tweens.add({
+      targets:  [bg, txt],
+      alpha:    1,
+      duration: 500,
+      hold:     2000,
+      yoyo:     true,
+      ease:     "Sine.easeInOut",
+      onComplete: () => {
+        bg.destroy();
+        txt.destroy();
+        this.mapBannerObjects = [];
+      },
+    });
+  }
 }

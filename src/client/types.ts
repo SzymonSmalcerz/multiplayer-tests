@@ -67,6 +67,7 @@ export interface DoorData {
 export interface MapDataMessage {
   mapWidth:     number;
   mapHeight:    number;
+  displayName?: string;
   defaultTile?: string;
   spawnPoint?:  { x: number; y: number };
   tiles?:       TilePlacement[];

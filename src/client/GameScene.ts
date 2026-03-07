@@ -1480,6 +1480,11 @@ export class GameScene extends Phaser.Scene {
     this.placeNpcs(data.npcs ?? []);
     if (this.mobSystem) this.mobSystem.createMobs(data.mobs ?? []);
     this.placeDoors(data.doors ?? []);
+
+    // Cinematic map name banner (skip waiting area — no meaningful name)
+    if (this.currentMapName !== "waitingArea") {
+      this.ui.showMapBanner(data.displayName || this.currentMapName);
+    }
   }
 
   private setupRoomListeners(): void {
