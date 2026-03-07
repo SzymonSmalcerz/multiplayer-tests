@@ -186,6 +186,24 @@ describe("findPath", () => {
     expect(path).toBeNull();
   });
 
+  it("returns null when the start cell is blocked", () => {
+    // 3×3 grid, start cell (0,0) is a wall
+    const grid = new Uint8Array([1, 0, 0,  0, 0, 0,  0, 0, 0]);
+    const result = findPath(grid, 3, 3, CELL, 0, 0, 20, 20);
+    expect(result).toBeNull();
+  });
+
+  it("returns path to closest reachable cell when destination is surrounded by walls", () => {
+    // 5×5 grid with right column and bottom row walled off
+    const grid = new Uint8Array(25).fill(0);
+    for (let r = 0; r < 5; r++) grid[r * 5 + 4] = 1;
+    for (let c = 0; c < 5; c++) grid[4 * 5 + c] = 1;
+    const result = findPath(grid, 5, 5, CELL, 5, 5, 45, 45);
+    // Can't reach (4,4) but should return a partial path (not null, not empty)
+    expect(result).not.toBeNull();
+    expect(result!.length).toBeGreaterThan(0);
+  });
+
   it("waypoints are ordered from start to destination", () => {
     const grid = clearGrid(10, 10);
     // straight right — x should be non-decreasing
@@ -213,5 +231,11 @@ describe("XP Math", () => {
 
   it("getLevelAndXpFromTotal(0) gives level 1 with 0 XP", () => {
     expect(getLevelAndXpFromTotal(0)).toEqual({ level: 1, xp: 0 });
+  });
+
+  it("getLevelAndXpFromTotal returns level 1 with 0 xp for negative input", () => {
+    const result = getLevelAndXpFromTotal(-500);
+    expect(result.level).toBe(1);
+    expect(result.xp).toBe(0);
   });
 });

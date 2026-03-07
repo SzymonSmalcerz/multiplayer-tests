@@ -148,6 +148,10 @@ export class GameScene extends Phaser.Scene {
   private chatInput!: HTMLInputElement;
   private chatDisplay!: HTMLElement;
   private isTyping = false;
+  private chatKeydownListener: ((e: KeyboardEvent) => void) | null = null;
+
+  // Timers that need explicit cleanup
+  private leaderboardTimer: Phaser.Time.TimerEvent | null = null;
 
   // Static objects
   private staticObjectsGroup!: Phaser.Physics.Arcade.StaticGroup;
@@ -684,7 +688,7 @@ export class GameScene extends Phaser.Scene {
     this.ui.createWeaponHUD();
 
     // ── Leaderboard throttle (200 ms) ────────────────────────────────────────
-    this.time.addEvent({ delay: 200, loop: true, callback: () => {
+    this.leaderboardTimer = this.time.addEvent({ delay: 200, loop: true, callback: () => {
       if (this.currentMapName !== "waitingArea") this.ui.updateLeaderboard();
     }});
 
@@ -707,6 +711,8 @@ export class GameScene extends Phaser.Scene {
     // ── Mob system ───────────────────────────────────────────────────────────
     this.mobSystem = new MobSystem(this);
     this.events.once("shutdown", () => {
+      this.leaderboardTimer?.remove(false);
+      if (this.quizResultTimer) { clearTimeout(this.quizResultTimer); this.quizResultTimer = null; }
       this.mobSystem.destroy();
       this.scale.off("resize", this.recalcCameraBounds, this);
     });
@@ -870,15 +876,14 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard.clearCaptures();
     }
 
+    if (this.chatKeydownListener) {
+      this.chatInput.removeEventListener("keydown", this.chatKeydownListener);
+    }
     const onEnter = (e: KeyboardEvent) => {
-      if (e.key === "Enter") {
-        this.stopTyping(true);
-        this.chatInput.removeEventListener("keydown", onEnter);
-      } else if (e.key === "Escape") {
-        this.stopTyping(false);
-        this.chatInput.removeEventListener("keydown", onEnter);
-      }
+      if (e.key === "Enter") { this.stopTyping(true); }
+      else if (e.key === "Escape") { this.stopTyping(false); }
     };
+    this.chatKeydownListener = onEnter;
     this.chatInput.addEventListener("keydown", onEnter);
   }
 
@@ -905,6 +910,10 @@ export class GameScene extends Phaser.Scene {
         Phaser.Input.Keyboard.KeyCodes.LEFT,
         Phaser.Input.Keyboard.KeyCodes.RIGHT,
       ]);
+    }
+    if (this.chatKeydownListener) {
+      this.chatInput.removeEventListener("keydown", this.chatKeydownListener);
+      this.chatKeydownListener = null;
     }
   }
 
@@ -1084,15 +1093,12 @@ export class GameScene extends Phaser.Scene {
       const ctrl = document.getElementById("quiz-gm-controls");
       if (ctrl) ctrl.style.display = "block";
 
-      document.getElementById("btn-start-quiz")?.addEventListener("click", () => {
-        this.room.send("gm_start_quiz");
-      });
-      document.getElementById("btn-next-question")?.addEventListener("click", () => {
-        this.room.send("gm_next_question");
-      });
-      document.getElementById("btn-end-quiz")?.addEventListener("click", () => {
-        this.room.send("gm_end_quiz");
-      });
+      const startBtn = document.getElementById("btn-start-quiz") as HTMLButtonElement | null;
+      const nextBtn  = document.getElementById("btn-next-question") as HTMLButtonElement | null;
+      const endBtn   = document.getElementById("btn-end-quiz") as HTMLButtonElement | null;
+      if (startBtn) startBtn.onclick = () => this.room.send("gm_start_quiz");
+      if (nextBtn)  nextBtn.onclick  = () => this.room.send("gm_next_question");
+      if (endBtn)   endBtn.onclick   = () => this.room.send("gm_end_quiz");
     }
   }
 

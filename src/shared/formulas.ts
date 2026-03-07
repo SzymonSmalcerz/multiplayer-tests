@@ -17,6 +17,7 @@ export function getTotalXp(level: number, currentXp: number): number {
 }
 
 export function getLevelAndXpFromTotal(totalXp: number): { level: number; xp: number } {
+  if (totalXp < 0) return { level: 1, xp: 0 };
   let lvl = 1;
   let xp = totalXp;
   while (xp >= xpForNextLevel(lvl)) { xp -= xpForNextLevel(lvl); lvl++; }

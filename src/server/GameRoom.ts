@@ -225,8 +225,8 @@ export class GameRoom extends Room<GameState> {
     }
 
     // ── Load map JSON ─────────────────────────────────────────────────────────
-    const mapFile  = path.resolve(__dirname, `../../public/assets/maps/placement/${this.mapName}.json`);
-    const mapJson  = JSON.parse(fs.readFileSync(mapFile, "utf-8")) as {
+    const mapFile = path.resolve(__dirname, `../../public/assets/maps/placement/${this.mapName}.json`);
+    let mapJson: {
       mapWidth?:     number;
       mapHeight?:    number;
       displayName?:  string;
@@ -240,6 +240,12 @@ export class GameRoom extends Room<GameState> {
       neutralZones?: Array<{ x: number; y: number; width: number; height: number }>;
       doors?:        Array<{ id: string; x: number; y: number; targetMap: string; targetDoorId: string }>;
     };
+    try {
+      mapJson = JSON.parse(fs.readFileSync(mapFile, "utf-8"));
+    } catch (err) {
+      console.error(`[Room] Failed to load map "${this.mapName}":`, err);
+      throw new Error(`Map "${this.mapName}" could not be loaded.`);
+    }
     for (const obj of mapJson.objects) {
       if (OBJECT_REGISTRY[obj.type]) {
         this.objectData.push({ type: obj.type, x: obj.x, y: obj.y });

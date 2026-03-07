@@ -63,7 +63,7 @@ export function findPath(
   const tc = Math.max(0, Math.min(cols - 1, Math.floor(toX   / cellSize)));
   const tr = Math.max(0, Math.min(rows - 1, Math.floor(toY   / cellSize)));
 
-  if (grid[tr * cols + tc]) return null;
+  if (grid[sr * cols + sc] || grid[tr * cols + tc]) return null;
 
   const start = sr * cols + sc;
   let   goal  = tr * cols + tc;
