@@ -2,12 +2,16 @@ import Phaser from "phaser";
 import { HomeScene } from "./HomeScene";
 import { GameScene } from "./GameScene";
 
-// Phaser 3.60+ ignores root `resolution`; Text objects render into their own
-// offscreen canvas at resolution=1 by default. Patch the factory so every
-// scene.add.text() call automatically renders at the physical pixel density.
-const baseDpr = window.devicePixelRatio || 1;
-const bestRes = Math.ceil(Math.max(baseDpr, 2));
+// Use the exact physical pixel ratio — no rounding, no floor.
+// Math.ceil() or a minimum of 2 causes a canvas size mismatch on fractional
+// displays (Android 2.625x, Windows 125%) which forces the browser to apply a
+// CSS blur over the entire canvas.
+const dpr = window.devicePixelRatio || 1;
 
+// Patch every scene.add.text() call:
+//   1. Strip any hardcoded `resolution` values baked into UI style configs so
+//      they don't override the device pixel ratio.
+//   2. Call setResolution() — the only API that works in Phaser 3.60+.
 const _origText = Phaser.GameObjects.GameObjectFactory.prototype.text;
 Phaser.GameObjects.GameObjectFactory.prototype.text = function (
   x: number,
@@ -15,8 +19,10 @@ Phaser.GameObjects.GameObjectFactory.prototype.text = function (
   text: string | string[],
   style?: Phaser.Types.GameObjects.Text.TextStyle
 ) {
-  const t = _origText.call(this, x, y, text, style);
-  t.setResolution(bestRes);
+  const cleanStyle = { ...style };
+  delete cleanStyle.resolution;
+  const t = _origText.call(this, x, y, text, cleanStyle);
+  t.setResolution(dpr);
   return t;
 };
 
@@ -26,8 +32,9 @@ const config: Phaser.Types.Core.GameConfig = {
   width: window.innerWidth,
   height: window.innerHeight,
   transparent: true,
-  roundPixels: true,
-  resolution: bestRes,
+  pixelArt: true,      // NEAREST filtering keeps pixel-art sprites crisp
+  roundPixels: false,  // must be false — true mangles text kerning on fractional DPR
+  resolution: dpr,     // exact hardware match prevents browser CSS blur
   physics: {
     default: "arcade",
     arcade: { debug: false },
@@ -36,7 +43,7 @@ const config: Phaser.Types.Core.GameConfig = {
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    autoDensity: true,
+    autoDensity: true,  // syncs CSS size with the high-res WebGL buffer
   },
 };
 
