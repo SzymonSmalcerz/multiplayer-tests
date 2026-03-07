@@ -175,8 +175,9 @@ export class GameScene extends Phaser.Scene {
   private localPartyLabel?: Phaser.GameObjects.Text;
 
   // Minimap
-  private minimapOpen         = false;
-  private pendingMinimapOpen  = false;
+  private minimapOpen             = true;
+  private pendingMinimapOpen      = true;
+  public  pendingLeaderboardOpen  = true;
   private minimapIcon!:       Phaser.GameObjects.Image;
   private minimapBg!:         Phaser.GameObjects.Graphics;
   private minimapDots!:       Phaser.GameObjects.Graphics;
@@ -259,7 +260,8 @@ export class GameScene extends Phaser.Scene {
     this.isSessionEnded       = false;
     this.isCreated            = false;
     this.sessionTimerEndTime  = data.sessionTimerEndTime ?? 0;
-    this.pendingMinimapOpen   = data.minimapOpen ?? false;
+    this.pendingMinimapOpen      = data.minimapOpen    ?? true;
+    this.pendingLeaderboardOpen  = data.leaderboardOpen ?? true;
     this.localLevel       = 0;
     this.localPotions     = 0;
     this.localIsDead      = false;
@@ -1214,8 +1216,10 @@ export class GameScene extends Phaser.Scene {
     // Restore minimap visibility from before map travel
     if (this.pendingMinimapOpen) {
       this.openMinimap();
-      this.pendingMinimapOpen = false;
+    } else {
+      this.closeMinimap();
     }
+    this.pendingMinimapOpen = true;
   }
 
   private openMinimap(): void {
@@ -1225,6 +1229,7 @@ export class GameScene extends Phaser.Scene {
     this.minimapDots.setVisible(true);
     this.minimapCloseBtn.setVisible(true);
     this.minimapNorthLabel.setVisible(true);
+    this.ui.updateLeaderboard();
   }
 
   private closeMinimap(): void {
@@ -1234,6 +1239,7 @@ export class GameScene extends Phaser.Scene {
     this.minimapDots.setVisible(false);
     this.minimapCloseBtn.setVisible(false);
     this.minimapNorthLabel.setVisible(false);
+    this.ui.updateLeaderboard();
   }
 
   private toggleMinimap(): void {
@@ -2804,6 +2810,7 @@ export class GameScene extends Phaser.Scene {
         equipmentState: this.equipmentUI.exportState(),
         sessionTimerEndTime: this.sessionTimerEndTime || undefined,
         minimapOpen: this.minimapOpen,
+        leaderboardOpen: this.ui.leaderboardOpen,
       };
       
       // Clean up UI before switching

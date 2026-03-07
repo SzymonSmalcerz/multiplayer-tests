@@ -61,9 +61,14 @@ export class UIManager {
   }> = [];
 
   // ── Leaderboard ─────────────────────────────────────────────────────────────
-  private leaderboardBg!:     Phaser.GameObjects.Graphics;
-  private leaderboardHeader!: Phaser.GameObjects.Text;
-  private leaderboardRows:    Phaser.GameObjects.Text[] = [];
+  public  leaderboardOpen       = true;
+  private leaderboardBg!:       Phaser.GameObjects.Graphics;
+  private leaderboardHeader!:   Phaser.GameObjects.Text;
+  private leaderboardCloseBtn!: Phaser.GameObjects.Text;
+  private leaderboardRows:      Phaser.GameObjects.Text[] = [];
+  private leaderboardIconBg!:   Phaser.GameObjects.Graphics;
+  private leaderboardIconHit!:  Phaser.GameObjects.Rectangle;
+  private leaderboardIcon!:     Phaser.GameObjects.Text;
 
   // ── Death UI ────────────────────────────────────────────────────────────────
   private diedOverlay?:  Phaser.GameObjects.Rectangle;
@@ -527,62 +532,97 @@ export class UIManager {
 
   createLeaderboard(): void {
     const D = 99990;
-    const camW = this.scene.cameras.main.width;
-    const lbX = camW - 208;
-    const lbY = 216;
-
     this.leaderboardRows = [];
 
+    // ── Panel elements ────────────────────────────────────────────────────────
     this.leaderboardBg = this.scene.add.graphics()
-      .fillStyle(0x111111, 0.85)
-      .fillRect(0, 0, MINIMAP_SIZE, 120)
-      .lineStyle(1, 0x334433, 1)
-      .strokeRect(0, 0, MINIMAP_SIZE, 120)
-      .setScrollFactor(0)
-      .setDepth(D)
-      .setPosition(lbX, lbY)
-      .setVisible(true);
+      .setScrollFactor(0).setDepth(D).setVisible(true);
 
-    this.leaderboardHeader = this.scene.add.text(lbX + MINIMAP_SIZE / 2, lbY + 8, "🏆 Top Players", {
-      fontSize: "13px",
-      color: "#ffcc44",
-      stroke: "#000000",
-      strokeThickness: 3,
-      fontStyle: "bold",
-      resolution: 2,
-    })
-    .setOrigin(0.5, 0)
-    .setScrollFactor(0)
-    .setDepth(D + 1)
-    .setVisible(true);
+    this.leaderboardHeader = this.scene.add.text(0, 0, "🏆 Top Players", {
+      fontSize: "13px", color: "#ffcc44",
+      stroke: "#000000", strokeThickness: 3, fontStyle: "bold", resolution: 2,
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(D + 1).setVisible(true);
+
+    this.leaderboardCloseBtn = this.scene.add.text(0, 0, "×", {
+      fontSize: "20px", color: "#ffffff", stroke: "#000000", strokeThickness: 2, resolution: 2,
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(D + 2)
+      .setInteractive({ useHandCursor: true });
+
+    this.leaderboardCloseBtn.on("pointerover", () => this.leaderboardCloseBtn.setColor("#ff4444"));
+    this.leaderboardCloseBtn.on("pointerout",  () => this.leaderboardCloseBtn.setColor("#ffffff"));
+    this.leaderboardCloseBtn.on("pointerdown", () => {
+      this.gs.ignoreNextMapClick = true;
+      this.leaderboardOpen = false;
+      this.updateLeaderboard();
+    });
 
     for (let i = 0; i < 5; i++) {
-      const row = this.scene.add.text(lbX + 8, lbY + 32 + i * 16, "", {
-        fontSize: "11px",
-        color: i === 0 ? "#ffcc44" : "#cccccc",
-        stroke: "#000000",
-        strokeThickness: 2,
-        fontStyle: "bold",
-        resolution: 2,
-      })
-      .setScrollFactor(0)
-      .setDepth(D + 1)
-      .setVisible(true);
-
+      const row = this.scene.add.text(0, 0, "", {
+        fontSize: "11px", color: i === 0 ? "#ffcc44" : "#cccccc",
+        stroke: "#000000", strokeThickness: 2, fontStyle: "bold", resolution: 2,
+      }).setScrollFactor(0).setDepth(D + 1).setVisible(true);
       this.leaderboardRows.push(row);
     }
+
+    // ── Cup toggle icon (shown when leaderboard is closed) ────────────────────
+    this.leaderboardIconBg = this.scene.add.graphics().setScrollFactor(0).setDepth(D);
+
+    this.leaderboardIconHit = this.scene.add.rectangle(0, 0, 48, 48, 0x000000, 0)
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(D + 2)
+      .setInteractive({ useHandCursor: true }) as Phaser.GameObjects.Rectangle;
+
+    this.leaderboardIcon = this.scene.add.text(0, 0, "🏆", {
+      fontSize: "22px", resolution: 2,
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(D + 1);
+
+    this.leaderboardIconHit.on("pointerdown", () => {
+      this.gs.ignoreNextMapClick = true;
+      this.leaderboardOpen = true;
+      this.updateLeaderboard();
+    });
+    this.leaderboardIconHit.on("pointerover", () => this.leaderboardIconBg.setAlpha(0.8));
+    this.leaderboardIconHit.on("pointerout",  () => this.leaderboardIconBg.setAlpha(1));
+
+    // Restore open/closed state from map travel
+    this.leaderboardOpen = this.gs.pendingLeaderboardOpen ?? true;
   }
 
   updateLeaderboard(): void {
-    if (this.gs.currentMapName === "waitingArea") return; // quiz map leaderboard stays visible
+    if (this.gs.currentMapName === "waitingArea") return;
     if (!this.leaderboardBg || !this.leaderboardBg.active) return;
 
-    const camW = this.scene.cameras.main.width;
-    const lbX = camW - 208;
-    const lbY = this.gs.minimapOpen ? 216 : 64;
+    const camW  = this.scene.cameras.main.width;
+    const lbX   = camW - 208;
+    const lbY   = this.gs.minimapOpen ? 216 : 64;
+    const iconX = camW - 56;
 
-    this.leaderboardBg.setPosition(lbX, lbY);
-    this.leaderboardHeader.setPosition(lbX + MINIMAP_SIZE / 2, lbY + 8);
+    // Position cup icon (used when panel is closed)
+    this.leaderboardIconBg.clear()
+      .fillStyle(0x1a1208, 0.95)
+      .fillRoundedRect(iconX, lbY, 48, 48, 6)
+      .lineStyle(2, 0xc9a227, 1)
+      .strokeRoundedRect(iconX, lbY, 48, 48, 6);
+    this.leaderboardIconHit.setPosition(iconX, lbY);
+    this.leaderboardIcon.setPosition(iconX + 24, lbY + 24);
+
+    if (!this.leaderboardOpen) {
+      this.leaderboardBg.setVisible(false);
+      this.leaderboardHeader.setVisible(false);
+      this.leaderboardCloseBtn.setVisible(false);
+      this.leaderboardRows.forEach(r => r.setVisible(false));
+      this.leaderboardIconBg.setVisible(true);
+      this.leaderboardIconHit.setVisible(true);
+      this.leaderboardIcon.setVisible(true);
+      return;
+    }
+
+    this.leaderboardIconBg.setVisible(false);
+    this.leaderboardIconHit.setVisible(false);
+    this.leaderboardIcon.setVisible(false);
+
+    this.leaderboardBg.setVisible(true).setPosition(lbX, lbY);
+    this.leaderboardHeader.setVisible(true).setPosition(lbX + MINIMAP_SIZE / 2, lbY + 8);
+    this.leaderboardCloseBtn.setVisible(true).setPosition(camW - 16, lbY + 10);
 
     let top5: Array<{ nickname: string; level: number; xp: number; partyName: string }> = [];
     if (this.gs.globalLeaderboardData && this.gs.globalLeaderboardData.length > 0) {
@@ -597,45 +637,32 @@ export class UIManager {
       top5 = sortLeaderboard(allPlayers).slice(0, 5);
     }
 
-    if (top5.length === 0 && this.leaderboardRows.some(r => r.visible)) {
-      return;
-    }
+    if (top5.length === 0 && this.leaderboardRows.some(r => r.visible)) return;
 
     let currentY = lbY + 32;
-
     for (let i = 0; i < 5; i++) {
       const row = this.leaderboardRows[i];
       if (!row || !row.active) continue;
-
       if (i < top5.length) {
         row.setPosition(lbX + 8, currentY);
         const p = top5[i];
-        const partyTag = p.partyName ? ` [${p.partyName}]` : "";
+        const partyTag   = p.partyName ? ` [${p.partyName}]` : "";
         const rawContent = `${p.nickname}${partyTag} Lv.${p.level}`;
-
         let text = `${i + 1}. ${rawContent}`;
         if (rawContent.length > 20) {
           text = `${i + 1}. ${rawContent.slice(0, 20)}\n   ${rawContent.slice(20)}`;
         }
-
-        row.setText(text);
-        row.setVisible(true);
-
-        const h = row.height > 0 ? row.height : 18;
-        currentY += h + 4;
+        row.setText(text).setVisible(true);
+        currentY += (row.height > 0 ? row.height : 18) + 4;
       } else {
         row.setVisible(false);
       }
     }
 
     const totalHeight = Math.max(120, (currentY - lbY) + 4);
-    if (this.leaderboardBg && this.leaderboardBg.active) {
-      this.leaderboardBg.clear();
-      this.leaderboardBg.fillStyle(0x111111, 0.85);
-      this.leaderboardBg.fillRect(0, 0, MINIMAP_SIZE, totalHeight);
-      this.leaderboardBg.lineStyle(1, 0x334433, 1);
-      this.leaderboardBg.strokeRect(0, 0, MINIMAP_SIZE, totalHeight);
-    }
+    this.leaderboardBg.clear()
+      .fillStyle(0x111111, 0.85).fillRect(0, 0, MINIMAP_SIZE, totalHeight)
+      .lineStyle(1, 0x334433, 1).strokeRect(0, 0, MINIMAP_SIZE, totalHeight);
   }
 
   // ── Death UI ────────────────────────────────────────────────────────────────

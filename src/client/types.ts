@@ -142,6 +142,7 @@ export interface GameSceneData {
   equipmentState?: any;
   sessionTimerEndTime?: number;
   minimapOpen?: boolean;
+  leaderboardOpen?: boolean;
 }
 
 /** Represents one remote player entity in the GameScene */
