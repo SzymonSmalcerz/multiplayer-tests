@@ -222,6 +222,23 @@ app.post("/design/save", (req, res) => {
   });
 });
 
+// Save a minimap PNG rendered by the designer
+app.post("/design/save-minimap", (req, res) => {
+  const { name, imageBase64 } = req.body as { name?: string; imageBase64?: string };
+  if (!name || !/^[\w-]+$/.test(name)) { res.status(400).json({ error: "Invalid map name" }); return; }
+  if (!imageBase64)                     { res.status(400).json({ error: "Missing image data" }); return; }
+
+  const minimapDir = path.join(publicDir, "assets/maps/minimaps");
+  if (!fs.existsSync(minimapDir)) fs.mkdirSync(minimapDir, { recursive: true });
+
+  const base64   = imageBase64.replace(/^data:image\/png;base64,/, "");
+  const filePath = path.join(minimapDir, `${name}_minimap.png`);
+  fs.writeFile(filePath, Buffer.from(base64, "base64"), (err) => {
+    if (err) { res.status(500).json({ error: err.message }); return; }
+    res.json({ ok: true });
+  });
+});
+
 // Save a new enemy: write PNG + update enemies.json + hot-reload in-memory registry
 app.post("/design/save-enemy", (req, res) => {
   const body = req.body as {

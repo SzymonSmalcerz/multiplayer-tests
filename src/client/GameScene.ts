@@ -15,6 +15,7 @@ import { StatsUI } from "./ui/StatsUI";
 import { HealerShopUI } from "./ui/HealerShopUI";
 import { ActionBarUI } from "./ui/ActionBarUI";
 import { HelpUI } from "./ui/HelpUI";
+import { WorldMapUI } from "./ui/WorldMapUI";
 import { UIManager } from "./managers/UIManager";
 import { SKINS_TO_LOAD, getSkinForLevel, isTierBoundary, FRAME_W as FRAME_SIZE } from "./skins";
 import {
@@ -89,7 +90,8 @@ export class GameScene extends Phaser.Scene {
   private localPotions = 0;
 
   // Map / doors
-  private currentMapName = "m1";
+  private currentMapName    = "m1";
+  private currentDisplayName = "";
   private doors: DoorData[] = [];
   private doorSprites = new Map<string, Phaser.GameObjects.Image>();
   private isTeleporting = false;
@@ -184,6 +186,7 @@ export class GameScene extends Phaser.Scene {
   private keyM!:              Phaser.Input.Keyboard.Key;
   private keyH!:              Phaser.Input.Keyboard.Key;
   private helpUI!:            HelpUI;
+  private worldMapUI!:        WorldMapUI;
 
   // Current map dimensions — kept in sync so recalcCameraBounds() can read them
   private mapWidth  = 2000;
@@ -420,6 +423,14 @@ export class GameScene extends Phaser.Scene {
 
     // Quiz answer pad image (shared for all four pads)
     this.load.image("quiz_pad", "assets/maps/response.png");
+
+    // World map PNG — gracefully ignored if file doesn't exist
+    if (this.currentMapName !== "waitingArea" && this.currentMapName !== "quiz") {
+      this.load.image(
+        `${this.currentMapName}_minimap`,
+        `/assets/maps/minimaps/${this.currentMapName}_minimap.png`,
+      );
+    }
   }
 
   create(): void {
@@ -639,6 +650,22 @@ export class GameScene extends Phaser.Scene {
       () => { this.ignoreNextMapClick = true; },
     );
 
+    // ── World Map UI ──────────────────────────────────────────────────────────
+    this.worldMapUI = new WorldMapUI(
+      this,
+      () => {
+        const p = this.room?.state?.players?.get(this.mySessionId);
+        return p ? { x: p.x as number, y: p.y as number } : null;
+      },
+      () => ({
+        width:       this.mapWidth,
+        height:      this.mapHeight,
+        name:        this.currentMapName,
+        displayName: this.currentDisplayName,
+      }),
+      () => { this.ignoreNextMapClick = true; },
+    );
+
     // ── Healer Shop UI ────────────────────────────────────────────────────────
     this.healerShopUI = new HealerShopUI(
       this,
@@ -744,7 +771,7 @@ export class GameScene extends Phaser.Scene {
 
     this.keyM.on("down", () => {
       if (this.isTyping) return;
-      this.toggleMinimap();
+      this.worldMapUI?.toggle();
     });
 
     this.keyH.on("down", () => {
@@ -821,6 +848,7 @@ export class GameScene extends Phaser.Scene {
       this.equipmentUI?.close();
       this.statsUI?.close();
       this.helpUI?.close();
+      this.worldMapUI?.close();
     });
   }
 
@@ -927,6 +955,7 @@ export class GameScene extends Phaser.Scene {
     if (this.minimapOpen) {
       this.updateMinimap();
     }
+    this.worldMapUI?.update();
 
     this.ui.tickDeathTimer(delta);
     this.ui.updateWeaponHUD();
@@ -1481,9 +1510,11 @@ export class GameScene extends Phaser.Scene {
     if (this.mobSystem) this.mobSystem.createMobs(data.mobs ?? []);
     this.placeDoors(data.doors ?? []);
 
+    this.currentDisplayName = data.displayName || this.currentMapName;
+
     // Cinematic map name banner (skip waiting area — no meaningful name)
     if (this.currentMapName !== "waitingArea") {
-      this.ui.showMapBanner(data.displayName || this.currentMapName);
+      this.ui.showMapBanner(this.currentDisplayName);
     }
   }
 
@@ -2777,6 +2808,7 @@ export class GameScene extends Phaser.Scene {
       this.equipmentUI.close();
       this.statsUI.close();
       this.helpUI.close();
+      this.worldMapUI?.close();
 
       this.scene.start("GameScene", data);
     } catch (err) {

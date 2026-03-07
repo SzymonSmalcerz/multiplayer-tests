@@ -90,6 +90,7 @@ const displayNameInput = document.getElementById('display-name');
 const mapWidthInput    = document.getElementById('map-width');
 const mapHeightInput   = document.getElementById('map-height');
 const saveBtn       = document.getElementById('save-btn');
+const exportBtn     = document.getElementById('export-btn');
 const loadBtn       = document.getElementById('load-btn');
 const clearBtn      = document.getElementById('clear-btn');
 const hideObjectsCb = document.getElementById('hide-objects');
@@ -1994,6 +1995,114 @@ saveBtn.addEventListener('click', async () => {
     }
   } catch (err) {
     statusBar.textContent = `Save error: ${err.message}`;
+  }
+});
+
+// ── Export Minimap ─────────────────────────────────────────────────────────────
+exportBtn.addEventListener('click', async () => {
+  const name = mapNameInput.value.trim();
+  if (!name) { alert('Enter a map name first.'); return; }
+
+  statusBar.textContent = `Generating ${name}_minimap.png…`;
+
+  const SCALE = 1 / 7;
+  const expCanvas = document.createElement('canvas');
+  expCanvas.width  = Math.round(mapWidth  * SCALE);
+  expCanvas.height = Math.round(mapHeight * SCALE);
+  const exCtx = expCanvas.getContext('2d');
+  exCtx.scale(SCALE, SCALE);
+
+  // 1. Background tile
+  const bgImg = images['tile_' + defaultTile];
+  if (bgImg && bgImg.complete && bgImg.naturalWidth > 0) {
+    const tw = bgImg.naturalWidth, th = bgImg.naturalHeight;
+    for (let x = 0; x < mapWidth; x += tw)
+      for (let y = 0; y < mapHeight; y += th)
+        exCtx.drawImage(bgImg, x, y);
+  } else {
+    exCtx.fillStyle = '#4a6a3a';
+    exCtx.fillRect(0, 0, mapWidth, mapHeight);
+  }
+
+  // 2. Placed tiles
+  placedTiles.forEach(tile => {
+    const def = tileRegistry[tile.type];
+    const img = images['tile_' + tile.type];
+    if (def && img && img.complete) exCtx.drawImage(img, tile.x, tile.y, def.imageWidth, def.imageHeight);
+  });
+
+  // 3. Objects
+  placedObjects.forEach(obj => {
+    const def = registry[obj.type];
+    const img = images[obj.type];
+    if (def && img && img.complete) exCtx.drawImage(img, obj.x, obj.y, def.imageWidth, def.imageHeight);
+  });
+
+  // 4. NPCs
+  placedNpcs.forEach(npc => {
+    const img = images['npc_' + npc.type];
+    if (img && img.complete) exCtx.drawImage(img, npc.x, npc.y, img.naturalWidth, img.naturalHeight);
+  });
+
+  // 5. Doors — door image at 1:3 scale, snapped to nearest canvas edge
+  if (placedDoors.length > 0) {
+    const doorImg = images['door'];
+    const cw = expCanvas.width;
+    const ch = expCanvas.height;
+    const ICON_W = 32 / 3;
+    const ICON_H = 64 / 3;
+    const MARGIN = 2;
+
+    exCtx.save();
+    exCtx.setTransform(1, 0, 0, 1, 0, 0);  // reset 1:10 scale — draw in output px
+
+    placedDoors.forEach(door => {
+      const ox = door.x * SCALE;
+      const oy = door.y * SCALE;
+
+      const dists = [ox, cw - ox, oy, ch - oy];  // left, right, top, bottom
+      const minIdx = dists.indexOf(Math.min(...dists));
+
+      let ix, iy;
+      if (minIdx === 0) {          // left edge
+        ix = MARGIN;
+        iy = Math.max(MARGIN, Math.min(ch - ICON_H - MARGIN, oy - ICON_H / 2));
+      } else if (minIdx === 1) {   // right edge
+        ix = cw - ICON_W - MARGIN;
+        iy = Math.max(MARGIN, Math.min(ch - ICON_H - MARGIN, oy - ICON_H / 2));
+      } else if (minIdx === 2) {   // top edge
+        ix = Math.max(MARGIN, Math.min(cw - ICON_W - MARGIN, ox - ICON_W / 2));
+        iy = MARGIN;
+      } else {                     // bottom edge
+        ix = Math.max(MARGIN, Math.min(cw - ICON_W - MARGIN, ox - ICON_W / 2));
+        iy = ch - ICON_H - MARGIN;
+      }
+
+      if (doorImg && doorImg.complete && doorImg.naturalWidth > 0) {
+        try { exCtx.drawImage(doorImg, ix, iy, ICON_W, ICON_H); } catch (_) {}
+      } else {
+        exCtx.fillStyle = '#e0a030';
+        exCtx.fillRect(ix, iy, ICON_W, ICON_H);
+      }
+    });
+
+    exCtx.restore();
+    // Restore world scale for anything drawn after this
+    exCtx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  }
+
+  try {
+    const res  = await fetch('/design/save-minimap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, imageBase64: expCanvas.toDataURL('image/png') }),
+    });
+    const json = await res.json();
+    statusBar.textContent = json.ok
+      ? `✓ Exported ${name}_minimap.png (${expCanvas.width}×${expCanvas.height}px)`
+      : `Export failed: ${json.error}`;
+  } catch (err) {
+    statusBar.textContent = `Export error: ${err.message}`;
   }
 });
 
