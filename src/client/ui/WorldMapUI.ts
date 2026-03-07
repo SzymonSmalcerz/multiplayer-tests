@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { makeDraggable } from "./DragHelper";
 
-const D       = 200000;
+const D       = 210000;
 const LS_KEY  = "world_map_pos";
 const PADDING = 14;
 const HEADER_H = 38;
