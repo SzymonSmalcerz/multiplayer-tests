@@ -1,6 +1,7 @@
 {
   "mapWidth": 1995,
   "mapHeight": 2000,
+  "displayName": "m2",
   "defaultTile": "grass_basic",
   "spawnPoint": {
     "x": 1759,

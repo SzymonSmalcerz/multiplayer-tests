@@ -85,9 +85,10 @@ const canvas        = document.getElementById('map-canvas');
 const ctx           = canvas.getContext('2d');
 const sidebar       = document.getElementById('sidebar');
 const statusBar     = document.getElementById('status');
-const mapNameInput  = document.getElementById('map-name');
-const mapWidthInput = document.getElementById('map-width');
-const mapHeightInput= document.getElementById('map-height');
+const mapNameInput     = document.getElementById('map-name');
+const displayNameInput = document.getElementById('display-name');
+const mapWidthInput    = document.getElementById('map-width');
+const mapHeightInput   = document.getElementById('map-height');
 const saveBtn       = document.getElementById('save-btn');
 const loadBtn       = document.getElementById('load-btn');
 const clearBtn      = document.getElementById('clear-btn');
@@ -1975,7 +1976,8 @@ saveBtn.addEventListener('click', async () => {
     return;
   }
 
-  const data = { mapWidth, mapHeight, defaultTile, spawnPoint, tiles: placedTiles, objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies, neutralZones: placedNeutralZones, doors: placedDoors };
+  const displayName = displayNameInput.value.trim();
+  const data = { mapWidth, mapHeight, ...(displayName ? { displayName } : {}), defaultTile, spawnPoint, tiles: placedTiles, objects: placedObjects, npcs: placedNpcs, mobs: placedMobs, enemies: placedEnemies, neutralZones: placedNeutralZones, doors: placedDoors };
 
   statusBar.textContent = `Saving ${name}.json…`;
   try {
@@ -2013,6 +2015,7 @@ loadBtn.addEventListener('click', async () => {
     const data = await res.json();
     if (typeof data.mapWidth  === 'number') { mapWidth  = data.mapWidth;  mapWidthInput.value  = mapWidth; }
     if (typeof data.mapHeight === 'number') { mapHeight = data.mapHeight; mapHeightInput.value = mapHeight; }
+    displayNameInput.value = data.displayName || '';
     defaultTile        = data.defaultTile || 'grass_basic';
     spawnPoint         = (data.spawnPoint && typeof data.spawnPoint.x === 'number') ? data.spawnPoint : { x: 100, y: 100 };
     placedTiles        = Array.isArray(data.tiles)        ? data.tiles        : [];
