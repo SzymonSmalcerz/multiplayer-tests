@@ -346,6 +346,32 @@ export class GameRoom extends Room<GameState> {
         });
         return result;
       },
+      giveGoldFn: (nickname: string, amount: number) => {
+        let found = false;
+        this.state.players.forEach((p, sid) => {
+          if (p.nickname === nickname && !p.isGM && !found) {
+            p.gold += amount;
+            const c = this.clients.find((c: Client) => c.sessionId === sid);
+            if (c) c.send("chat", { sessionId: "server", nickname: "Server",
+              message: `You received ${amount} gold from the Game Master.` });
+            found = true;
+          }
+        });
+        return found;
+      },
+      broadcastGoldFn: (amount: number) => {
+        let count = 0;
+        this.state.players.forEach((p, sid) => {
+          if (!p.isGM) {
+            p.gold += amount;
+            const c = this.clients.find((c: Client) => c.sessionId === sid);
+            if (c) c.send("chat", { sessionId: "server", nickname: "Server",
+              message: `You received ${amount} gold from the Game Master.` });
+            count++;
+          }
+        });
+        return count;
+      },
     });
 
     this.onMessage("get_map", (client) => {
@@ -1637,28 +1663,15 @@ export class GameRoom extends Room<GameState> {
           found = true;
         }
       });
+      if (!found) found = globalBus.giveGoldToPlayer(this.passcode, targetNick, amount);
       if (!found) sendPrivate(`Player "${targetNick}" not found.`);
 
     } else if (command === "/gold_all") {
       const amount = parseInt(parts[1] ?? "", 10);
       if (isNaN(amount) || amount <= 0) { sendPrivate("Usage: /gold_all {amount}"); return; }
 
-      let count = 0;
-      this.state.players.forEach((p, sid) => {
-        if (!p.isGM) {
-          p.gold += amount;
-          const targetClient = this.clients.find((c: Client) => c.sessionId === sid);
-          if (targetClient) {
-            targetClient.send("chat", {
-              sessionId: "server",
-              nickname:  "Server",
-              message:   `You received ${amount} gold from the Game Master.`,
-            });
-          }
-          count++;
-        }
-      });
-      sendPrivate(`Gave ${amount} gold to ${count} players on this map.`);
+      const count = globalBus.giveGoldToAllInSession(this.passcode, amount);
+      sendPrivate(`Gave ${amount} gold to ${count} players across all maps.`);
 
     } else if (command === "/unstuck") {
       const targetNick = parts.slice(1).join(" ");
@@ -1715,22 +1728,18 @@ export class GameRoom extends Room<GameState> {
       }
 
     } else if (command === "/summon_all") {
+      const pids = globalBus.getSessionPlayerPids(this.passcode);
       let count = 0;
-      this.state.players.forEach((p, sid) => {
-        if (!p.isGM) {
-          const offsetX = (Math.random() - 0.5) * 200;
-          const offsetY = (Math.random() - 0.5) * 200;
-          const targetClient = this.clients.find((c: Client) => c.sessionId === sid);
-          if (targetClient) {
-            targetClient.send("door_travel", {
-              targetMap: this.mapName,
-              spawnX: Math.max(32, Math.min(this.mapWidth  - 32, gmPlayer.x + offsetX)),
-              spawnY: Math.max(32, Math.min(this.mapHeight - 32, gmPlayer.y + offsetY)),
-            });
-            count++;
-          }
-        }
-      });
+      for (const pid of pids) {
+        const offsetX = (Math.random() - 0.5) * 200;
+        const offsetY = (Math.random() - 0.5) * 200;
+        globalBus.sendToPlayer(this.passcode, pid, "door_travel", {
+          targetMap: this.mapName,
+          spawnX: Math.max(32, Math.min(this.mapWidth  - 32, gmPlayer.x + offsetX)),
+          spawnY: Math.max(32, Math.min(this.mapHeight - 32, gmPlayer.y + offsetY)),
+        });
+        count++;
+      }
       sendPrivate(`Summoned ${count} players to your location.`);
 
     } else if (command === "/teleport") {

@@ -68,6 +68,10 @@ interface RoomHandle {
   unstuckPlayerFn: (nickname: string) => boolean;
   /** Get position+mapName of a player by nickname. Returns undefined if not found. */
   getPlayerPositionFn: (nickname: string) => { x: number; y: number; mapName: string } | undefined;
+  /** Give gold to a specific player by nickname in this room. Returns true if found. */
+  giveGoldFn: (nickname: string, amount: number) => boolean;
+  /** Give gold to all non-GM players in this room. Returns count. */
+  broadcastGoldFn: (amount: number) => number;
 }
 
 class GlobalBus {
@@ -343,6 +347,30 @@ class GlobalBus {
       }
     }
     return undefined;
+  }
+
+  /** Give gold to a player by nickname across all rooms in the session. */
+  giveGoldToPlayer(passcode: string, nickname: string, amount: number): boolean {
+    for (const handle of this.rooms.values()) {
+      if (handle.passcode === passcode) {
+        if (handle.giveGoldFn(nickname, amount)) return true;
+      }
+    }
+    return false;
+  }
+
+  /** Give gold to all non-GM players across all rooms in the session. Returns total count. */
+  giveGoldToAllInSession(passcode: string, amount: number): number {
+    let count = 0;
+    for (const handle of this.rooms.values()) {
+      if (handle.passcode === passcode) count += handle.broadcastGoldFn(amount);
+    }
+    return count;
+  }
+
+  /** Return all non-GM player persistentIds in the session. */
+  getSessionPlayerPids(passcode: string): string[] {
+    return Array.from(this.getSessionProfiles(passcode).keys());
   }
 
   /**
