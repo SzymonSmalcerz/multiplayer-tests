@@ -338,6 +338,7 @@ export class HomeScene extends Phaser.Scene {
       const overlay = document.getElementById("overlay");
       if (overlay) overlay.style.display = "none";
 
+      document.getElementById("loading-overlay")?.classList.add("lo-visible");
       const data: GameSceneData = { room, nickname: "admin", skin: "gm", passcode, mapName: "waitingArea", sessionName };
       this.scene.start("GameScene", data);
     } catch (err) {
@@ -562,6 +563,7 @@ export class HomeScene extends Phaser.Scene {
       const overlay = document.getElementById("overlay");
       if (overlay) overlay.style.display = "none";
 
+      document.getElementById("loading-overlay")?.classList.add("lo-visible");
       const data: GameSceneData = { room, nickname, skin: this.selectedSkin, passcode, mapName, sessionName: this.sessionName };
       this.scene.start("GameScene", data);
     } catch (err) {

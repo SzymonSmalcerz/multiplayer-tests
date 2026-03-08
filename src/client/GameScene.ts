@@ -124,9 +124,6 @@ export class GameScene extends Phaser.Scene {
   private localIsDead    = false;
   private localDeathTimer = 0;
 
-  private loadingOverlay?: Phaser.GameObjects.Graphics;
-  private loadingText?:    Phaser.GameObjects.Text;
-
   // Input
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyW!: Phaser.Input.Keyboard.Key;
@@ -1552,6 +1549,8 @@ export class GameScene extends Phaser.Scene {
     if (this.currentMapName !== "waitingArea") {
       this.ui.showMapBanner(this.currentDisplayName);
     }
+
+    document.getElementById("loading-overlay")?.classList.remove("lo-visible");
   }
 
   private setupRoomListeners(): void {
@@ -2781,17 +2780,7 @@ export class GameScene extends Phaser.Scene {
     if (transBgEl) transBgEl.style.display = "none";
 
     // Show loading overlay
-    const w = this.cameras.main.width;
-    const h = this.cameras.main.height;
-    this.loadingOverlay = this.add.graphics()
-      .fillStyle(0x000000, 1)
-      .fillRect(0, 0, w, h)
-      .setScrollFactor(0)
-      .setDepth(2000000);
-    this.loadingText = this.add.text(w / 2, h / 2, "Loading Map...", {
-      fontSize: "24px",
-      color: "#ffffff",
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2000001);
+    document.getElementById("loading-overlay")?.classList.add("lo-visible");
 
     // Disable all input to prevent double-clicks or movement during transition
     if (this.input.keyboard) this.input.keyboard.enabled = false;
@@ -2851,8 +2840,7 @@ export class GameScene extends Phaser.Scene {
       this.scene.start("GameScene", data);
     } catch (err) {
       console.error("[Door] Travel failed:", err);
-      if (this.loadingOverlay) this.loadingOverlay.destroy();
-      if (this.loadingText) this.loadingText.destroy();
+      document.getElementById("loading-overlay")?.classList.remove("lo-visible");
       if (this.input.keyboard) this.input.keyboard.enabled = true;
       this.input.enabled = true;
       this.isTeleporting = false;
