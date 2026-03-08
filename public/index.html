@@ -1534,9 +1534,78 @@
         font-size: 22px !important;
       }
     }
+
+    /* ── Loading Overlay ─────────────────────────────── */
+    #loading-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 9999;
+      background-color: #0e0c08;
+      background-image:
+        repeating-linear-gradient(0deg,  transparent 0, transparent 29px, rgba(0,0,0,0.2) 29px, rgba(0,0,0,0.2) 30px),
+        repeating-linear-gradient(90deg, transparent 0, transparent 29px, rgba(0,0,0,0.2) 29px, rgba(0,0,0,0.2) 30px),
+        repeating-linear-gradient(0deg,  transparent 0, transparent 14px, rgba(0,0,0,0.07) 14px, rgba(0,0,0,0.07) 15px),
+        repeating-linear-gradient(90deg, transparent 0, transparent 59px, rgba(0,0,0,0.07) 59px, rgba(0,0,0,0.07) 60px);
+      align-items: center; justify-content: center; flex-direction: column;
+    }
+    #loading-overlay.lo-visible { display: flex; }
+
+    .lo-vignette {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 50%, rgba(201,162,39,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.65) 100%);
+    }
+    .lo-content {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+    }
+    .lo-title {
+      font-family: 'Cinzel Decorative', serif;
+      font-size: clamp(2.4rem, 6vw, 4.2rem);
+      color: #c9a227; margin: 0; letter-spacing: 0.08em;
+      text-shadow: 0 0 20px rgba(201,162,39,0.5), 0 0 60px rgba(201,162,39,0.15), 0 2px 4px rgba(0,0,0,0.9);
+      animation: torchFlicker 3s ease-in-out infinite;
+    }
+    .lo-sub {
+      font-family: 'VT323', serif; font-size: 1.4rem;
+      color: #e8d5a0; margin: 0; letter-spacing: 2px;
+    }
+    .lo-dots::after {
+      content: '';
+      animation: loDots 1.5s steps(4, end) infinite;
+    }
+    @keyframes loDots {
+      0%   { content: ''; }
+      25%  { content: '.'; }
+      50%  { content: '..'; }
+      75%  { content: '...'; }
+      100% { content: ''; }
+    }
+    .lo-bar-wrap {
+      width: clamp(160px, 30vw, 280px); height: 3px;
+      background: rgba(74,46,21,0.5); border-radius: 2px; overflow: hidden;
+      margin-top: 8px;
+    }
+    .lo-bar {
+      height: 100%; width: 40%;
+      background: linear-gradient(90deg, transparent, #c9a227, transparent);
+      animation: loShimmer 1.6s ease-in-out infinite;
+    }
+    @keyframes loShimmer {
+      0%   { transform: translateX(-200%); }
+      100% { transform: translateX(350%); }
+    }
   </style>
 </head>
 <body>
+  <div id="loading-overlay">
+    <div class="lo-vignette"></div>
+    <div class="lo-content">
+      <h1 class="lo-title">WANTAJA</h1>
+      <p class="lo-sub">Loading<span class="lo-dots"></span></p>
+      <div class="lo-bar-wrap"><div class="lo-bar"></div></div>
+    </div>
+  </div>
   <div id="waiting-area-bg"></div>
   <div id="game"></div>
 

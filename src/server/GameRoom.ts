@@ -350,10 +350,12 @@ export class GameRoom extends Room<GameState> {
         let found = false;
         this.state.players.forEach((p, sid) => {
           if (p.nickname === nickname && !p.isGM && !found) {
-            p.gold += amount;
+            p.gold = Math.max(0, p.gold + amount);
             const c = this.clients.find((c: Client) => c.sessionId === sid);
             if (c) c.send("chat", { sessionId: "server", nickname: "Server",
-              message: `You received ${amount} gold from the Game Master.` });
+              message: amount > 0
+                ? `You received ${amount} gold from the Game Master.`
+                : `The Game Master took ${-amount} gold from you.` });
             found = true;
           }
         });
@@ -363,10 +365,12 @@ export class GameRoom extends Room<GameState> {
         let count = 0;
         this.state.players.forEach((p, sid) => {
           if (!p.isGM) {
-            p.gold += amount;
+            p.gold = Math.max(0, p.gold + amount);
             const c = this.clients.find((c: Client) => c.sessionId === sid);
             if (c) c.send("chat", { sessionId: "server", nickname: "Server",
-              message: `You received ${amount} gold from the Game Master.` });
+              message: amount > 0
+                ? `You received ${amount} gold from the Game Master.`
+                : `The Game Master took ${-amount} gold from you.` });
             count++;
           }
         });
@@ -1627,13 +1631,13 @@ export class GameRoom extends Room<GameState> {
       const amount     = parseInt(parts[1] ?? "", 10);
       const targetNick = parts.slice(2).join(" ");
 
-      if (isNaN(amount) || amount <= 0) { sendPrivate("Usage: /exp {amount} {nickname}"); return; }
-      if (!targetNick)                  { sendPrivate("Usage: /exp {amount} {nickname}"); return; }
+      if (isNaN(amount) || amount === 0) { sendPrivate("Usage: /exp {amount} {nickname}  (non-zero integer, negative to remove)"); return; }
+      if (!targetNick)                   { sendPrivate("Usage: /exp {amount} {nickname}  (non-zero integer, negative to remove)"); return; }
 
       let found = false;
       this.state.players.forEach((p, sid) => {
         if (p.nickname === targetNick && !p.isGM) {
-          p.xp += amount;
+          p.xp = Math.max(0, p.xp + amount);
           this.checkLevelUp(sid);
           found = true;
         }
@@ -1645,19 +1649,21 @@ export class GameRoom extends Room<GameState> {
       const amount     = parseInt(parts[1] ?? "", 10);
       const targetNick = parts.slice(2).join(" ");
 
-      if (isNaN(amount) || amount <= 0) { sendPrivate("Usage: /gold {amount} {nickname}"); return; }
-      if (!targetNick)                  { sendPrivate("Usage: /gold {amount} {nickname}"); return; }
+      if (isNaN(amount) || amount === 0) { sendPrivate("Usage: /gold {amount} {nickname}  (non-zero integer, negative to remove)"); return; }
+      if (!targetNick)                   { sendPrivate("Usage: /gold {amount} {nickname}  (non-zero integer, negative to remove)"); return; }
 
       let found = false;
       this.state.players.forEach((p, sid) => {
         if (p.nickname === targetNick && !p.isGM) {
-          p.gold += amount;
+          p.gold = Math.max(0, p.gold + amount);
           const targetClient = this.clients.find((c: Client) => c.sessionId === sid);
           if (targetClient) {
             targetClient.send("chat", {
               sessionId: "server",
               nickname:  "Server",
-              message:   `You received ${amount} gold from the Game Master.`,
+              message:   amount > 0
+                ? `You received ${amount} gold from the Game Master.`
+                : `The Game Master took ${-amount} gold from you.`,
             });
           }
           found = true;
@@ -1668,7 +1674,7 @@ export class GameRoom extends Room<GameState> {
 
     } else if (command === "/gold_all") {
       const amount = parseInt(parts[1] ?? "", 10);
-      if (isNaN(amount) || amount <= 0) { sendPrivate("Usage: /gold_all {amount}"); return; }
+      if (isNaN(amount) || amount === 0) { sendPrivate("Usage: /gold_all {amount}  (non-zero integer, negative to remove)"); return; }
 
       const count = globalBus.giveGoldToAllInSession(this.passcode, amount);
       sendPrivate(`Gave ${amount} gold to ${count} players across all maps.`);
