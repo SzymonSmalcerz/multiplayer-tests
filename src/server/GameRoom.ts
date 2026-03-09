@@ -1371,7 +1371,7 @@ export class GameRoom extends Room<GameState> {
 
             const stolenGold = Math.floor(target.gold * 0.10);
             const targetTotalXp = getTotalXp(target.level, target.xp);
-            const lostXp = Math.floor(targetTotalXp * 0.05);
+            const lostXp = Math.floor(targetTotalXp * 0.10);
 
             target.gold = Math.max(0, target.gold - stolenGold);
             const { level: newLevel, xp: newXp } = getLevelAndXpFromTotal(Math.max(0, targetTotalXp - lostXp));
