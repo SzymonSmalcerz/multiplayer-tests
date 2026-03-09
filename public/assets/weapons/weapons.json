@@ -3,7 +3,7 @@
     "type": "great_spear",
     "label": "Great spear",
     "damage": 100,
-    "cost": 4000,
+    "cost": 400,
     "hitRadius": 27,
     "orbitRadius": 38,
     "spritePath": "/assets/weapons/great_spear.png"

@@ -540,7 +540,7 @@
     /* ── Slideshow ─────────────────────────────────────────── */
     #slideshow-container {
       display: none; text-align: center;
-      width: 80%; max-width: 640px;
+      width: 90%; max-width: 640px;
     }
     #slideshow-title {
       font-family: 'Cinzel Decorative', serif;
@@ -549,21 +549,83 @@
       margin-bottom: 28px;
       animation: torchFlicker 3s ease-in-out infinite;
     }
-    .rank-row {
-      opacity: 0; transform: translateY(20px);
+    /* ── Podium stage ───────────────────────────────────────── */
+    .podium-slot {
+      display: flex; flex-direction: column; align-items: center;
+      opacity: 0; transform: translateY(28px);
       transition: opacity 0.8s ease-out, transform 0.8s ease-out;
-      display: flex; align-items: center; justify-content: center;
-      gap: 12px; margin-bottom: 12px;
+      width: 170px;
     }
-    .rank-row.visible { opacity: 1; transform: translateY(0); }
-    .rank-position-label { font-family: 'Cinzel Decorative', serif; font-size: 1.6rem; min-width: 40px; }
-    .rank-players { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-    .rank-player-box {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: rgba(0,0,0,0.45);
-      border: 1px solid rgba(201,162,39,0.25);
-      border-radius: 8px; padding: 6px 14px;
+    .podium-slot.visible { opacity: 1; transform: translateY(0); }
+
+    .podium-card {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 6px; padding: 10px 8px 14px;
+      background: rgba(14,12,8,0.75);
+      border: 1px solid rgba(201,162,39,0.22);
+      border-radius: 8px 8px 0 0;
+      width: 100%; min-height: 120px;
     }
+    .podium-slot.empty .podium-card { background: transparent; border-color: transparent; }
+    .podium-slot.empty .podium-card * { display: none; }
+
+    .podium-medal { font-size: 1.8rem; line-height: 1; }
+    .podium-player-name {
+      font-family: 'Cinzel', serif; color: #e8d5a0;
+      font-size: 0.88rem; text-align: center;
+      word-break: break-word; max-width: 140px;
+    }
+    .podium-player-stat {
+      font-family: 'Press Start 2P', monospace;
+      color: #c9a227; font-size: 0.55rem; text-align: center;
+    }
+
+    .podium-block {
+      width: 100%; border-radius: 0 0 4px 4px; position: relative;
+    }
+    /* 1st — gold-trimmed stone */
+    .podium-block.rank-1 {
+      height: 130px;
+      background: linear-gradient(180deg, #3d3020 0%, #251c10 60%, #1a1208 100%);
+      border-top: 3px solid #c9a227; border-left: 2px solid #8b6914;
+      border-right: 2px solid #4a3208; border-bottom: 4px solid #0e0c08;
+      box-shadow: inset 0 1px 0 rgba(201,162,39,0.18), 0 6px 20px rgba(0,0,0,0.7);
+    }
+    .podium-block.rank-1::after {
+      content: "I"; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      font-family: 'Cinzel Decorative', serif; font-size: 1.4rem;
+      color: rgba(201,162,39,0.4); pointer-events: none;
+    }
+    /* 2nd — silver-ish stone */
+    .podium-block.rank-2 {
+      height: 95px;
+      background: linear-gradient(180deg, #2e2e2e 0%, #1e1e1e 60%, #111 100%);
+      border-top: 3px solid #888ea0; border-left: 2px solid #555e6a;
+      border-right: 2px solid #2a2f38; border-bottom: 4px solid #0a0a0a;
+      box-shadow: inset 0 1px 0 rgba(180,192,210,0.12), 0 6px 20px rgba(0,0,0,0.7);
+    }
+    .podium-block.rank-2::after {
+      content: "II"; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      font-family: 'Cinzel Decorative', serif; font-size: 1.1rem;
+      color: rgba(136,142,160,0.35); pointer-events: none;
+    }
+    /* 3rd — bronze/wood stone */
+    .podium-block.rank-3 {
+      height: 65px;
+      background: linear-gradient(180deg, #2c1f10 0%, #1c1408 60%, #110d06 100%);
+      border-top: 3px solid #7a4a1e; border-left: 2px solid #4a2e15;
+      border-right: 2px solid #261608; border-bottom: 4px solid #0a0806;
+      box-shadow: inset 0 1px 0 rgba(122,74,30,0.2), 0 6px 20px rgba(0,0,0,0.7);
+    }
+    .podium-block.rank-3::after {
+      content: "III"; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      font-family: 'Cinzel Decorative', serif; font-size: 0.9rem;
+      color: rgba(122,74,30,0.35); pointer-events: none;
+    }
+
     .rank-player-name { font-family: 'Cinzel', serif; color: #e8d5a0; font-size: 1rem; }
     .rank-player-stat  { font-family: 'Press Start 2P', monospace; color: #c9a227; font-size: 0.6rem; }
 

@@ -3273,30 +3273,45 @@ export class GameScene extends Phaser.Scene {
       slideshowTitle.textContent = cat.title;
       slideshowRanks.innerHTML = "";
 
-      const topRanks = cat.ranks.slice(0, 3).reverse();
-      const rows: HTMLElement[] = [];
-      for (const rankGroup of topRanks) {
-        const row = document.createElement("div");
-        row.className = "rank-row";
-        const rankLabel = rankGroup.rank === 1 ? "🥇" : rankGroup.rank === 2 ? "🥈" : "🥉";
-        const playerBoxes = rankGroup.players.map(p => {
+      // Map rank number → RankGroup (for ranks 1, 2, 3)
+      const rankData: Record<number, (typeof cat.ranks)[0] | undefined> = {};
+      for (const rg of cat.ranks.slice(0, 3)) rankData[rg.rank] = rg;
+
+      // Visual layout: [left=2nd, center=1st, right=3rd]
+      // Reveal order: 3rd (idx 2) → 2nd (idx 0) → 1st (idx 1)
+      const slotDefs: [number, string][] = [[2, "rank-2"], [1, "rank-1"], [3, "rank-3"]];
+      const revealOrder = [2, 0, 1];
+
+      const slots: HTMLElement[] = [];
+      for (const [rankNum, rankClass] of slotDefs) {
+        const rg = rankData[rankNum];
+        const slot = document.createElement("div");
+        slot.className = "podium-slot" + (rg ? "" : " empty");
+        const medalEmoji = rankNum === 1 ? "🥇" : rankNum === 2 ? "🥈" : "🥉";
+        const playerEntries = rg ? rg.players.map(p => {
           const av = this.getAvatarStyle(p.skin, p.level);
-          return `<div class="rank-player-box">
-            <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
-            <span class="rank-player-name">${this.escapeHTML(p.nickname)}</span>
-            <span class="rank-player-stat">${cat.statLabel(p)}</span>
-          </div>`;
-        }).join("");
-        row.innerHTML = `<span class="rank-position-label">${rankLabel}</span><div class="rank-players">${playerBoxes}</div>`;
-        slideshowRanks.appendChild(row);
-        rows.push(row);
+          return `<div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
+                  <span class="podium-player-name">${this.escapeHTML(p.nickname)}</span>
+                  <span class="podium-player-stat">${cat.statLabel(p)}</span>`;
+        }).join('<hr style="border:none;border-top:1px solid rgba(201,162,39,0.15);width:80%;margin:4px 0">') : "";
+        slot.innerHTML = `
+          <div class="podium-card">
+            ${rg ? `<span class="podium-medal">${medalEmoji}</span>` : ""}
+            ${playerEntries}
+          </div>
+          <div class="podium-block ${rankClass}"></div>`;
+        slideshowRanks.appendChild(slot);
+        slots.push(slot);
       }
 
+      // Flex layout on the container
+      slideshowRanks.style.cssText = "display:flex;align-items:flex-end;justify-content:center;gap:0";
       slideshowContainer.style.display = "block";
 
-      for (const row of rows) {
+      // Reveal: 3rd → 2nd → 1st
+      for (const idx of revealOrder) {
         await delay(1000);
-        row.classList.add("visible");
+        slots[idx].classList.add("visible");
       }
       await delay(4000);
       await fadeOut(slideshowContainer);

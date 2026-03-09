@@ -1271,5 +1271,17 @@
     "label": "tile_0434",
     "imageWidth": 32,
     "imageHeight": 32
+  },
+  "autenti_dark": {
+    "type": "autenti_dark",
+    "label": "autenti_dark",
+    "imageWidth": 32,
+    "imageHeight": 32
+  },
+  "autenti_blue": {
+    "type": "autenti_blue",
+    "label": "autenti_blue",
+    "imageWidth": 32,
+    "imageHeight": 32
   }
 }
