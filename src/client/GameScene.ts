@@ -1921,6 +1921,8 @@ export class GameScene extends Phaser.Scene {
         // Respawned: snap to new server position, restore sprite, hide grave
         e.sprite.setPosition(player.x, player.y);
         e.sprite.setVisible(true);
+        e.weaponSprite.setVisible(true);
+        e.label.setVisible(true);
         e.graveSprite?.setVisible(false);
       }
 
@@ -3354,13 +3356,20 @@ export class GameScene extends Phaser.Scene {
     for (const corner of corners) {
       const el = document.getElementById(corner.id);
       if (!el) continue;
-      const winner = corner.ranks[0]?.players[0];
-      if (!winner) { el.innerHTML = ""; continue; }
-      const av = this.getAvatarStyle(winner.skin, winner.level);
+      const winners = corner.ranks[0]?.players;
+      if (!winners?.length) { el.innerHTML = ""; continue; }
+
+      const winnersHTML = winners.map(p => {
+        const av = this.getAvatarStyle(p.skin, p.level);
+        return `<div class="corner-winner">
+          <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
+          <div class="corner-name">${this.escapeHTML(p.nickname)}</div>
+        </div>`;
+      }).join(`<div class="corner-tie-divider">⚔ TIE</div>`);
+
       el.innerHTML = `<div class="corner-badge">
         <div class="corner-title">${corner.label}</div>
-        <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
-        <div class="corner-name">${this.escapeHTML(winner.nickname)}</div>
+        ${winnersHTML}
       </div>`;
     }
   }
