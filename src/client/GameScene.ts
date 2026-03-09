@@ -3359,10 +3359,16 @@ export class GameScene extends Phaser.Scene {
       const winners = corner.ranks[0]?.players;
       if (!winners?.length) { el.innerHTML = ""; continue; }
 
+      const solo = winners.length === 1;
       const winnersHTML = winners.map(p => {
-        const av = this.getAvatarStyle(p.skin, p.level);
+        if (solo) {
+          const av = this.getAvatarStyle(p.skin, p.level);
+          return `<div class="corner-winner">
+            <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
+            <div class="corner-name">${this.escapeHTML(p.nickname)}</div>
+          </div>`;
+        }
         return `<div class="corner-winner">
-          <div class="rank-avatar" style="background-image:${av.backgroundImage};background-size:${av.backgroundSize};background-position:${av.backgroundPosition}"></div>
           <div class="corner-name">${this.escapeHTML(p.nickname)}</div>
         </div>`;
       }).join(`<div class="corner-tie-divider">⚔ TIE</div>`);
