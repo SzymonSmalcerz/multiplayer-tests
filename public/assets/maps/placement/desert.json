@@ -831,8 +831,8 @@
   "npcs": [
     {
       "type": "healer",
-      "x": 24,
-      "y": 36
+      "x": 57,
+      "y": 203
     }
   ],
   "mobs": [
@@ -1139,8 +1139,8 @@
   "doors": [
     {
       "id": "desert",
-      "x": 111,
-      "y": 33,
+      "x": 107,
+      "y": 48,
       "targetMap": "firstMap",
       "targetDoorId": "firstMap_desert"
     }

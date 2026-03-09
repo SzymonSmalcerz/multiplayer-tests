@@ -3592,15 +3592,15 @@
     },
     {
       "id": "firstMap_orc_town",
-      "x": 1967,
-      "y": 1831,
+      "x": 1963,
+      "y": 1830,
       "targetMap": "orc_town",
       "targetDoorId": "orc_town"
     },
     {
       "id": "firstMap_desert",
       "x": 1861,
-      "y": 1962,
+      "y": 1952,
       "targetMap": "desert",
       "targetDoorId": "desert"
     }

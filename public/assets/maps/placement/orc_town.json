@@ -1419,8 +1419,8 @@
   "doors": [
     {
       "id": "orc_town",
-      "x": 20,
-      "y": 1017,
+      "x": 15,
+      "y": 1026,
       "targetMap": "firstMap",
       "targetDoorId": "firstMap_orc_town"
     }
