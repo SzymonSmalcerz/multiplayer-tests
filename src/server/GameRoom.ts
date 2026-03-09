@@ -4,7 +4,7 @@ import fs   from "fs";
 import path from "path";
 import { xpForNextLevel, getTotalXp, getLevelAndXpFromTotal } from "../shared/formulas";
 import { getHitbox, isInsideHitbox }          from "../shared/combat";
-import { findNearestPlayers, getShareRecipients, PositionedPlayer } from "../shared/economy";
+import { findNearestPlayers, getShareRecipients, applyDeathPenalty, PositionedPlayer } from "../shared/economy";
 import { OBJECT_REGISTRY }                    from "../shared/objects";
 import { ENEMY_REGISTRY }                     from "../shared/enemies";
 import { WEAPON_REGISTRY }                    from "../shared/weapons";
@@ -1202,6 +1202,10 @@ export class GameRoom extends Room<GameState> {
             this.playerLastDamagedAt.set(nearest.id, now);
 
             if (nearest.state.hp <= 0) {
+              const penalty = applyDeathPenalty(nearest.state.gold, nearest.state.level, nearest.state.xp);
+              nearest.state.gold  = penalty.gold;
+              nearest.state.level = penalty.level;
+              nearest.state.xp    = penalty.xp;
               this.handlePlayerDeath(nearest.id, nearest.state);
             }
           }

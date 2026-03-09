@@ -1,5 +1,58 @@
 import { describe, it, expect } from "vitest";
-import { findNearestPlayers, getShareRecipients } from "../src/shared/economy";
+import { findNearestPlayers, getShareRecipients, applyDeathPenalty } from "../src/shared/economy";
+import { xpForNextLevel } from "../src/shared/formulas";
+
+// ─── applyDeathPenalty ────────────────────────────────────────────────────────
+
+describe("applyDeathPenalty", () => {
+  it("reduces gold by 5% (floored)", () => {
+    const result = applyDeathPenalty(200, 1, 0);
+    expect(result.gold).toBe(190); // 200 - floor(200 * 0.05) = 200 - 10
+  });
+
+  it("gold stays at 0 when player has no gold", () => {
+    const result = applyDeathPenalty(0, 1, 50);
+    expect(result.gold).toBe(0);
+  });
+
+  it("reduces total XP by 5% (floored), staying within level", () => {
+    // Level 1, xpForNextLevel(1) = 100. Give player 50 xp.
+    // totalXp = 50, xpLost = floor(50 * 0.05) = 2, newTotal = 48
+    const result = applyDeathPenalty(0, 1, 50);
+    expect(result.level).toBe(1);
+    expect(result.xp).toBe(48);
+  });
+
+  it("de-levels when XP loss crosses a level boundary", () => {
+    // Level 2, xp = 0 → totalXp = xpForNextLevel(1) = 100
+    // xpLost = floor(100 * 0.05) = 5, newTotal = 95 → still level 1 (95 < 100)
+    const result = applyDeathPenalty(0, 2, 0);
+    expect(result.level).toBe(1);
+    expect(result.xp).toBe(95);
+  });
+
+  it("level 1 with xp 0 stays at level 1 xp 0 (nothing to lose)", () => {
+    const result = applyDeathPenalty(0, 1, 0);
+    expect(result.level).toBe(1);
+    expect(result.xp).toBe(0);
+    expect(result.gold).toBe(0);
+  });
+
+  it("rounding: gold=1 loses 0 (floor(1 * 0.05) = 0)", () => {
+    const result = applyDeathPenalty(1, 1, 0);
+    expect(result.gold).toBe(1);
+  });
+
+  it("gold=19 loses 0 (floor(19 * 0.05) = 0)", () => {
+    const result = applyDeathPenalty(19, 1, 0);
+    expect(result.gold).toBe(19);
+  });
+
+  it("gold=20 loses 1 (floor(20 * 0.05) = 1)", () => {
+    const result = applyDeathPenalty(20, 1, 0);
+    expect(result.gold).toBe(19);
+  });
+});
 
 // ─── findNearestPlayers ───────────────────────────────────────────────────────
 

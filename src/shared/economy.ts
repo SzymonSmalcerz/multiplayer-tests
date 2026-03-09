@@ -2,6 +2,8 @@
 // Extracted from GameRoom so gold-split and XP-share logic can be tested.
 // No Phaser or Colyseus dependencies.
 
+import { getTotalXp, getLevelAndXpFromTotal } from "./formulas";
+
 export interface PositionedPlayer {
   id: string;
   x: number;
@@ -37,6 +39,23 @@ export function findNearestPlayers(
  * the event position (enemy kill site or coin drop). Used for both XP and gold
  * party-sharing.
  */
+/**
+ * Applies the enemy-death penalty to a player: -5% gold (floored), -5% total XP (floored).
+ * Gold never goes below 0. XP loss may cause de-leveling.
+ * Values vanish — there is no recipient.
+ */
+export function applyDeathPenalty(
+  gold: number,
+  level: number,
+  xp: number,
+): { gold: number; level: number; xp: number } {
+  const newGold = Math.max(0, gold - Math.floor(gold * 0.05));
+  const totalXp = getTotalXp(level, xp);
+  const xpLost  = Math.floor(totalXp * 0.05);
+  const { level: newLevel, xp: newXp } = getLevelAndXpFromTotal(Math.max(0, totalXp - xpLost));
+  return { gold: newGold, level: newLevel, xp: newXp };
+}
+
 export function getShareRecipients(
   eventX: number,
   eventY: number,
