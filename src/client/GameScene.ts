@@ -709,7 +709,11 @@ export class GameScene extends Phaser.Scene {
     this.mobSystem = new MobSystem(this);
     this.events.once("shutdown", () => {
       this.leaderboardTimer?.remove(false);
-      if (this.quizResultTimer) { clearTimeout(this.quizResultTimer); this.quizResultTimer = null; }
+      if (this.quizResultTimer) {
+        clearTimeout(this.quizResultTimer);
+        this.quizResultTimer = null;
+        document.getElementById("quiz-result-popup")?.classList.remove("qr-visible");
+      }
       this.mobSystem.destroy();
       this.scale.off("resize", this.recalcCameraBounds, this);
     });
