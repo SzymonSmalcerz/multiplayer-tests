@@ -1,4 +1,4 @@
-import { Room, Client } from "@colyseus/core";
+import { Room, Client, CloseCode } from "@colyseus/core";
 import { Schema, MapSchema, ArraySchema, type } from "@colyseus/schema";
 import fs   from "fs";
 import path from "path";
@@ -135,7 +135,7 @@ interface PendingCoin {
 
 // ─── Room ─────────────────────────────────────────────────────────────────────
 
-export class GameRoom extends Room<GameState> {
+export class GameRoom extends Room<{ state: GameState }> {
   maxClients = 50;
 
   private mapName: string = "m1";
@@ -938,7 +938,8 @@ export class GameRoom extends Room<GameState> {
     console.log(`[Room] ${player.nickname} (${client.sessionId}) joined. Players: ${this.state.players.size}`);
   }
 
-  async onLeave(client: Client, consented: boolean): Promise<void> {
+  async onLeave(client: Client, code: number): Promise<void> {
+    const consented = code === CloseCode.CONSENTED;
     const player = this.state.players.get(client.sessionId);
     const name   = player?.nickname ?? client.sessionId;
 

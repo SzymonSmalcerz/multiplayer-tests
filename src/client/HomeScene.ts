@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Client } from "colyseus.js";
+import { Client } from "@colyseus/sdk";
 import { GameSceneData } from "./types";
 import {
   MALE_SKINS, FEMALE_SKINS,

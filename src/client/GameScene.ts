@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Client } from "colyseus.js";
+import { Client, getStateCallbacks } from "@colyseus/sdk";
 import {
   GameSceneData, MapDataMessage, RemotePlayer, RemotePlayerEntity,
   StaticObjectData, EnemyData, EnemyEntity, NpcData, TilePlacement, DoorData,
@@ -73,6 +73,8 @@ function skinKey(skin: string): string {
 export class GameScene extends Phaser.Scene {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private room!: any; // Colyseus.Room
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private $!: any; // getStateCallbacks proxy (Colyseus 0.17+)
   private mySessionId!: string;
 
   private localSkin!: string;
@@ -691,12 +693,12 @@ export class GameScene extends Phaser.Scene {
 
     // ── Quiz state listeners ─────────────────────────────────────────────────
     if (this.currentMapName === "quiz") {
-      this.room.state.listen("quizStatus",   (val: string) => this.onQuizStatusChange(val));
-      this.room.state.listen("quizQuestion", (val: string) => {
+      this.$(this.room.state).listen("quizStatus",   (val: string) => this.onQuizStatusChange(val));
+      this.$(this.room.state).listen("quizQuestion", (val: string) => {
         const el = document.getElementById("quiz-question-text");
         if (el) el.textContent = val;
       });
-      this.room.state.listen("quizTimeLeft", (val: number) => {
+      this.$(this.room.state).listen("quizTimeLeft", (val: number) => {
         const el = document.getElementById("quiz-timer");
         if (el) el.textContent = String(val);
       });
@@ -1558,6 +1560,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupRoomListeners(): void {
+    this.$ = getStateCallbacks(this.room);
     this.room.onMessage("map_data", (data: MapDataMessage) => {
       console.log(`[DIAG] map_data received — map=${this.currentMapName} isCreated=${this.isCreated} tiles=${data.tiles?.length ?? 0} bgActive=${this.bgTileSprite?.active ?? "null"}`);
       this.pendingMapData = data;
@@ -1587,7 +1590,7 @@ export class GameScene extends Phaser.Scene {
     );
 
     // Player added
-    this.room.state.players.onAdd((player: RemotePlayer, sessionId: string) => {
+    this.$(this.room.state).players.onAdd((player: RemotePlayer, sessionId: string) => {
       if (!this.isCreated) {
         this.pendingAddPlayers.push({ player, sessionId });
         return;
@@ -1596,7 +1599,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Player left
-    this.room.state.players.onRemove((_player: RemotePlayer, sessionId: string) => {
+    this.$(this.room.state).players.onRemove((_player: RemotePlayer, sessionId: string) => {
       console.log(`[Network] onRemove player: ${sessionId}`);
       this.pendingAddPlayers = this.pendingAddPlayers.filter(p => p.sessionId !== sessionId);
       this.removeRemotePlayer(sessionId);
@@ -1604,7 +1607,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Enemy added
-    this.room.state.enemies.onAdd((enemy: EnemyData, id: string) => {
+    this.$(this.room.state).enemies.onAdd((enemy: EnemyData, id: string) => {
       if (!this.isCreated) {
         this.pendingAddEnemies.push({ enemy, id });
         return;
@@ -1613,7 +1616,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Enemy removed
-    this.room.state.enemies.onRemove((_enemy: EnemyData, id: string) => {
+    this.$(this.room.state).enemies.onRemove((_enemy: EnemyData, id: string) => {
       this.pendingAddEnemies = this.pendingAddEnemies.filter(e => e.id !== id);
       this.removeEnemy(id);
     });
@@ -1678,7 +1681,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Track local player's own state changes
-    this.room.state.players.onChange((player: RemotePlayer, sessionId: string) => {
+    this.$(this.room.state).players.onChange((player: RemotePlayer, sessionId: string) => {
       if (sessionId !== this.mySessionId) return;
       if (!this.isCreated) return; // scene not ready yet — stale objects would crash
 
@@ -1727,7 +1730,7 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.scrollY = player.y - this.cameras.main.height / 2;
       }
       this.localPotions = player.potions ?? 0;
-      player.onChange(() => {
+      this.$(player).onChange(() => {
         const newPotions = player.potions ?? 0;
         if (newPotions < this.localPotions && this.localSprite?.active) {
           this.spawnPlayerEffect(this.localSprite.x, this.localSprite.y, 0xff4444);
@@ -1878,7 +1881,7 @@ export class GameScene extends Phaser.Scene {
 
     this.remoteMap.set(sessionId, entity);
 
-    player.onChange(() => {
+    this.$(player).onChange(() => {
       const e = this.remoteMap.get(sessionId);
       if (!e) return;
 
@@ -2178,7 +2181,7 @@ export class GameScene extends Phaser.Scene {
 
     this.enemyMap.set(id, entity);
 
-    enemy.onChange(() => {
+    this.$(enemy).onChange(() => {
       const e = this.enemyMap.get(id);
       if (!e) return;
       e.targetX       = enemy.x;
